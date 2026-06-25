@@ -42,10 +42,11 @@ export async function generateAjbPdf(state: BerkasState, docId: string): Promise
     let textWidth: number
     try { textWidth = font.widthOfTextAtSize(value, fontSize) } catch { continue }
 
-    const pageWidth = page.getWidth()
-    const bgWidth = Math.max(field.width, Math.min(textWidth + 4, pageWidth - field.x - 10))
+    // White background ONLY covers text width + small padding (not full annotation width)
+    // This prevents covering user's annotation boxes for short values like "E" or "6"
+    const bgWidth = textWidth + 4
 
-    page.drawRectangle({ x: field.x - 1, y: field.y, width: bgWidth + 2, height: field.height, color: rgb(1, 1, 1), opacity: 1 })
+    page.drawRectangle({ x: field.x - 1, y: field.y, width: bgWidth, height: field.height, color: rgb(1, 1, 1), opacity: 1 })
 
     try {
       page.drawText(value, { x: field.x, y: field.y + (field.height - fontSize) / 2 + 1, size: fontSize, font, color: rgb(0, 0, 0) })

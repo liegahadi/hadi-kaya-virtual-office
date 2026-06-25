@@ -5,13 +5,14 @@
 import { CompanyInfo, PropertyData, JobType, MaritalStatus } from './types'
 
 export const COMPANY_INFO: CompanyInfo = {
-  name: 'PT. Marlindo Bangun Persada',
+  name: 'Marlindo Bangun Persada',
   city: 'Pangkalpinang',
   director: 'Andrian Bong',
+  directorKtp: '1971040409720004',
   btnAccount: '00209 0130 000 3316',
   bankName: 'BTN Cabang Pangkalpinang',
   bankAddress: 'Jl. Jenderal Sudirman No. 10, Pangkalpinang',
-}
+} as any
 
 export const DEFAULT_PROPERTY: PropertyData = {
   projectName: 'ANJAYO 16',
@@ -19,6 +20,9 @@ export const DEFAULT_PROPERTY: PropertyData = {
   houseSize: 36,
   landSize: 84,
   kavlingNumber: '',
+  blockLetter: '',
+  houseNumber: '',
+  shmNumber: '',
   nibNumber: '',
   certificateDate: '',
   pbgNumber: 'SK-PBG-197106-24112023-001',

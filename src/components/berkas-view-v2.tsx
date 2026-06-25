@@ -268,12 +268,62 @@ function DinaSidebar({ customer }: { customer: any }) {
 // BERKAS EDITOR - Form + Preview (2 columns inside box)
 // ============================================================
 function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRefresh: () => void; projectId: string }) {
-  const [state, setState] = useState<BerkasState>({
-    ...INITIAL_STATE,
-    applicant: { ...INITIAL_STATE.applicant, fullName: customer.name || '', phone: customer.whatsappNumber || customer.phone || '' },
-    property: { ...DEFAULT_PROPERTY, kavlingNumber: customer.units?.[0]?.blockNumber || '', landSize: customer.units?.[0]?.landSize || 84 },
-    dateOfDocument: new Date().toISOString().split('T')[0],
-  })
+  // Build initial state FROM customer DB data (prevents reset after save)
+  const buildInitialState = (): BerkasState => {
+    const unit = customer.units?.[0]
+    // Parse blockLetter + houseNumber from existing blockNumber if present
+    // Format: "E6" → blockLetter="E", houseNumber="6"
+    let blockLetter = '', houseNumber = ''
+    if (unit?.blockNumber) {
+      const match = String(unit.blockNumber).match(/^([A-Za-z]+)(\d+.*)$/)
+      if (match) { blockLetter = match[1]; houseNumber = match[2] }
+      else { blockLetter = String(unit.blockNumber) }
+    }
+    return {
+      ...INITIAL_STATE,
+      applicant: {
+        ...INITIAL_STATE.applicant,
+        fullName: customer.name || '',
+        phone: customer.whatsappNumber || customer.phone || '',
+        ktpNumber: customer.nik || '',
+        pob: customer.birthPlace || '',
+        dob: customer.birthDate || '',
+        address: customer.ktpAddress || '',
+        jobTitle: customer.workPosition || '',
+        companyName: customer.companyName || '',
+        companyAddress: customer.companyAddress || '',
+        monthlyIncome: customer.monthlyIncome || 0,
+        btnAccountNumber: customer.btnAccountNumber || '',
+        npwpNumber: customer.npwpNumber || '',
+        jobType: (customer.occupation === 'Wirausaha' ? JobType.ENTREPRENEUR : JobType.EMPLOYEE),
+      },
+      maritalStatus: customer.maritalStatus === 'MENIKAH' ? MaritalStatus.MARRIED : MaritalStatus.SINGLE,
+      spouse: customer.spouseName ? {
+        fullName: customer.spouseName || '',
+        ktpNumber: customer.spouseNik || '',
+        pob: customer.spouseBirthPlace || '',
+        dob: customer.spouseBirthDate || '',
+        job: customer.spouseOccupation || '',
+        address: customer.spouseAddress || '',
+        isWorking: false,
+        jobType: 'NGANGGUR' as SpouseJobType,
+      } : undefined,
+      property: {
+        ...DEFAULT_PROPERTY,
+        kavlingNumber: unit?.blockNumber || '',
+        blockLetter,
+        houseNumber,
+        landSize: unit?.landSize || 84,
+        projectName: 'ANJAYO 16',
+      },
+      dateOfDocument: customer.dateOfDocument || new Date().toISOString().split('T')[0],
+      akadDate: customer.akadDate ? new Date(customer.akadDate).toISOString().split('T')[0] : '',
+      akadNumber: customer.akadNumber || '',
+      lpaDate: customer.lpaDate ? new Date(customer.lpaDate).toISOString().split('T')[0] : '',
+      lpaNumber: customer.lpaNumber || '',
+    }
+  }
+  const [state, setState] = useState<BerkasState>(buildInitialState)
   const [bank, setBank] = useState<string>(customer.bankName || customer.bankPipelines?.[0]?.bankName || 'BTN')
   const [saving, setSaving] = useState(false)
   const [flppGenerating, setFlppGenerating] = useState(false)
@@ -364,12 +414,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       // AJB documents
       setFlppGenerating(true)
       try {
-        const res = await fetch('/api/documents/generate-ajb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, docId: generateDocId }) })
+        const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
+        const res = await fetch('/api/documents/generate-ajb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, docId: realDocId }) })
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
-        a.href = url; a.download = `${generateDocId.toUpperCase()}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
+        a.href = url; a.download = `${realDocId.toUpperCase()}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
         toast.success('PDF berhasil di-download!')
       } catch (err) { toast.error('Gagal generate PDF: ' + (err instanceof Error ? err.message : 'unknown')) }
@@ -384,9 +435,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     flppLoadingRef.current = true
     setFlppLoading(true)
     try {
-      const isAjb = ['ajb-bank', 'surat-lpa', 'surat-akad'].includes(generateDocId)
+      const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
       const endpoint = isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
-      const body = isAjb ? { state, docId: generateDocId } : { state }
+      const body = isAjb ? { state, docId: generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId } : { state }
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const blob = await res.blob()
@@ -500,8 +551,18 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Unit Properti">
             <FormField label="Nama Perumahan" value={state.property.projectName} onChange={v => updateProperty('projectName', v)} />
             <FormField label="Alamat" value={state.property.houseAddress} onChange={v => updateProperty('houseAddress', v)} full />
-            <FormField label="Kavling / Blok" value={state.property.kavlingNumber} onChange={v => updateProperty('kavlingNumber', v)} />
+            <FormField label="Blok (Huruf)" value={state.property.blockLetter} onChange={v => {
+              updateProperty('blockLetter', v)
+              setState(s => ({ ...s, property: { ...s.property, blockLetter: v, kavlingNumber: `${v}${s.property.houseNumber || ''}` } }))
+            }} />
+            <FormField label="No. Rumah (Angka)" value={state.property.houseNumber} onChange={v => {
+              updateProperty('houseNumber', v)
+              setState(s => ({ ...s, property: { ...s.property, houseNumber: v, kavlingNumber: `${s.property.blockLetter || ''}${v}` } }))
+            }} />
             <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />
+            <FormField label="Luas Bangunan (m²)" type="number" value={state.property.houseSize} onChange={v => updateProperty('houseSize', parseInt(v) || 0)} />
+            <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
+            <FormField label="No. NIB" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
             <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />
             <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />
             <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />
@@ -580,8 +641,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 ) : (
                   <>
                     <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
-                    <button onClick={() => setGenerateDocId('surat-lpa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA</button>
-                    <button onClick={() => setGenerateDocId('surat-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Akad</button>
+                    <button onClick={() => setGenerateDocId('surat-lpa-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA & Akad</button>
                   </>
                 )}
                 {generateDocId !== 'spr' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}

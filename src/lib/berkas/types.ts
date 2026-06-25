@@ -47,6 +47,9 @@ export interface PropertyData {
   houseSize: number;
   landSize: number;
   kavlingNumber: string;
+  blockLetter: string;
+  houseNumber: string;
+  shmNumber: string;
   nibNumber: string;
   certificateDate: string;
   pbgNumber: string;
