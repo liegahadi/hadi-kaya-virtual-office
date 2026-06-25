@@ -62,6 +62,7 @@ model Project {
   id          String   @id @default(cuid())
   name        String   // e.g. "Anjayo 16"
   brandName   String   // e.g. "Anjayo"
+  code        String?  // e.g. "A16"
   location    String   // e.g. "Jerambah Gantung, Pangkalpinang"
   address     String?
   totalUnits  Int      @default(0)
@@ -221,6 +222,7 @@ model Customer {
   spouseBirthPlace String?
   spouseBirthDate  String?
   spouseOccupation String?
+  spouseAddress String?
   spouseIncome Float?
   motherMaidenName String?
   emergencyContact String?
@@ -598,10 +600,17 @@ model DocumentTemplate {
   id          String   @id @default(cuid())
   bankName    String
   templateName String
-  templateUrl String
-  fields      String   // JSON array of fields to fill
+  templateUrl String?
+  fields      String?
   version     Int      @default(1)
   isActive    Boolean  @default(true)
+  type        String?
+  category    String?
+  sortOrder   Int?
+  isRequired  Boolean?
+  description String?
+  mimeType    String?
+  fileSize    Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

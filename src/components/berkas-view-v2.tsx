@@ -295,20 +295,27 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   async function handleSave() {
     setSaving(true)
     try {
-      const res = await fetch(`/api/customers/${customer.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-        name: state.applicant.fullName, phone: state.applicant.phone, whatsappNumber: state.applicant.phone,
-        nik: state.applicant.ktpNumber, birthPlace: state.applicant.pob, birthDate: state.applicant.dob,
-        occupation: state.applicant.jobType, ktpAddress: state.applicant.address,
-        companyName: state.applicant.companyName, companyAddress: state.applicant.companyAddress,
-        workPosition: state.applicant.jobTitle, monthlyIncome: state.applicant.monthlyIncome,
-        maritalStatus: state.maritalStatus === 'Sudah Menikah' ? 'MENIKAH' : 'SINGLE',
-        spouseName: state.spouse?.fullName, spouseNik: state.spouse?.ktpNumber,
-        spouseBirthPlace: state.spouse?.pob, spouseBirthDate: state.spouse?.dob, spouseOccupation: state.spouse?.job,
-        dateOfDocument: state.dateOfDocument,
-      }) })
+      const res = await fetch(`/api/customers/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: state.applicant.fullName, phone: state.applicant.phone, whatsappNumber: state.applicant.phone,
+          nik: state.applicant.ktpNumber, birthPlace: state.applicant.pob, birthDate: state.applicant.dob,
+          occupation: state.applicant.jobType, ktpAddress: state.applicant.address,
+          companyName: state.applicant.companyName, companyAddress: state.applicant.companyAddress,
+          workPosition: state.applicant.jobTitle, monthlyIncome: state.applicant.monthlyIncome,
+          maritalStatus: state.maritalStatus === 'Sudah Menikah' ? 'MENIKAH' : 'SINGLE',
+          spouseName: state.spouse?.fullName, spouseNik: state.spouse?.ktpNumber,
+          spouseBirthPlace: state.spouse?.pob, spouseBirthDate: state.spouse?.dob, spouseOccupation: state.spouse?.job,
+          spouseAddress: state.spouse?.address,
+          dateOfDocument: state.dateOfDocument,
+        }),
+      })
       const d = await res.json()
-      if (d.success) { toast.success('Data tersimpan!'); onRefresh() } else toast.error('Gagal simpan')
-    } catch { toast.error('Network error') } finally { setSaving(false) }
+      if (d.success) { toast.success('Data tersimpan!'); onRefresh() }
+      else { toast.error('Gagal simpan: ' + (d.error || 'Unknown')); console.error('Save error:', d) }
+    } catch (err) { toast.error('Network error: ' + (err instanceof Error ? err.message : 'unknown')); console.error('Save network error:', err) }
+    finally { setSaving(false) }
   }
 
   // Download PDF - SPR uses html2canvas-pro, FLPP uses overlay API
@@ -353,28 +360,35 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     }
   }
 
-  // FLPP preview via API overlay
+  // FLPP preview via API overlay — guarded to prevent concurrent requests
+  const flppLoadingRef = useRef(false)
   async function loadFlppPreview() {
+    if (flppLoadingRef.current) return
+    flppLoadingRef.current = true
     setFlppLoading(true)
     try {
       const res = await fetch('/api/documents/preview-flpp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const blob = await res.blob()
-      if (flppBlobUrl) URL.revokeObjectURL(flppBlobUrl)
-      setFlppBlobUrl(URL.createObjectURL(blob))
+      const newUrl = URL.createObjectURL(blob)
+      const oldUrl = flppBlobUrl
+      setFlppBlobUrl(newUrl)
+      // Revoke old URL AFTER state update (prevents 'leave this site?' dialog)
+      if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
     } catch (err) { toast.error('Gagal load FLPP preview: ' + (err instanceof Error ? err.message : 'unknown')) }
-    finally { setFlppLoading(false) }
+    finally { flppLoadingRef.current = false; setFlppLoading(false) }
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && generateDocId === 'flpp') loadFlppPreview()
+    if (previewMode === 'generate' && generateDocId === 'flpp' && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
+  // Refresh FLPP preview when key form data changes (debounced 2.5s to avoid rapid requests)
   useEffect(() => {
     if (generateDocId !== 'flpp') return
-    const timer = setTimeout(() => { if (flppBlobUrl) loadFlppPreview() }, 1500)
+    const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
-  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument])
+  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument])
 
   async function handleUpload(docId: string, file: File) {
     setUploadingId(docId)
@@ -452,6 +466,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />
                 <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />
                 <FormField label="Pekerjaan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />
+                <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Status Pekerjaan Pasangan</label>
                   <div className="flex gap-1 mt-0.5">
@@ -630,7 +645,9 @@ function FormField({ label, value, onChange, placeholder, full, required, type =
   return (
     <div className={full ? 'col-span-2' : ''}>
       <label className="text-[9px] text-muted-foreground">{label} {required && <span className="text-rose-400">*</span>}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className="w-full mt-0.5 bg-background/50 border border-border rounded px-2 py-1 text-xs disabled:opacity-50" />
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+        lang={type === 'date' ? 'id' : undefined}
+        className="w-full mt-0.5 bg-background/50 border border-border rounded px-2 py-1 text-xs disabled:opacity-50" />
     </div>
   )
 }

@@ -39,7 +39,7 @@ const PAGE_1_FIELDS: FlppField[] = [
   { page: 1, x: 171.86, y: 552.19, width: 134.43, height: 12.11, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
   { page: 1, x: 172.88, y: 539.76, width: 178.07, height: 12.10, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
   { page: 1, x: 182.27, y: 438.75, width: 85.45, height: 12.11, source: 'property', field: 'projectName' },
-  { page: 1, x: 49.80, y: 425.05, width: 57.28, height: 12.11, source: 'company', field: 'name' },
+  { page: 1, x: 49.80, y: 425.05, width: 57.28, height: 12.11, source: 'property', field: 'kavlingNumber' },
   { page: 1, x: 221.60, y: 425.81, width: 101.44, height: 12.11, source: 'company', field: 'name' },
   { page: 1, x: 299.56, y: 283.54, width: 85.34, height: 12.13, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
@@ -179,7 +179,11 @@ const PAGE_11_FIELDS: FlppField[] = [
   { page: 11, x: 171.33, y: 641.24, width: 84.08, height: 12.02, source: 'applicant', field: 'jobTitle' },
   { page: 11, x: 169.93, y: 616.08, width: 126.19, height: 12.30, source: 'applicant', field: 'address' },
   { page: 11, x: 365.42, y: 79.02, width: 65.02, height: 12.32, source: 'applicant', field: 'fullName', bold: true },
-  { page: 11, x: 296.58, y: 171.43, width: 85.67, height: 12.61, source: 'computed', field: 'penerimaKuasa', transform: () => 'PT. Bank BTN' },
+  { page: 11, x: 296.58, y: 171.43, width: 85.67, height: 12.61, source: 'computed', field: 'dateFull', transform: (_v, s) => {
+    if (!s.dateOfDocument) return ''
+    const d = new Date(s.dateOfDocument)
+    return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
+  }},
 ]
 
 // ============================================================
