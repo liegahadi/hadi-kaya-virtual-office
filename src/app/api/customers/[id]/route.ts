@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ success: true, data: customer })
   } catch (error) {
     console.error('GET customer error:', error)
-    return NextResponse.json({ success: false, error: String(error).substring(0, 300) }, { status: 500 })
+    return NextResponse.json({ success: false, error: String(error).substring(0, 500) }, { status: 500 })
   }
 }
 
@@ -31,27 +31,69 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     const body = await req.json()
 
-    // Build update data - only include fields that exist in schema
-    const updateData: any = {}
-    const allowedFields = [
+    // Type definitions for field coercion
+    const floatFields = ['monthlyIncome', 'spouseIncome']
+    const intFields = ['dependents', 'fileSize', 'sortOrder']
+    const booleanFields = ['berkasLengkap', 'hasExistingLoan', 'hasExistingHouse', 'isExistingMigration', 'isRequired', 'isActive']
+    const dateFields = ['closingDate', 'berkasLengkapDate', 'berkasMasukBankDate', 'sp3kDate', 'akadDate', 'stageUpdatedAt', 'submittedAt', 'sp3kAt', 'akadAt', 'rejectAt', 'bookedAt', 'uploadedAt']
+
+    // All allowed string fields
+    const stringFields = [
       'name', 'whatsappNumber', 'phone', 'email', 'occupation', 'maritalStatus',
-      'monthlyIncome', 'stage', 'stageUpdatedAt', 'notes',
+      'stage', 'notes',
       'nik', 'birthPlace', 'birthDate', 'gender', 'ktpAddress', 'rtRw',
       'kelurahan', 'kecamatan', 'city', 'postalCode', 'religion',
       'companyName', 'companyAddress', 'companyPhone', 'workDuration', 'workPosition',
       'bankName', 'bankAccount', 'npwpNumber', 'btnAccountNumber',
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
-      'spouseOccupation', 'spouseAddress', 'spouseIncome', 'motherMaidenName', 'emergencyContact',
-      'dependents', 'dateOfDocument',
-      'closingDate', 'berkasLengkapDate', 'berkasMasukBankDate',
-      'sp3kDate', 'akadDate', 'berkasLengkap',
+      'spouseOccupation', 'spouseAddress', 'motherMaidenName', 'emergencyContact',
+      'dateOfDocument', 'personalityPreference', 'sourceLead', 'assignedAgentId',
     ]
 
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field]
+    const updateData: any = {}
+
+    // Process string fields - skip empty strings and null
+    for (const field of stringFields) {
+      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+        updateData[field] = String(body[field])
       }
     }
+
+    // Process float fields - coerce to number
+    for (const field of floatFields) {
+      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+        const num = parseFloat(body[field])
+        if (!isNaN(num)) updateData[field] = num
+      }
+    }
+
+    // Process int fields - coerce to number
+    for (const field of intFields) {
+      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+        const num = parseInt(body[field])
+        if (!isNaN(num)) updateData[field] = num
+      }
+    }
+
+    // Process boolean fields - coerce to boolean
+    for (const field of booleanFields) {
+      if (body[field] !== undefined && body[field] !== null) {
+        updateData[field] = body[field] === true || body[field] === 'true' || body[field] === 1 || body[field] === '1'
+      }
+    }
+
+    // Process date fields - convert to ISO string or Date
+    for (const field of dateFields) {
+      if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+        try {
+          updateData[field] = new Date(body[field])
+        } catch {
+          // skip invalid date
+        }
+      }
+    }
+
+    console.log('PATCH customer updateData keys:', Object.keys(updateData))
 
     const customer = await db.customer.update({
       where: { id },
@@ -59,8 +101,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
 
     return NextResponse.json({ success: true, data: customer })
-  } catch (error) {
+  } catch (error: any) {
     console.error('PATCH customer error:', error)
-    return NextResponse.json({ success: false, error: String(error).substring(0, 300) }, { status: 500 })
+
+    // Extract the most useful part of Prisma error
+    let errorMsg = 'Unknown error'
+    if (error?.message) {
+      // Prisma validation errors are long - extract key part
+      const msg = error.message
+      if (msg.includes('Unknown field')) {
+        errorMsg = msg.match(/Unknown field `[^`]+`/)?.[0] || msg.substring(0, 200)
+      } else if (msg.includes('Invalid value')) {
+        errorMsg = msg.match(/Invalid value[^.]*/)?.[0] || msg.substring(0, 200)
+      } else if (msg.includes('required')) {
+        errorMsg = msg.match(/Argument `[^`]+` is missing[^.]*/)?.[0] || msg.substring(0, 200)
+      } else {
+        errorMsg = msg.substring(0, 500)
+      }
+    } else {
+      errorMsg = String(error).substring(0, 500)
+    }
+
+    return NextResponse.json({ success: false, error: errorMsg, fullError: String(error).substring(0, 1000) }, { status: 500 })
   }
 }
