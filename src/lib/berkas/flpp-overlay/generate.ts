@@ -67,10 +67,9 @@ export async function generateFlppPdf(state: BerkasState): Promise<{ buffer: Uin
       continue
     }
 
-    // White background EXPANDS to fit full text (min = annotation width, max = page width - x)
-    const pageWidth = page.getWidth()
-    const maxAvailableWidth = pageWidth - field.x - 10 // 10pt right margin
-    const bgWidth = Math.max(field.width, Math.min(textWidth + 4, maxAvailableWidth))
+    // White background ONLY covers text width + small padding (not full annotation width)
+    // Prevents covering user's annotation boxes for short values
+    const bgWidth = textWidth + 4
     const bgHeight = field.height
 
     // Draw WHITE BACKGROUND RECTANGLE
