@@ -384,7 +384,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     flppLoadingRef.current = true
     setFlppLoading(true)
     try {
-      const isAjb = ['ajb-bank', 'surat-lpa', 'surat-akad', 'psu-jalan-listrik', 'spsu'].includes(generateDocId)
+      const isAjb = ['ajb-bank', 'surat-lpa', 'surat-akad'].includes(generateDocId)
       const endpoint = isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
       const body = isAjb ? { state, docId: generateDocId } : { state }
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -582,8 +582,6 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
                     <button onClick={() => setGenerateDocId('surat-lpa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA</button>
                     <button onClick={() => setGenerateDocId('surat-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Akad</button>
-                    <button onClick={() => setGenerateDocId('psu-jalan-listrik')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'psu-jalan-listrik' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> PSU Jalan & Listrik</button>
-                    <button onClick={() => setGenerateDocId('spsu')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'spsu' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPSU</button>
                   </>
                 )}
                 {generateDocId !== 'spr' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
