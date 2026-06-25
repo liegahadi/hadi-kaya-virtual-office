@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       'bankName', 'bankAccount', 'npwpNumber', 'btnAccountNumber',
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
       'spouseOccupation', 'spouseAddress', 'motherMaidenName', 'emergencyContact',
-      'dateOfDocument', 'personalityPreference', 'sourceLead', 'assignedAgentId',
+      'dateOfDocument', 'akadNumber', 'lpaNumber', 'personalityPreference', 'sourceLead', 'assignedAgentId',
     ]
 
     const updateData: any = {}

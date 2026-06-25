@@ -281,7 +281,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'generate' | 'uploads'>('generate')
-  const [generateDocId, setGenerateDocId] = useState<'spr' | 'flpp'>('flpp')
+  const [docStage, setDocStage] = useState<'entry' | 'ajb'>('entry')
+  const [generateDocId, setGenerateDocId] = useState<string>('flpp')
   const [flppBlobUrl, setFlppBlobUrl] = useState<string | null>(null)
   const [flppLoading, setFlppLoading] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -309,6 +310,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           spouseBirthPlace: state.spouse?.pob, spouseBirthDate: state.spouse?.dob, spouseOccupation: state.spouse?.job,
           spouseAddress: state.spouse?.address,
           dateOfDocument: state.dateOfDocument,
+          akadDate: state.akadDate, akadNumber: state.akadNumber,
+          lpaDate: state.lpaDate, lpaNumber: state.lpaNumber,
         }),
       })
       const d = await res.json()
@@ -318,7 +321,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     finally { setSaving(false) }
   }
 
-  // Download PDF - SPR uses html2canvas-pro, FLPP uses overlay API
+  // Download PDF - handles all document types
   async function handleDownloadFlpp() {
     if (generateDocId === 'spr') {
       setFlppGenerating(true)
@@ -344,7 +347,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         toast.success('SPR PDF berhasil di-download!')
       } catch (err) { toast.error('Gagal generate SPR: ' + (err instanceof Error ? err.message : 'unknown')) }
       finally { try { if (root) root.unmount(); if (printArea?.parentNode) printArea.parentNode.removeChild(printArea) } catch {} setFlppGenerating(false) }
-    } else {
+    } else if (generateDocId === 'flpp') {
       setFlppGenerating(true)
       try {
         const res = await fetch('/api/documents/generate-flpp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) })
@@ -357,38 +360,54 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         toast.success('FLPP PDF berhasil di-download!')
       } catch (err) { toast.error('Gagal generate FLPP: ' + (err instanceof Error ? err.message : 'unknown')) }
       finally { setFlppGenerating(false) }
+    } else {
+      // AJB documents
+      setFlppGenerating(true)
+      try {
+        const res = await fetch('/api/documents/generate-ajb', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, docId: generateDocId }) })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `${generateDocId.toUpperCase()}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+        toast.success('PDF berhasil di-download!')
+      } catch (err) { toast.error('Gagal generate PDF: ' + (err instanceof Error ? err.message : 'unknown')) }
+      finally { setFlppGenerating(false) }
     }
   }
 
-  // FLPP preview via API overlay — guarded to prevent concurrent requests
+  // PDF preview via API overlay — handles FLPP + AJB documents
   const flppLoadingRef = useRef(false)
   async function loadFlppPreview() {
     if (flppLoadingRef.current) return
     flppLoadingRef.current = true
     setFlppLoading(true)
     try {
-      const res = await fetch('/api/documents/preview-flpp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) })
+      const isAjb = ['ajb-bank', 'surat-lpa', 'surat-akad', 'psu-jalan-listrik', 'spsu'].includes(generateDocId)
+      const endpoint = isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
+      const body = isAjb ? { state, docId: generateDocId } : { state }
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const blob = await res.blob()
       const newUrl = URL.createObjectURL(blob)
       const oldUrl = flppBlobUrl
       setFlppBlobUrl(newUrl)
-      // Revoke old URL AFTER state update (prevents 'leave this site?' dialog)
       if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
-    } catch (err) { toast.error('Gagal load FLPP preview: ' + (err instanceof Error ? err.message : 'unknown')) }
+    } catch (err) { toast.error('Gagal load preview: ' + (err instanceof Error ? err.message : 'unknown')) }
     finally { flppLoadingRef.current = false; setFlppLoading(false) }
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && generateDocId === 'flpp' && !flppLoading) loadFlppPreview()
+    if (previewMode === 'generate' && generateDocId !== 'spr' && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
-  // Refresh FLPP preview when key form data changes (debounced 2.5s to avoid rapid requests)
+  // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
-    if (generateDocId !== 'flpp') return
+    if (generateDocId === 'spr') return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
-  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument])
+  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
 
   async function handleUpload(docId: string, file: File) {
     setUploadingId(docId)
@@ -488,6 +507,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />
             <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />
             <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} full />
+            <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />
+            <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />
+            <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />
+            <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />
           </FormSection>
           {/* Upload sections */}
           <div>
@@ -535,22 +558,49 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
           {previewMode === 'generate' && (
             <>
-              <div className="flex gap-1 mb-3">
-                <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
-                <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>
-                {generateDocId === 'flpp' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+              {/* Stage toggle: Entry vs AJB */}
+              <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 mb-3">
+                <button onClick={() => { setDocStage('entry'); setGenerateDocId('flpp') }}
+                  className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'entry' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
+                  Entry (Pre-Bank)
+                </button>
+                <button onClick={() => { setDocStage('ajb'); setGenerateDocId('ajb-bank') }}
+                  className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'ajb' ? 'bg-white dark:bg-slate-900 shadow text-violet-600' : 'text-muted-foreground')}>
+                  AJB (Post-SP3K)
+                </button>
               </div>
 
+              {/* Document tabs */}
+              <div className="flex gap-1 mb-3 flex-wrap">
+                {docStage === 'entry' ? (
+                  <>
+                    <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
+                    <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
+                    <button onClick={() => setGenerateDocId('surat-lpa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA</button>
+                    <button onClick={() => setGenerateDocId('surat-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Akad</button>
+                    <button onClick={() => setGenerateDocId('psu-jalan-listrik')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'psu-jalan-listrik' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> PSU Jalan & Listrik</button>
+                    <button onClick={() => setGenerateDocId('spsu')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'spsu' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPSU</button>
+                  </>
+                )}
+                {generateDocId !== 'spr' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+              </div>
+
+              {/* SPR Preview (React component) */}
               {generateDocId === 'spr' && (
                 <div ref={previewRef} className="flex justify-center">
                   <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SPR_BTN data={state} /></div>
                 </div>
               )}
 
-              {generateDocId === 'flpp' && (
+              {/* PDF Preview (iframe) - for FLPP + all AJB docs */}
+              {generateDocId !== 'spr' && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
-                  {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading FLPP PDF...</span></div>}
-                  {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="FLPP BTN Preview" />}
+                  {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
+                  {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
                   {!flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full flex-col gap-2"><FileText className="w-10 h-10 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">Klik Refresh untuk load preview</p></div>}
                 </div>
               )}
