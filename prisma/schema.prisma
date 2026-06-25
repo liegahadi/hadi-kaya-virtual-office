@@ -13,7 +13,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -195,6 +195,45 @@ model Customer {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Detailed data for auto-fill (added for BerkasView v2)
+  nik          String?
+  birthPlace   String?
+  birthDate    String?
+  gender       String?
+  ktpAddress   String?
+  rtRw         String?
+  kelurahan    String?
+  kecamatan    String?
+  city         String?
+  postalCode   String?
+  religion     String?
+  companyName  String?
+  companyAddress String?
+  companyPhone String?
+  workDuration String?
+  workPosition String?
+  bankName     String?
+  bankAccount  String?
+  npwpNumber   String?
+  btnAccountNumber String?
+  spouseName   String?
+  spouseNik    String?
+  spouseBirthPlace String?
+  spouseBirthDate  String?
+  spouseOccupation String?
+  spouseIncome Float?
+  motherMaidenName String?
+  emergencyContact String?
+  dependents   Int?
+  dateOfDocument String?
+  // Date tracking
+  closingDate    DateTime?
+  berkasLengkapDate DateTime?
+  berkasMasukBankDate DateTime?
+  sp3kDate       DateTime?
+  akadDate       DateTime?
+  berkasLengkap  Boolean  @default(false)
+
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignedAgent  Agent?        @relation(fields: [assignedAgentId], references: [id])
   units          Unit[]
@@ -202,6 +241,7 @@ model Customer {
   stageHistory   CustomerStageHistory[]
   documents      Document[]
   surveySchedules SurveySchedule[]
+  bankPipelines  BankPipeline[]
 
   @@index([projectId, stage])
   @@index([assignedAgentId])
@@ -626,4 +666,28 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([agentId, isRead])
+}
+
+// ============================================================
+// BANK PIPELINE - Track customer progress per bank
+// ============================================================
+
+model BankPipeline {
+  id          String   @id @default(cuid())
+  customerId  String
+  bankName    String
+  status      String   @default("NOT_SUBMITTED") // NOT_SUBMITTED | BERKAS_MASUK | PROSES_BANK | SP3K | AKAD
+  submittedAt DateTime?
+  sp3kAt      DateTime?
+  akadAt      DateTime?
+  rejectAt    DateTime?
+  rejectReason String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, bankName])
+  @@index([customerId])
 }
