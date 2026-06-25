@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       'companyName', 'companyAddress', 'companyPhone', 'workDuration', 'workPosition',
       'bankName', 'bankAccount', 'npwpNumber', 'btnAccountNumber',
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
-      'spouseOccupation', 'spouseIncome', 'motherMaidenName', 'emergencyContact',
+      'spouseOccupation', 'spouseAddress', 'spouseIncome', 'motherMaidenName', 'emergencyContact',
       'dependents', 'dateOfDocument',
       'closingDate', 'berkasLengkapDate', 'berkasMasukBankDate',
       'sp3kDate', 'akadDate', 'berkasLengkap',
