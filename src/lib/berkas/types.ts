@@ -28,6 +28,8 @@ export interface ApplicantData {
   monthlyIncome: number;
 }
 
+export type SpouseJobType = 'NGANGGUR' | 'KARYAWAN' | 'WIRAUSAHA'
+
 export interface SpouseData {
   fullName: string;
   ktpNumber: string;
@@ -36,6 +38,7 @@ export interface SpouseData {
   job: string;
   address: string;
   isWorking: boolean;
+  jobType: SpouseJobType;
 }
 
 export interface PropertyData {
