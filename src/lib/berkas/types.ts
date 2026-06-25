@@ -85,5 +85,8 @@ export interface BerkasState {
   berkasMasukBankDate?: string;
   sp3kDate?: string;
   akadDate?: string;
+  akadNumber?: string;
+  lpaDate?: string;
+  lpaNumber?: string;
   berkasLengkap?: boolean;
 }

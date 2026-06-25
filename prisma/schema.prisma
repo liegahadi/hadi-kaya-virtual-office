@@ -234,6 +234,9 @@ model Customer {
   berkasMasukBankDate DateTime?
   sp3kDate       DateTime?
   akadDate       DateTime?
+  akadNumber     String?
+  lpaDate        DateTime?
+  lpaNumber      String?
   berkasLengkap  Boolean  @default(false)
 
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
