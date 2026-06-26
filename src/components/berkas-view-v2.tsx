@@ -338,6 +338,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'generate' | 'uploads'>('generate')
   const [docStage, setDocStage] = useState<'entry' | 'ajb' | 'bphtb'>('entry')
+  const [formMode, setFormMode] = useState<'bank' | 'bphtb' | 'notaris'>('bank')
   const [generateDocId, setGenerateDocId] = useState<string>('flpp')
   const [flppBlobUrl, setFlppBlobUrl] = useState<string | null>(null)
   const [flppLoading, setFlppLoading] = useState(false)
@@ -509,9 +510,27 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-card">
       <div className="flex items-center gap-2 p-3 bg-accent/10 flex-wrap">
-        <select value={bank} onChange={e => setBank(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-border bg-background">
-          <option value="BTN">BTN</option><option value="MANDIRI">Mandiri (coming soon)</option><option value="BSB_SYARIAH">BSB Syariah (coming soon)</option>
-        </select>
+        {/* Mode selector: Bank | BPHTB | Notaris */}
+        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+          <button onClick={() => { setFormMode('bank'); setDocStage('entry'); setGenerateDocId('flpp') }}
+            className={cn('px-3 py-1.5 rounded text-[11px] font-medium', formMode === 'bank' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
+            Bank
+          </button>
+          <button onClick={() => { setFormMode('bphtb'); setDocStage('bphtb'); setGenerateDocId('bphtb-pernyataan') }}
+            className={cn('px-3 py-1.5 rounded text-[11px] font-medium', formMode === 'bphtb' ? 'bg-white dark:bg-slate-900 shadow text-amber-600' : 'text-muted-foreground')}>
+            BPHTB
+          </button>
+          <button onClick={() => { setFormMode('notaris'); setDocStage('bphtb'); setGenerateDocId('bphtb-pernyataan') }}
+            className={cn('px-3 py-1.5 rounded text-[11px] font-medium', formMode === 'notaris' ? 'bg-white dark:bg-slate-900 shadow text-blue-600' : 'text-muted-foreground')}>
+            Notaris
+          </button>
+        </div>
+        {/* Bank selector - only show in bank mode */}
+        {formMode === 'bank' && (
+          <select value={bank} onChange={e => setBank(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-border bg-background">
+            <option value="BTN">BTN</option><option value="MANDIRI">Mandiri (coming soon)</option><option value="BSB_SYARIAH">BSB Syariah (coming soon)</option>
+          </select>
+        )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />} Simpan</Button>
           <Button size="sm" onClick={handleDownloadFlpp} disabled={flppGenerating} className="bg-orange-600 hover:bg-orange-700 h-8 text-xs">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}{flppGenerating ? 'Generating...' : 'Download PDF'}</Button>
@@ -521,17 +540,20 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       <div className="grid grid-cols-1 lg:grid-cols-5">
         {/* LEFT: Form */}
         <div className="lg:col-span-2 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
+          {/* Data Perusahaan - ONLY in bank mode */}
+          {formMode === 'bank' && (
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan">
             <FormField label="Nama PT" value={COMPANY_INFO.name} onChange={() => {}} disabled />
             <FormField label="Direktur" value={COMPANY_INFO.director} onChange={() => {}} disabled />
             <FormField label="Kota" value={COMPANY_INFO.city} onChange={() => {}} disabled />
             <FormField label="Rekening BTN" value={COMPANY_INFO.btnAccount} onChange={() => {}} disabled />
           </FormSection>
+          )}
           <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
             <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />
             <FormField label="NIK / No. KTP" value={state.applicant.ktpNumber} onChange={v => updateApplicant('ktpNumber', v)} />
-            <FormField label="NPWP" value={state.applicant.npwpNumber} onChange={v => updateApplicant('npwpNumber', v)} />
-            <FormField label="Rekening BTN" value={state.applicant.btnAccountNumber} onChange={v => updateApplicant('btnAccountNumber', v)} />
+            {formMode === 'bank' && <FormField label="NPWP" value={state.applicant.npwpNumber} onChange={v => updateApplicant('npwpNumber', v)} />}
+            {formMode === 'bank' && <FormField label="Rekening BTN" value={state.applicant.btnAccountNumber} onChange={v => updateApplicant('btnAccountNumber', v)} />}
             <FormField label="Tempat Lahir" value={state.applicant.pob} onChange={v => updateApplicant('pob', v)} />
             <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />
             <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />
@@ -587,16 +609,18 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
             <FormField label="No. NIB" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
             <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />
-            <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />
-            <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />
-            <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />
+            {formMode === 'bank' && <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />}
+            {formMode === 'bank' && <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />}
+            {formMode === 'bank' && <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />}
             <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} full />
-            <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />
-            <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />
-            <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />
-            <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />
+            {formMode === 'bank' && <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />}
+            {formMode === 'bank' && <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />}
+            {formMode === 'bank' && <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />}
+            {formMode === 'bank' && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
           </FormSection>
-          {/* Upload sections */}
+          {/* Upload sections - ONLY in bank mode */}
+          {formMode === 'bank' && (
+          <>
           <div>
             <h4 className="text-[10px] font-bold text-amber-400 uppercase mb-2 flex items-center gap-1"><Upload className="w-3 h-3" /> Dokumen Wajib ({uploadedCount}/{requiredUploads.length})</h4>
             <div className="space-y-1.5">
@@ -631,9 +655,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               })}
             </div>
           </div>
+          </>
+          )}
 
-          {/* BPHTB file requirements - only show when BPHTB stage */}
-          {docStage === 'bphtb' && (
+          {/* BPHTB/Notaris file requirements - show when not in bank mode */}
+          {formMode !== 'bank' && (
             <div>
               <h4 className="text-[10px] font-bold text-amber-400 uppercase mb-2 flex items-center gap-1">
                 <FileText className="w-3 h-3" /> Kebutuhan Berkas BPHTB
@@ -687,7 +713,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
           {previewMode === 'generate' && (
             <>
-              {/* Stage toggle: Entry vs AJB vs BPHTB */}
+              {/* Stage toggle: Entry vs AJB - ONLY in bank mode */}
+              {formMode === 'bank' && (
               <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 mb-3">
                 <button onClick={() => { setDocStage('entry'); setGenerateDocId('flpp') }}
                   className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'entry' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
@@ -697,20 +724,17 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                   className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'ajb' ? 'bg-white dark:bg-slate-900 shadow text-violet-600' : 'text-muted-foreground')}>
                   AJB (Post-SP3K)
                 </button>
-                <button onClick={() => { setDocStage('bphtb'); setGenerateDocId('bphtb-pernyataan') }}
-                  className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'bphtb' ? 'bg-white dark:bg-slate-900 shadow text-amber-600' : 'text-muted-foreground')}>
-                  BPHTB
-                </button>
               </div>
+              )}
 
               {/* Document tabs */}
               <div className="flex gap-1 mb-3 flex-wrap">
-                {docStage === 'entry' ? (
+                {formMode === 'bank' && docStage === 'entry' ? (
                   <>
                     <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
                     <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>
                   </>
-                ) : docStage === 'ajb' ? (
+                ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
                     <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
                     <button onClick={() => setGenerateDocId('surat-lpa-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA & Akad</button>
