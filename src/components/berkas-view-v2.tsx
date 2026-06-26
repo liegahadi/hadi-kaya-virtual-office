@@ -34,6 +34,7 @@ const BASE_REQUIRED_UPLOADS = [
   { id: 'sk-kerja', label: 'SK Kerja / NIB', desc: 'Surat Keterangan Kerja atau NIB (wirausaha)' },
   { id: 'surat-rumah', label: 'Surat Belum Memiliki Rumah', desc: 'Dari Kelurahan/Desa' },
   { id: 'sertifikat', label: 'Sertifikat Rumah', desc: 'Sertifikat tanah/rumah' },
+  { id: 'pbb', label: 'PBB', desc: 'Pajak Bumi dan Bangunan (scan/foto)' },
 ]
 
 const SPOUSE_UPLOADS = {
@@ -62,7 +63,6 @@ const SIGNED_DOCS = [
   { id: 'aplikasi-signed', label: 'Form Aplikasi', desc: 'Form aplikasi KPR yang sudah ditandatangani' },
   { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan', desc: 'Sudah ditandatangani pemohon' },
   { id: 'rekening-koran-signed', label: 'Rekening Koran / Buku Tabungan', desc: '3-6 bulan terakhir (scan/foto)' },
-  { id: 'pbb', label: 'PBB', desc: 'Pajak Bumi dan Bangunan (scan/foto)' },
 ]
 
 function formatShortDate(d: string | Date | null | undefined): string {
