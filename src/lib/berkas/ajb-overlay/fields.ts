@@ -32,16 +32,18 @@ function formatDate(d: string): string {
   catch { return d }
 }
 
+// AJB date format: ONLY tanggal bulan tahun (NO city prefix)
+// User request: "ga usah ada kota pangkalpinangnya ya... hanya tanggal bulan tahun aja"
 function akadDateTransform(_v: any, s: BerkasState): string {
   if (!s.akadDate) return ''
   const d = new Date(s.akadDate)
-  return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function lpaDateTransform(_v: any, s: BerkasState): string {
   if (!s.lpaDate) return ''
   const d = new Date(s.lpaDate)
-  return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function pobDobTransform(_v: any, s: BerkasState): string {
@@ -52,10 +54,11 @@ function spousePobDobTransform(_v: any, s: BerkasState): string {
   return s.spouse ? `${s.spouse.pob}, ${formatDate(s.spouse.dob)}` : ''
 }
 
-// Type Luas format: "84/36" (landSize/houseSize)
+// Type Luas format: [luas bangunan]/[luas tanah] = houseSize/landSize
+// User request: "formatnya spt ini [Luas bangunan]/[luas tanah]"
 function typeLuasTransform(_v: any, s: BerkasState): string {
-  if (!s.property.landSize) return ''
-  return `${s.property.landSize}/${s.property.houseSize || 36}`
+  if (!s.property.houseSize) return ''
+  return `${s.property.houseSize}/${s.property.landSize || 84}`
 }
 
 // Blok Kavling format: "E6" (blockLetter + houseNumber)
@@ -126,10 +129,13 @@ const AJB_BANK: AjbDocConfig = {
     { page: 6, x: 116.8, y: 256.0, width: 115.4, height: 12.2, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
     { page: 6, x: 360.4, y: 256.6, width: 65.1, height: 12.2, source: 'applicant', field: 'fullName', bold: true },
     { page: 6, x: 412.0, y: 339.9, width: 94.9, height: 12.2, source: 'computed', field: 'dateFull', transform: akadDateTransform },
-    // Page 7 - SPSU page 1
-    { page: 7, x: 93.0, y: 461.6, width: 73.5, height: 12.0, source: 'property', field: 'blockLetter' },       // Blok (huruf)
-    { page: 7, x: 200.2, y: 462.3, width: 108.0, height: 12.0, source: 'property', field: 'houseNumber' },    // No Rumah (angka)
-    { page: 7, x: 410.2, y: 461.6, width: 94.5, height: 12.0, source: 'property', field: 'houseAddress' },
+    // Page 7 - CORRECTED per user feedback
+    // #1 (x=93) = No KTP Debitur → ktpNumber (was blockLetter)
+    { page: 7, x: 93.0, y: 461.6, width: 73.5, height: 12.0, source: 'applicant', field: 'ktpNumber' },
+    // #2 (x=200) = Nama Lengkap Debitur → fullName (was houseNumber)
+    { page: 7, x: 200.2, y: 462.3, width: 108.0, height: 12.0, source: 'applicant', field: 'fullName', bold: true },
+    // #3 (x=410) = Blok dan No Rumah → blokKavling E6 (was houseAddress)
+    { page: 7, x: 410.2, y: 461.6, width: 94.5, height: 12.0, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform },
     { page: 7, x: 394.7, y: 392.8, width: 94.9, height: 12.2, source: 'computed', field: 'dateFull', transform: akadDateTransform },
     { page: 7, x: 379.5, y: 269.6, width: 68.3, height: 12.0, source: 'company', field: 'director', bold: true },
     // Page 8 - PSU page 1
@@ -153,9 +159,11 @@ const AJB_BANK: AjbDocConfig = {
     // Page 10 - PSU page 3
     { page: 10, x: 280.6, y: 368.1, width: 106.3, height: 12.3, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok (E6)
     { page: 10, x: 424.3, y: 225.2, width: 92.6, height: 12.1, source: 'computed', field: 'dateFull', transform: lpaDateTransform },
-    // Page 11 - PSU page 4
-    { page: 11, x: 104.7, y: 394.8, width: 63.2, height: 12.2, source: 'property', field: 'blockLetter' },    // Blok (huruf)
-    { page: 11, x: 236.0, y: 394.3, width: 84.2, height: 12.2, source: 'property', field: 'houseNumber' },   // Nomor (angka)
+    // Page 11 - CORRECTED per user feedback
+    // #1 (x=104) = Nama Debitur → fullName (was blockLetter)
+    { page: 11, x: 104.7, y: 394.8, width: 63.2, height: 12.2, source: 'applicant', field: 'fullName', bold: true },
+    // #2 (x=236) = Nama Perumahan → projectName (was houseNumber)
+    { page: 11, x: 236.0, y: 394.3, width: 84.2, height: 12.2, source: 'property', field: 'projectName' },
     { page: 11, x: 434.5, y: 234.9, width: 92.5, height: 12.3, source: 'computed', field: 'dateFull', transform: lpaDateTransform },
   ],
 }
