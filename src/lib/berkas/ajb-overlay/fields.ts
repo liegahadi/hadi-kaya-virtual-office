@@ -222,16 +222,16 @@ const SURAT_LPA: AjbDocConfig = {
     { page: 1, x: 262.2, y: 714.2, width: 26.4, height: 12.0, source: 'computed', field: 'year', transform: () => currentYearTransform() },
     // Date "Pangkalpinang," → today's date (realtime)
     { page: 1, x: 435.0, y: 741.6, width: 92.4, height: 12.5, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
-    // Property table (5 fields, y~438):
-    // #5 = Blok dan No rumah (E6)
-    { page: 1, x: 109.5, y: 438.2, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform },
-    // #6 = Nama Debitur
-    { page: 1, x: 258.3, y: 438.7, width: 52.1, height: 12.5, source: 'applicant', field: 'fullName', bold: true },
-    // #7 = Luas Tanah
-    { page: 1, x: 304.4, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'landSize' },
-    // #8 = Luas Bangunan
-    { page: 1, x: 372.1, y: 437.3, width: 90.4, height: 12.5, source: 'property', field: 'houseSize' },
-    // #9 = Nomor Sertipikat (SHM)
+    // Property table (5 fields, y~438) — SHIFTED LEFT by 1 position per user feedback:
+    // #5 (x=109.5) = Nama Debitur (was blokKavling)
+    { page: 1, x: 109.5, y: 438.2, width: 63.3, height: 12.5, source: 'applicant', field: 'fullName', bold: true },
+    // #6 (x=258.3) = Luas Tanah (was fullName)
+    { page: 1, x: 258.3, y: 438.7, width: 52.1, height: 12.5, source: 'property', field: 'landSize' },
+    // #7 (x=304.4) = Luas Bangunan (was landSize)
+    { page: 1, x: 304.4, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'houseSize' },
+    // #8 (x=372.1) = Blok dan No rumah (was houseSize)
+    { page: 1, x: 372.1, y: 437.3, width: 90.4, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform },
+    // #9 (x=408.1) = Nomor Sertipikat (stays shmNumber)
     { page: 1, x: 408.1, y: 436.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },
     // #10 = "Pada" → Hari Tanggal bulan tahun LPA from form
     { page: 1, x: 335.3, y: 507.7, width: 138.8, height: 12.0, source: 'computed', field: 'lpaDateFull', transform: lpaDateFullTransform },
@@ -245,12 +245,12 @@ const SURAT_LPA: AjbDocConfig = {
     { page: 2, x: 275.2, y: 714.0, width: 26.3, height: 12.5, source: 'computed', field: 'year', transform: () => currentYearTransform() },
     // Date "Pangkalpinang," → today's date (realtime)
     { page: 2, x: 433.9, y: 741.1, width: 92.4, height: 12.5, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
-    // Property table (5 fields, y~438):
-    { page: 2, x: 107.4, y: 439.1, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok dan No rumah
-    { page: 2, x: 260.0, y: 438.4, width: 52.1, height: 12.5, source: 'applicant', field: 'fullName', bold: true },  // Nama Debitur
-    { page: 2, x: 303.7, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'landSize' },               // Luas Tanah
-    { page: 2, x: 370.4, y: 437.8, width: 90.4, height: 12.5, source: 'property', field: 'houseSize' },              // Luas Bangunan
-    { page: 2, x: 408.1, y: 437.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },              // Nomor Sertipikat
+    // Property table (5 fields, y~438) — SHIFTED LEFT by 1 position per user feedback:
+    { page: 2, x: 107.4, y: 439.1, width: 63.3, height: 12.5, source: 'applicant', field: 'fullName', bold: true },  // Nama Debitur (was blokKavling)
+    { page: 2, x: 260.0, y: 438.4, width: 52.1, height: 12.5, source: 'property', field: 'landSize' },               // Luas Tanah (was fullName)
+    { page: 2, x: 303.7, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'houseSize' },              // Luas Bangunan (was landSize)
+    { page: 2, x: 370.4, y: 437.8, width: 90.4, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok dan No rumah (was houseSize)
+    { page: 2, x: 408.1, y: 437.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },              // Nomor Sertipikat (stays)
   ],
 }
 
