@@ -21,6 +21,8 @@ import { COMPANY_INFO, DEFAULT_PROPERTY, INITIAL_STATE } from '@/lib/berkas/cons
 import { formatCurrency, formatLongDate } from '@/lib/berkas/formatters'
 import { DocumentLayout } from '@/components/berkas-docs/DocumentLayout'
 import { SPR_BTN } from '@/components/berkas-docs/docs/btn/SPR'
+import { SuratPernyataanBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratPernyataanBPHTB'
+import { SuratKuasaBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratKuasaBPHTB'
 
 // ============================================================
 // REQUIRED UPLOADS - Dokumen identitas wajib
@@ -335,7 +337,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'generate' | 'uploads'>('generate')
-  const [docStage, setDocStage] = useState<'entry' | 'ajb'>('entry')
+  const [docStage, setDocStage] = useState<'entry' | 'ajb' | 'bphtb'>('entry')
   const [generateDocId, setGenerateDocId] = useState<string>('flpp')
   const [flppBlobUrl, setFlppBlobUrl] = useState<string | null>(null)
   const [flppLoading, setFlppLoading] = useState(false)
@@ -385,7 +387,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
   // Download PDF - handles all document types
   async function handleDownloadFlpp() {
-    if (generateDocId === 'spr') {
+    // React component docs: SPR + BPHTB Surat Pernyataan + BPHTB Surat Kuasa
+    const reactDocs: Record<string, { component: any; name: string }> = {
+      'spr': { component: SPR_BTN, name: 'SPR' },
+      'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
+      'bphtb-kuasa': { component: SuratKuasaBPHTB, name: 'Surat_Kuasa_BPHTB' },
+    }
+
+    if (reactDocs[generateDocId]) {
+      const { component: DocComponent, name } = reactDocs[generateDocId]
       setFlppGenerating(true)
       let printArea: HTMLDivElement | null = null
       let root: any = null
@@ -396,7 +406,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         const { createRoot } = await import('react-dom/client')
         root = createRoot(printArea)
         document.body.appendChild(printArea)
-        await new Promise(resolve => { root.render(React.createElement(SPR_BTN, { data: state })); setTimeout(resolve, 800) })
+        await new Promise(resolve => { root.render(React.createElement(DocComponent, { data: state })); setTimeout(resolve, 800) })
         const canvas = await html2canvas(printArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printArea.scrollWidth, windowHeight: printArea.scrollHeight })
         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
         const imgData = canvas.toDataURL('image/jpeg', 0.95)
@@ -405,9 +415,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
         heightLeft -= 297
         while (heightLeft > 0) { position = heightLeft - imgHeight; pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight); heightLeft -= 297 }
-        pdf.save(`SPR_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`)
-        toast.success('SPR PDF berhasil di-download!')
-      } catch (err) { toast.error('Gagal generate SPR: ' + (err instanceof Error ? err.message : 'unknown')) }
+        pdf.save(`${name}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`)
+        toast.success(`${name} PDF berhasil di-download!`)
+      } catch (err) { toast.error(`Gagal generate ${name}: ` + (err instanceof Error ? err.message : 'unknown')) }
       finally { try { if (root) root.unmount(); if (printArea?.parentNode) printArea.parentNode.removeChild(printArea) } catch {} setFlppGenerating(false) }
     } else if (generateDocId === 'flpp') {
       setFlppGenerating(true)
@@ -462,12 +472,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && generateDocId !== 'spr' && !flppLoading) loadFlppPreview()
+    if (previewMode === 'generate' && generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
-    if (generateDocId === 'spr') return
+    // Skip auto-refresh for React component docs (SPR + BPHTB) - they update live in DOM
+    if (generateDocId === 'spr' || generateDocId === 'bphtb-pernyataan' || generateDocId === 'bphtb-kuasa') return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -620,9 +631,54 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               })}
             </div>
           </div>
-        </div>
 
-        {/* RIGHT: Preview */}
+          {/* BPHTB file requirements - only show when BPHTB stage */}
+          {docStage === 'bphtb' && (
+            <div>
+              <h4 className="text-[10px] font-bold text-amber-400 uppercase mb-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Kebutuhan Berkas BPHTB
+              </h4>
+              <div className="space-y-1">
+                {[
+                  { id: 'sertifikat', label: '1. Sertipikat', source: 'bank', from: 'sertifikat' },
+                  { id: 'pbb', label: '2. PBB', source: 'bank', from: 'pbb' },
+                  { id: 'bphtb-bukti-bayar-pbb', label: '3. Bukti Bayar PBB', source: 'new' },
+                  { id: 'bphtb-pernyataan', label: '4. Pernyataan Penghasilan', source: 'generated' },
+                  { id: 'bphtb-kwitansi', label: '5. Kwitansi Harga Rumah', source: 'new' },
+                  { id: 'ktp', label: '6. KTP Debitur', source: 'bank', from: 'ktp' },
+                  { id: 'spouse-ktp', label: '7. KTP Pasangan', source: 'bank', from: 'spouse-ktp', showWhen: state.maritalStatus === 'Sudah Menikah' },
+                  { id: 'kk', label: '8. Kartu Keluarga', source: 'bank', from: 'kk' },
+                  { id: 'npwp', label: '9. NPWP', source: 'bank', from: 'npwp' },
+                  { id: 'bphtb-sppk', label: '10. SPPK / SP3K / SP4K', source: 'new' },
+                  { id: 'status-nikah', label: '11. Akte Nikah / Cerai / Blm Menikah', source: 'bank', from: 'status-nikah' },
+                  { id: 'bphtb-kuasa', label: '12. Surat Kuasa', source: 'generated' },
+                ].filter(d => !d.showWhen || d.showWhen).map(doc => {
+                  const isReady = doc.source === 'generated' || doc.source === 'bank'
+                    ? (doc.source === 'generated' || !!uploadedFiles[doc.from || ''])
+                    : !!uploadedFiles[doc.id]
+                  return (
+                    <div key={doc.id} className={cn('flex items-center gap-2 p-1.5 rounded border text-[10px]', isReady ? 'border-emerald-700/30 bg-emerald-950/10' : 'border-amber-500/30 bg-amber-950/10')}>
+                      <span>{isReady ? '✅' : '⬜'}</span>
+                      <span className="flex-1">{doc.label}</span>
+                      <span className="text-[8px] text-muted-foreground">
+                        {doc.source === 'generated' ? '⚡ Auto-generate' : doc.source === 'bank' ? '📦 Dari berkas bank' : '📤 Upload baru'}
+                      </span>
+                      {doc.source === 'new' && (
+                        <>
+                          {uploadedFiles[doc.id] && <button onClick={() => setPreviewUrl(uploadedFiles[doc.id])} className="text-muted-foreground hover:text-foreground"><Eye className="w-3 h-3" /></button>}
+                          <input type="file" accept="image/*,.pdf" className="hidden" id={`upload-${doc.id}`} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(doc.id, f); e.target.value = '' }} />
+                          <button onClick={() => document.getElementById(`upload-${doc.id}`)?.click()} disabled={uploadingId === doc.id} className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400">
+                            {uploadingId === doc.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : uploadedFiles[doc.id] ? 'Ganti' : 'Upload'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
         <div className="lg:col-span-3 bg-slate-200 dark:bg-slate-800 p-4 max-h-[70vh] overflow-auto">
           <div className="flex bg-white dark:bg-slate-900 rounded-lg p-0.5 mb-3 shadow-sm">
             <button onClick={() => setPreviewMode('generate')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'generate' ? 'bg-emerald-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><FileText className="w-3.5 h-3.5" /> Preview Dokumen</button>
@@ -631,7 +687,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
           {previewMode === 'generate' && (
             <>
-              {/* Stage toggle: Entry vs AJB */}
+              {/* Stage toggle: Entry vs AJB vs BPHTB */}
               <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 mb-3">
                 <button onClick={() => { setDocStage('entry'); setGenerateDocId('flpp') }}
                   className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'entry' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
@@ -640,6 +696,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 <button onClick={() => { setDocStage('ajb'); setGenerateDocId('ajb-bank') }}
                   className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'ajb' ? 'bg-white dark:bg-slate-900 shadow text-violet-600' : 'text-muted-foreground')}>
                   AJB (Post-SP3K)
+                </button>
+                <button onClick={() => { setDocStage('bphtb'); setGenerateDocId('bphtb-pernyataan') }}
+                  className={cn('flex-1 px-3 py-1.5 rounded text-[11px] font-medium', docStage === 'bphtb' ? 'bg-white dark:bg-slate-900 shadow text-amber-600' : 'text-muted-foreground')}>
+                  BPHTB
                 </button>
               </div>
 
@@ -650,13 +710,18 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
                     <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>
                   </>
-                ) : (
+                ) : docStage === 'ajb' ? (
                   <>
                     <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
                     <button onClick={() => setGenerateDocId('surat-lpa-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA & Akad</button>
                   </>
+                ) : (
+                  <>
+                    <button onClick={() => setGenerateDocId('bphtb-pernyataan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-pernyataan' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan</button>
+                    <button onClick={() => setGenerateDocId('bphtb-kuasa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-kuasa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Kuasa</button>
+                  </>
                 )}
-                {generateDocId !== 'spr' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+                {generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
               </div>
 
               {/* SPR Preview (React component) */}
@@ -666,8 +731,22 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )}
 
-              {/* PDF Preview (iframe) - for FLPP + all AJB docs */}
-              {generateDocId !== 'spr' && (
+              {/* BPHTB Surat Pernyataan Preview (React component) */}
+              {generateDocId === 'bphtb-pernyataan' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SuratPernyataanBPHTB data={state} /></div>
+                </div>
+              )}
+
+              {/* BPHTB Surat Kuasa Preview (React component) */}
+              {generateDocId === 'bphtb-kuasa' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SuratKuasaBPHTB data={state} /></div>
+                </div>
+              )}
+
+              {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
+              {generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                   {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                   {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
