@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Type definitions for field coercion
     const floatFields = ['monthlyIncome', 'spouseIncome']
-    const intFields = ['dependents', 'fileSize', 'sortOrder']
+    const intFields = ['dependents', 'fileSize', 'sortOrder', 'landSize', 'houseSize']
     const booleanFields = ['berkasLengkap', 'hasExistingLoan', 'hasExistingHouse', 'isExistingMigration', 'isRequired', 'isActive']
     const dateFields = ['closingDate', 'berkasLengkapDate', 'berkasMasukBankDate', 'sp3kDate', 'akadDate', 'stageUpdatedAt', 'submittedAt', 'sp3kAt', 'akadAt', 'rejectAt', 'bookedAt', 'uploadedAt']
 
@@ -45,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       'kelurahan', 'kecamatan', 'city', 'postalCode', 'religion',
       'companyName', 'companyAddress', 'companyPhone', 'workDuration', 'workPosition',
       'bankName', 'bankAccount', 'npwpNumber', 'btnAccountNumber',
+      'blockLetter', 'houseNumber', 'shmNumber', 'nibNumber',
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
       'spouseOccupation', 'spouseAddress', 'motherMaidenName', 'emergencyContact',
       'dateOfDocument', 'akadNumber', 'lpaNumber', 'personalityPreference', 'sourceLead', 'assignedAgentId',

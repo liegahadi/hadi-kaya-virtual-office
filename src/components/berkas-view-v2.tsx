@@ -62,6 +62,7 @@ const SIGNED_DOCS = [
   { id: 'aplikasi-signed', label: 'Form Aplikasi', desc: 'Form aplikasi KPR yang sudah ditandatangani' },
   { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan', desc: 'Sudah ditandatangani pemohon' },
   { id: 'rekening-koran-signed', label: 'Rekening Koran / Buku Tabungan', desc: '3-6 bulan terakhir (scan/foto)' },
+  { id: 'pbb', label: 'PBB', desc: 'Pajak Bumi dan Bangunan (scan/foto)' },
 ]
 
 function formatShortDate(d: string | Date | null | undefined): string {
@@ -311,9 +312,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       property: {
         ...DEFAULT_PROPERTY,
         kavlingNumber: unit?.blockNumber || '',
-        blockLetter,
-        houseNumber,
-        landSize: unit?.landSize || 84,
+        blockLetter: customer.blockLetter || blockLetter,
+        houseNumber: customer.houseNumber || houseNumber,
+        landSize: customer.landSize || unit?.landSize || 84,
+        houseSize: customer.houseSize || 36,
+        shmNumber: customer.shmNumber || '',
+        nibNumber: customer.nibNumber || '',
         projectName: 'ANJAYO 16',
       },
       dateOfDocument: customer.dateOfDocument || new Date().toISOString().split('T')[0],
@@ -362,6 +366,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           dateOfDocument: state.dateOfDocument,
           akadDate: state.akadDate, akadNumber: state.akadNumber,
           lpaDate: state.lpaDate, lpaNumber: state.lpaNumber,
+          npwpNumber: state.applicant.npwpNumber,
+          btnAccountNumber: state.applicant.btnAccountNumber,
+          blockLetter: state.property.blockLetter,
+          houseNumber: state.property.houseNumber,
+          landSize: state.property.landSize,
+          houseSize: state.property.houseSize,
+          shmNumber: state.property.shmNumber,
+          nibNumber: state.property.nibNumber,
         }),
       })
       const d = await res.json()
