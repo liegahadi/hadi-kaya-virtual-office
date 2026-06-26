@@ -70,6 +70,40 @@ function blokKavlingTransform(_v: any, s: BerkasState): string {
   return `${s.property.blockLetter || ''}${s.property.houseNumber || ''}`
 }
 
+// Today's date (realtime) - format: "25 Juni 2026" (NO city prefix)
+// User: "tanggal bulan tahun = realtime mksdnya"
+function todayDateTransform(): string {
+  return new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
+// Roman numeral month for document number (I-XII)
+// User: "Bulan huruf romawi = bulan pembuatan surat ini menggunakan huruf romawi"
+function romanMonthTransform(): string {
+  const romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
+  return romans[new Date().getMonth()]
+}
+
+// Current year
+// User: "tahun = tahun ini"
+function currentYearTransform(): string {
+  return new Date().getFullYear().toString()
+}
+
+// LPA date from form: "Senin, 25 Juni 2026" (with day name)
+// User: "Hari Tanggal bulan tahun LPA = dari box form Tanggal LPA"
+function lpaDateFullTransform(_v: any, s: BerkasState): string {
+  const dateStr = s.lpaDate || s.dateOfDocument
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+}
+
+// Akad date from form: "Senin, 25 Juni 2026"
+function akadDateFullTransform(_v: any, s: BerkasState): string {
+  const dateStr = s.akadDate || s.dateOfDocument
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 // ============================================================
 // 1. AJB BANK (btn-ajb-bank.pdf, 11 pages, 73 annotations)
 // ============================================================
@@ -173,38 +207,50 @@ const AJB_BANK: AjbDocConfig = {
 }
 
 // ============================================================
-// 2. SURAT LPA (page 1 of btn-surat-lpa-akad.pdf, 10 annotations)
-//    Surat Akad is page 2 — both rendered together as 1 preview
+// 2. SURAT LPA & AKAD (btn-surat-lpa-akad.pdf, 2 pages, 20 annotations)
+//    Page 1 = Surat LPA, Page 2 = Surat Akad
 // ============================================================
 const SURAT_LPA: AjbDocConfig = {
   id: 'surat-lpa',
   name: 'Surat LPA & Akad',
   templatePath: '/public/templates/btn-surat-lpa-akad.pdf',
   fields: [
-    // Page 1 = Surat LPA
+    // === PAGE 1 = SURAT LPA ===
+    // Nomor: [lpaNumber]/MBP/LPA/[romanMonth]/[year]
     { page: 1, x: 149.4, y: 714.8, width: 78.7, height: 12.4, source: 'computed', field: 'lpaNumber', transform: (_v, s) => s.lpaNumber || '001' },
-    { page: 1, x: 238.6, y: 714.7, width: 91.1, height: 12.5, source: 'computed', field: 'lpaMonth', transform: (_v, s) => s.lpaDate ? new Date(s.lpaDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '' },
-    { page: 1, x: 262.2, y: 714.2, width: 26.4, height: 12.0, source: 'computed', field: 'lpaDay', transform: (_v, s) => s.lpaDate ? new Date(s.lpaDate).toLocaleDateString('id-ID', { day: '2-digit' }) : '' },
-    { page: 1, x: 435.0, y: 741.6, width: 92.4, height: 12.5, source: 'computed', field: 'dateFull', transform: lpaDateTransform },
-    // Page 1 property info - CORRECTED mappings
-    { page: 1, x: 109.5, y: 438.2, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok/No (E6)
-    { page: 1, x: 258.3, y: 438.7, width: 52.1, height: 12.5, source: 'property', field: 'projectName' },        // Nama perumahan
-    { page: 1, x: 304.4, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'houseAddress' },       // Alamat
-    { page: 1, x: 372.1, y: 437.3, width: 90.4, height: 12.5, source: 'computed', field: 'luas', transform: (_v, s) => s.property.landSize ? `${s.property.landSize} m²` : '' }, // Luas tanah
-    { page: 1, x: 408.1, y: 436.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },          // No SHM/Sertifikat - CORRECTED
-    { page: 1, x: 335.3, y: 507.7, width: 138.8, height: 12.0, source: 'computed', field: 'location', transform: () => 'Gabek Dua, Pangkalpinang' },
-    // Page 2 = Surat Akad
+    { page: 1, x: 238.6, y: 714.7, width: 91.1, height: 12.5, source: 'computed', field: 'romanMonth', transform: () => romanMonthTransform() },
+    { page: 1, x: 262.2, y: 714.2, width: 26.4, height: 12.0, source: 'computed', field: 'year', transform: () => currentYearTransform() },
+    // Date "Pangkalpinang," → today's date (realtime)
+    { page: 1, x: 435.0, y: 741.6, width: 92.4, height: 12.5, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
+    // Property table (5 fields, y~438):
+    // #5 = Blok dan No rumah (E6)
+    { page: 1, x: 109.5, y: 438.2, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform },
+    // #6 = Nama Debitur
+    { page: 1, x: 258.3, y: 438.7, width: 52.1, height: 12.5, source: 'applicant', field: 'fullName', bold: true },
+    // #7 = Luas Tanah
+    { page: 1, x: 304.4, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'landSize' },
+    // #8 = Luas Bangunan
+    { page: 1, x: 372.1, y: 437.3, width: 90.4, height: 12.5, source: 'property', field: 'houseSize' },
+    // #9 = Nomor Sertipikat (SHM)
+    { page: 1, x: 408.1, y: 436.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },
+    // #10 = "Pada" → Hari Tanggal bulan tahun LPA from form
+    { page: 1, x: 335.3, y: 507.7, width: 138.8, height: 12.0, source: 'computed', field: 'lpaDateFull', transform: lpaDateFullTransform },
+
+    // === PAGE 2 = SURAT AKAD ===
+    // #1 = "Pada" → Hari Tanggal bulan tahun Akad from form
+    { page: 2, x: 260.2, y: 508.1, width: 143.3, height: 12.5, source: 'computed', field: 'akadDateFull', transform: akadDateFullTransform },
+    // Nomor: [akadNumber]/MBP/Akad/[romanMonth]/[year]
     { page: 2, x: 149.5, y: 714.9, width: 78.7, height: 12.3, source: 'computed', field: 'akadNumber', transform: (_v, s) => s.akadNumber || '001' },
-    { page: 2, x: 242.2, y: 714.7, width: 91.1, height: 12.5, source: 'computed', field: 'akadMonth', transform: (_v, s) => s.akadDate ? new Date(s.akadDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '' },
-    { page: 2, x: 275.2, y: 714.0, width: 26.3, height: 12.5, source: 'computed', field: 'akadDay', transform: (_v, s) => s.akadDate ? new Date(s.akadDate).toLocaleDateString('id-ID', { day: '2-digit' }) : '' },
-    { page: 2, x: 433.9, y: 741.1, width: 92.4, height: 12.5, source: 'computed', field: 'dateFull', transform: akadDateTransform },
-    // Page 2 property info - CORRECTED mappings
-    { page: 2, x: 107.4, y: 439.1, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok/No (E6)
-    { page: 2, x: 260.0, y: 438.4, width: 52.1, height: 12.5, source: 'property', field: 'projectName' },        // Nama perumahan
-    { page: 2, x: 303.7, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'houseAddress' },       // Alamat
-    { page: 2, x: 370.4, y: 437.8, width: 90.4, height: 12.5, source: 'computed', field: 'luas', transform: (_v, s) => s.property.landSize ? `${s.property.landSize} m²` : '' }, // Luas tanah
-    { page: 2, x: 408.1, y: 437.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },          // No SHM/Sertifikat - CORRECTED
-    { page: 2, x: 260.2, y: 508.1, width: 143.3, height: 12.5, source: 'computed', field: 'location', transform: () => 'Gabek Dua, Pangkalpinang' },
+    { page: 2, x: 242.2, y: 714.7, width: 91.1, height: 12.5, source: 'computed', field: 'romanMonth', transform: () => romanMonthTransform() },
+    { page: 2, x: 275.2, y: 714.0, width: 26.3, height: 12.5, source: 'computed', field: 'year', transform: () => currentYearTransform() },
+    // Date "Pangkalpinang," → today's date (realtime)
+    { page: 2, x: 433.9, y: 741.1, width: 92.4, height: 12.5, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
+    // Property table (5 fields, y~438):
+    { page: 2, x: 107.4, y: 439.1, width: 63.3, height: 12.5, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok dan No rumah
+    { page: 2, x: 260.0, y: 438.4, width: 52.1, height: 12.5, source: 'applicant', field: 'fullName', bold: true },  // Nama Debitur
+    { page: 2, x: 303.7, y: 437.8, width: 73.9, height: 12.5, source: 'property', field: 'landSize' },               // Luas Tanah
+    { page: 2, x: 370.4, y: 437.8, width: 90.4, height: 12.5, source: 'property', field: 'houseSize' },              // Luas Bangunan
+    { page: 2, x: 408.1, y: 437.8, width: 78.5, height: 12.5, source: 'property', field: 'shmNumber' },              // Nomor Sertipikat
   ],
 }
 
