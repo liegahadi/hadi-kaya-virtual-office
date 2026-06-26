@@ -26,12 +26,37 @@ export function SPR_MANDIRI({ data }: { data: BerkasState }) {
 
   return (
     <DocumentLayout>
-      {/* Kop Surat */}
-      <div style={{ textAlign: 'center', marginBottom: '15px', borderBottom: '3px double #000', paddingBottom: '10px' }}>
-        <h1 style={{ fontSize: '16pt', fontWeight: 'bold', margin: 0 }}>ANJAYO 16</h1>
-        <p style={{ fontSize: '10pt', margin: '2px 0' }}>KANTOR PEMASARAN JL. FATMAWATI (KAMPAK)</p>
-        <p style={{ fontSize: '9pt', margin: '2px 0' }}>PANGKALPINANG, KEPULAUAN BANGKA BELITUNG</p>
+      {/* Kop Surat PT. Marlindo Bangun Persada */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+        {/* Logo placeholder - MB (Marlindo Bangun) biru + kuning */}
+        <div style={{
+          width: '60px', height: '60px', marginRight: '15px', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '3px solid #1a5276', borderRadius: '8px',
+          background: 'linear-gradient(135deg, #1a5276 0%, #2980b9 100%)',
+          position: 'relative',
+        }}>
+          <span style={{
+            fontSize: '28pt', fontWeight: 'bold', color: '#f1c40f',
+            fontFamily: 'Arial, sans-serif', lineHeight: 1,
+            textShadow: '2px 2px 0 #1a5276',
+          }}>MB</span>
+        </div>
+        {/* Text kop surat */}
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: '16pt', fontWeight: 'bold', margin: 0, color: '#000', fontFamily: 'Arial, sans-serif' }}>
+            PT. MARLINDO BANGUN PERSADA
+          </h1>
+          <p style={{ fontSize: '9pt', margin: '3px 0 0 0', color: '#000' }}>
+            Alamat : Jalan Fatmawati Kel. Air Salemba Kec. Gabek Pangkalpinang
+          </p>
+          <p style={{ fontSize: '9pt', margin: '1px 0 0 0', color: '#000' }}>
+            e-mail : pt_marlindobangunpersada@yahoo.com
+          </p>
+        </div>
       </div>
+      {/* Garis pemisah kop surat */}
+      <div style={{ borderBottom: '3px solid #000', marginBottom: '15px' }}></div>
 
       {/* Judul SPR */}
       <div style={{ textAlign: 'center', marginBottom: '15px' }}>
