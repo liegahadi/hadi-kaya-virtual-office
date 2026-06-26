@@ -35,14 +35,18 @@ function formatDate(d: string): string {
 // AJB date format: ONLY tanggal bulan tahun (NO city prefix)
 // User request: "ga usah ada kota pangkalpinangnya ya... hanya tanggal bulan tahun aja"
 function akadDateTransform(_v: any, s: BerkasState): string {
-  if (!s.akadDate) return ''
-  const d = new Date(s.akadDate)
+  // Fallback: akadDate → lpaDate → dateOfDocument
+  const dateStr = s.akadDate || s.lpaDate || s.dateOfDocument
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function lpaDateTransform(_v: any, s: BerkasState): string {
-  if (!s.lpaDate) return ''
-  const d = new Date(s.lpaDate)
+  // Fallback: lpaDate → akadDate → dateOfDocument
+  const dateStr = s.lpaDate || s.akadDate || s.dateOfDocument
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
