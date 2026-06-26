@@ -21,6 +21,7 @@ import { COMPANY_INFO, DEFAULT_PROPERTY, INITIAL_STATE } from '@/lib/berkas/cons
 import { formatCurrency, formatLongDate } from '@/lib/berkas/formatters'
 import { DocumentLayout } from '@/components/berkas-docs/DocumentLayout'
 import { SPR_BTN } from '@/components/berkas-docs/docs/btn/SPR'
+import { SPR_MANDIRI } from '@/components/berkas-docs/docs/mandiri/SPR_MANDIRI'
 import { SuratPernyataanTidakMemilikiRumah } from '@/components/berkas-docs/docs/common/SuratPernyataanTidakMemilikiRumah'
 import { SuratPernyataanPenghasilan } from '@/components/berkas-docs/docs/common/SuratPernyataanPenghasilan'
 import { SuratPernyataanBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratPernyataanBPHTB'
@@ -392,7 +393,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   async function handleDownloadFlpp() {
     // React component docs: SPR + BPHTB Surat Pernyataan + BPHTB Surat Kuasa
     const reactDocs: Record<string, { component: any; name: string }> = {
-      'spr': { component: SPR_BTN, name: 'SPR' },
+      'spr': { component: bank === 'MANDIRI' ? SPR_MANDIRI : SPR_BTN, name: 'SPR' },
       'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
       'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
       'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
@@ -759,10 +760,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 {generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
               </div>
 
-              {/* SPR Preview (React component) */}
+              {/* SPR Preview (React component) - BTN or Mandiri */}
               {generateDocId === 'spr' && (
                 <div ref={previewRef} className="flex justify-center">
-                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SPR_BTN data={state} /></div>
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}>
+                    {bank === 'MANDIRI' ? <SPR_MANDIRI data={state} /> : <SPR_BTN data={state} />}
+                  </div>
                 </div>
               )}
 
