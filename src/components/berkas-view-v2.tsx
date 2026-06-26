@@ -21,6 +21,8 @@ import { COMPANY_INFO, DEFAULT_PROPERTY, INITIAL_STATE } from '@/lib/berkas/cons
 import { formatCurrency, formatLongDate } from '@/lib/berkas/formatters'
 import { DocumentLayout } from '@/components/berkas-docs/DocumentLayout'
 import { SPR_BTN } from '@/components/berkas-docs/docs/btn/SPR'
+import { SuratPernyataanTidakMemilikiRumah } from '@/components/berkas-docs/docs/common/SuratPernyataanTidakMemilikiRumah'
+import { SuratPernyataanPenghasilan } from '@/components/berkas-docs/docs/common/SuratPernyataanPenghasilan'
 import { SuratPernyataanBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratPernyataanBPHTB'
 import { SuratKuasaBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratKuasaBPHTB'
 
@@ -391,6 +393,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     // React component docs: SPR + BPHTB Surat Pernyataan + BPHTB Surat Kuasa
     const reactDocs: Record<string, { component: any; name: string }> = {
       'spr': { component: SPR_BTN, name: 'SPR' },
+      'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
+      'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
       'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
       'bphtb-kuasa': { component: SuratKuasaBPHTB, name: 'Surat_Kuasa_BPHTB' },
     }
@@ -473,13 +477,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && !flppLoading) loadFlppPreview()
+    if (previewMode === 'generate' && generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
-    // Skip auto-refresh for React component docs (SPR + BPHTB) - they update live in DOM
-    if (generateDocId === 'spr' || generateDocId === 'bphtb-pernyataan' || generateDocId === 'bphtb-kuasa') return
+    // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
+    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa'].includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -733,6 +737,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                   <>
                     <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
                     <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>
+                    <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>
+                    <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
@@ -745,13 +751,27 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('bphtb-kuasa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-kuasa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Kuasa</button>
                   </>
                 )}
-                {generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+                {generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
               </div>
 
               {/* SPR Preview (React component) */}
               {generateDocId === 'spr' && (
                 <div ref={previewRef} className="flex justify-center">
                   <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SPR_BTN data={state} /></div>
+                </div>
+              )}
+
+              {/* Surat Pernyataan Tidak Memiliki Rumah Preview */}
+              {generateDocId === 'pernyataan-rumah' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SuratPernyataanTidakMemilikiRumah data={state} /></div>
+                </div>
+              )}
+
+              {/* Surat Pernyataan Penghasilan Preview */}
+              {generateDocId === 'pernyataan-penghasilan' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SuratPernyataanPenghasilan data={state} /></div>
                 </div>
               )}
 
@@ -770,7 +790,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               )}
 
               {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
-              {generateDocId !== 'spr' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && (
+              {generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                   {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                   {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
