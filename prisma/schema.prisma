@@ -217,6 +217,12 @@ model Customer {
   bankAccount  String?
   npwpNumber   String?
   btnAccountNumber String?
+  blockLetter  String?
+  houseNumber  String?
+  landSize     Int?
+  houseSize    Int?
+  shmNumber    String?
+  nibNumber    String?
   spouseName   String?
   spouseNik    String?
   spouseBirthPlace String?
