@@ -508,6 +508,88 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       setUploadedFiles(prev => ({ ...prev, [docId]: dataUrl }))
       const label = [...requiredUploads, ...SIGNED_DOCS].find(u => u.id === docId)?.label || docId
       toast.success(`${label} berhasil diupload!`)
+
+      // === AUTO OCR: KTP Debitur ===
+      if (docId === 'ktp' && dataUrl.startsWith('data:image')) {
+        toast.info('🔍 Membaca data KTP...')
+        try {
+          const res = await fetch('/api/ocr/ktp', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataUrl })
+          })
+          const d = await res.json()
+          if (d.success && d.data) {
+            const ocr = d.data
+            // Auto-fill form fields from OCR
+            if (ocr.nama) updateApplicant('fullName', ocr.nama.toUpperCase())
+            if (ocr.nik) updateApplicant('ktpNumber', ocr.nik)
+            if (ocr.tempatLahir) updateApplicant('pob', ocr.tempatLahir.toUpperCase())
+            if (ocr.tanggalLahir) {
+              // Convert DD-MM-YYYY to YYYY-MM-DD for date input
+              const parts = ocr.tanggalLahir.split('-')
+              if (parts.length === 3) updateApplicant('dob', `${parts[2]}-${parts[1]}-${parts[0]}`)
+            }
+            if (ocr.alamat) updateApplicant('address', ocr.alamat.toUpperCase())
+            if (ocr.pekerjaan) updateApplicant('jobTitle', ocr.pekerjaan.toUpperCase())
+            if (ocr.statusPerkawinan) {
+              const st = ocr.statusPerkawinan.toUpperCase()
+              if (st.includes('KAWIN') && !st.includes('BELUM')) {
+                setState(s => ({ ...s, maritalStatus: MaritalStatus.MARRIED }))
+              } else {
+                setState(s => ({ ...s, maritalStatus: MaritalStatus.SINGLE }))
+              }
+            }
+            toast.success('✅ Data KTP otomatis terisi!')
+          }
+        } catch (err) { console.error('KTP OCR error:', err); toast.error('Gagal scan KTP, isi manual ya') }
+      }
+
+      // === AUTO OCR: KTP Pasangan ===
+      if (docId === 'spouse-ktp' && dataUrl.startsWith('data:image')) {
+        toast.info('🔍 Membaca data KTP Pasangan...')
+        try {
+          const res = await fetch('/api/ocr/ktp', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataUrl })
+          })
+          const d = await res.json()
+          if (d.success && d.data) {
+            const ocr = d.data
+            if (ocr.nama) updateSpouse('fullName', ocr.nama.toUpperCase())
+            if (ocr.nik) updateSpouse('ktpNumber', ocr.nik)
+            if (ocr.tempatLahir) updateSpouse('pob', ocr.tempatLahir.toUpperCase())
+            if (ocr.tanggalLahir) {
+              const parts = ocr.tanggalLahir.split('-')
+              if (parts.length === 3) updateSpouse('dob', `${parts[2]}-${parts[1]}-${parts[0]}`)
+            }
+            if (ocr.alamat) updateSpouse('address', ocr.alamat.toUpperCase())
+            if (ocr.pekerjaan) updateSpouse('job', ocr.pekerjaan.toUpperCase())
+            toast.success('✅ Data KTP Pasangan otomatis terisi!')
+          }
+        } catch (err) { console.error('Spouse KTP OCR error:', err); toast.error('Gagal scan KTP pasangan') }
+      }
+
+      // === AUTO OCR: Sertifikat ===
+      if (docId === 'sertifikat' && dataUrl.startsWith('data:image')) {
+        toast.info('🔍 Membaca nomor sertifikat...')
+        try {
+          const res = await fetch('/api/ocr/sertifikat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataUrl })
+          })
+          const d = await res.json()
+          if (d.success && d.data) {
+            if (d.data.nomorSertifikat) updateProperty('shmNumber', d.data.nomorSertifikat)
+            if (d.data.nib) updateProperty('nibNumber', d.data.nib)
+            if (d.data.luasTanah) {
+              const luas = parseInt(d.data.luasTanah.replace(/\D/g, ''))
+              if (luas) updateProperty('landSize', luas)
+            }
+            toast.success('✅ Nomor sertifikat otomatis terisi!')
+          }
+        } catch (err) { console.error('Sertifikat OCR error:', err); toast.error('Gagal scan sertifikat') }
+      }
+
     } catch (err) { toast.error('Gagal upload: ' + (err instanceof Error ? err.message : 'unknown')) }
     finally { setUploadingId(null) }
   }
