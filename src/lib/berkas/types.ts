@@ -26,6 +26,12 @@ export interface ApplicantData {
   companyName: string;
   companyAddress: string;
   monthlyIncome: number;
+  // BSB Syariah specific
+  domicileAddress?: string;
+  email?: string;
+  nip?: string;
+  bendaharawanName?: string;
+  bendaharawanNip?: string;
 }
 
 export type SpouseJobType = 'NGANGGUR' | 'KARYAWAN' | 'WIRAUSAHA'

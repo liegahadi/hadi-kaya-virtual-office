@@ -439,11 +439,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       } catch (err) { toast.error('Gagal generate FLPP: ' + (err instanceof Error ? err.message : 'unknown')) }
       finally { setFlppGenerating(false) }
     } else {
-      // AJB or Mandiri documents (PDF overlay)
+      // AJB, Mandiri, or BSB documents (PDF overlay)
       setFlppGenerating(true)
       try {
         const isMandiri = generateDocId.startsWith('mandiri-')
-        const endpoint = isMandiri ? '/api/documents/generate-mandiri' : '/api/documents/generate-ajb'
+        const isBsb = generateDocId.startsWith('bsb-')
+        const endpoint = isBsb ? '/api/documents/generate-bsb' : isMandiri ? '/api/documents/generate-mandiri' : '/api/documents/generate-ajb'
         const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
         const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, docId: realDocId }) })
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
@@ -467,9 +468,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     try {
       const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
       const isMandiri = generateDocId.startsWith('mandiri-')
-      const endpoint = isMandiri ? '/api/documents/preview-mandiri' : isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
+      const isBsb = generateDocId.startsWith('bsb-')
+      const endpoint = isBsb ? '/api/documents/preview-bsb' : isMandiri ? '/api/documents/preview-mandiri' : isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
       const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
-      const body = (isAjb || isMandiri) ? { state, docId: realDocId } : { state }
+      const body = (isAjb || isMandiri || isBsb) ? { state, docId: realDocId } : { state }
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const blob = await res.blob()
@@ -537,7 +539,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         {/* Bank selector - only show in bank mode */}
         {formMode === 'bank' && (
           <select value={bank} onChange={e => setBank(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-border bg-background">
-            <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah (coming soon)</option>
+            <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah</option>
           </select>
         )}
         <div className="ml-auto flex gap-2">
@@ -567,6 +569,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />
             <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />
             <FormField label="No. WhatsApp" value={state.applicant.phone} onChange={v => updateApplicant('phone', v)} />
+            {bank === 'BSB_SYARIAH' && <FormField label="Alamat Domisili" value={state.applicant.domicileAddress || ''} onChange={v => updateApplicant('domicileAddress', v)} full />}
+            {bank === 'BSB_SYARIAH' && <FormField label="Email" value={state.applicant.email || ''} onChange={v => updateApplicant('email', v)} />}
+            {bank === 'BSB_SYARIAH' && <FormField label="NIP / No. Pokok Pegawai" value={state.applicant.nip || ''} onChange={v => updateApplicant('nip', v)} />}
           </FormSection>
           <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan">
             <div className="col-span-2 flex gap-1 mb-1">
@@ -578,6 +583,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />
             <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />
           </FormSection>
+          {/* BSB-specific: Bendaharawan fields */}
+          {bank === 'BSB_SYARIAH' && (
+          <FormSection icon={<User className="w-3 h-3" />} title="Data Bendaharawan (BSB)">
+            <FormField label="Nama Bendaharawan" value={state.applicant.bendaharawanName || ''} onChange={v => updateApplicant('bendaharawanName', v)} full />
+            <FormField label="NIP Bendaharawan" value={state.applicant.bendaharawanNip || ''} onChange={v => updateApplicant('bendaharawanNip', v)} />
+          </FormSection>
+          )}
           <FormSection icon={<Heart className="w-3 h-3" />} title="Status Keluarga">
             <div className="col-span-2 flex gap-1 mb-1">
               <button onClick={() => setState(s => ({ ...s, maritalStatus: MaritalStatus.SINGLE }))} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.maritalStatus === MaritalStatus.SINGLE ? 'bg-pink-500 text-white border-pink-500' : 'bg-card border-border')}>BELUM KAWIN</button>
@@ -743,6 +755,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
                     {bank === 'BTN' && <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>}
                     {bank === 'MANDIRI' && <button onClick={() => setGenerateDocId('mandiri-pernyataan-pemohon')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'mandiri-pernyataan-pemohon' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan Pemohon</button>}
+                    {bank === 'BSB_SYARIAH' && <>
+                      <button onClick={() => setGenerateDocId('bsb-flpp')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> FLPP</button>
+                      <button onClick={() => setGenerateDocId('bsb-spr')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-spr' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
+                      <button onClick={() => setGenerateDocId('bsb-permohonan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-permohonan' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Permohonan</button>
+                      <button onClick={() => setGenerateDocId('bsb-kuasa-bendaharawan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-kuasa-bendaharawan' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Kuasa Bendaharawan</button>
+                      <button onClick={() => setGenerateDocId('bsb-pernyataan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-pernyataan' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Pernyataan</button>
+                      <button onClick={() => setGenerateDocId('bsb-sbum')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-sbum' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SBUM</button>
+                    </>}
                     <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>
                     <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>
                   </>
