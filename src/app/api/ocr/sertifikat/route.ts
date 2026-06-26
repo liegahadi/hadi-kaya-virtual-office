@@ -1,4 +1,5 @@
-// API: OCR Sertifikat - Extract nomor sertifikat/SHM from certificate image
+// API: OCR Sertifikat - Extract nomor sertifikat/SHM from certificate image OR PDF
+
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 
@@ -12,11 +13,16 @@ export async function POST(req: NextRequest) {
     if (!image) return NextResponse.json({ success: false, error: 'Image required' }, { status: 400 })
 
     const zai = await ZAI.create()
+    const isPdf = image.startsWith('data:application/pdf')
+    const mediaContent = isPdf
+      ? { type: 'file_url' as const, file_url: { url: image } }
+      : { type: 'image_url' as const, image_url: { url: image } }
+
     const response = await zai.chat.completions.createVision({
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: `Ini adalah foto/dokumen Sertifikat Hak Milik (SHM) atau sertifikat tanah Indonesia. Tolong extract nomor sertifikat dan return sebagai JSON:
+          { type: 'text', text: `Ini adalah ${isPdf ? 'dokumen PDF' : 'foto'} Sertifikat Hak Milik (SHM) atau sertifikat tanah Indonesia. Tolong extract nomor sertifikat dan return sebagai JSON:
 
 {
   "nomorSertifikat": "nomor sertifikat",
@@ -26,11 +32,11 @@ export async function POST(req: NextRequest) {
 }
 
 Jika ada field yang tidak terbaca, isi dengan string kosong "".` },
-          { type: 'image_url', image_url: { url: image } }
+          mediaContent
         ]
       }],
       thinking: { type: 'disabled' }
-    })
+    }) as any
 
     const content = response.choices[0]?.message?.content || ''
     let jsonStr = content.trim()
