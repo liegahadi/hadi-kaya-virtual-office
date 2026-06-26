@@ -510,7 +510,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       toast.success(`${label} berhasil diupload!`)
 
       // === AUTO OCR: KTP Debitur ===
-      if (docId === 'ktp' && dataUrl.startsWith('data:image')) {
+      if (docId === 'ktp') {
         toast.info('🔍 Membaca data KTP...')
         try {
           const res = await fetch('/api/ocr/ktp', {
@@ -520,12 +520,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           const d = await res.json()
           if (d.success && d.data) {
             const ocr = d.data
-            // Auto-fill form fields from OCR
             if (ocr.nama) updateApplicant('fullName', ocr.nama.toUpperCase())
             if (ocr.nik) updateApplicant('ktpNumber', ocr.nik)
             if (ocr.tempatLahir) updateApplicant('pob', ocr.tempatLahir.toUpperCase())
             if (ocr.tanggalLahir) {
-              // Convert DD-MM-YYYY to YYYY-MM-DD for date input
               const parts = ocr.tanggalLahir.split('-')
               if (parts.length === 3) updateApplicant('dob', `${parts[2]}-${parts[1]}-${parts[0]}`)
             }
@@ -540,12 +538,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               }
             }
             toast.success('✅ Data KTP otomatis terisi!')
+          } else {
+            toast.error('Gagal scan KTP: ' + (d.error || 'Unknown'))
           }
         } catch (err) { console.error('KTP OCR error:', err); toast.error('Gagal scan KTP, isi manual ya') }
       }
 
       // === AUTO OCR: KTP Pasangan ===
-      if (docId === 'spouse-ktp' && dataUrl.startsWith('data:image')) {
+      if (docId === 'spouse-ktp') {
         toast.info('🔍 Membaca data KTP Pasangan...')
         try {
           const res = await fetch('/api/ocr/ktp', {
@@ -565,12 +565,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             if (ocr.alamat) updateSpouse('address', ocr.alamat.toUpperCase())
             if (ocr.pekerjaan) updateSpouse('job', ocr.pekerjaan.toUpperCase())
             toast.success('✅ Data KTP Pasangan otomatis terisi!')
+          } else {
+            toast.error('Gagal scan KTP pasangan: ' + (d.error || 'Unknown'))
           }
         } catch (err) { console.error('Spouse KTP OCR error:', err); toast.error('Gagal scan KTP pasangan') }
       }
 
       // === AUTO OCR: Sertifikat ===
-      if (docId === 'sertifikat' && dataUrl.startsWith('data:image')) {
+      if (docId === 'sertifikat') {
         toast.info('🔍 Membaca nomor sertifikat...')
         try {
           const res = await fetch('/api/ocr/sertifikat', {
@@ -586,6 +588,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               if (luas) updateProperty('landSize', luas)
             }
             toast.success('✅ Nomor sertifikat otomatis terisi!')
+          } else {
+            toast.error('Gagal scan sertifikat: ' + (d.error || 'Unknown'))
           }
         } catch (err) { console.error('Sertifikat OCR error:', err); toast.error('Gagal scan sertifikat') }
       }

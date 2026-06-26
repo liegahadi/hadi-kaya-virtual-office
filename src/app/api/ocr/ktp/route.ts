@@ -1,5 +1,4 @@
-// API: OCR KTP - Extract data from KTP image using ZAI Vision Model
-// Returns: { nama, nik, tempatLahir, tanggalLahir, alamat, rtRw, kelurahan, kecamatan, agama, statusPerkawinan, pekerjaan, jenisKelamin }
+// API: OCR KTP - Extract data from KTP image OR PDF using ZAI Vision Model
 
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
@@ -14,11 +13,18 @@ export async function POST(req: NextRequest) {
     if (!image) return NextResponse.json({ success: false, error: 'Image required' }, { status: 400 })
 
     const zai = await ZAI.create()
+
+    // Detect if it's an image or PDF
+    const isPdf = image.startsWith('data:application/pdf')
+    const mediaContent = isPdf
+      ? { type: 'file_url' as const, file_url: { url: image } }
+      : { type: 'image_url' as const, image_url: { url: image } }
+
     const response = await zai.chat.completions.createVision({
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: `Ini adalah foto KTP (Kartu Tanda Penduduk) Indonesia. Tolong extract SEMUA data berikut dan return sebagai JSON object dengan format PERSIS seperti ini (jangan tambah teks lain, HANYA JSON):
+          { type: 'text', text: `Ini adalah ${isPdf ? 'dokumen PDF' : 'foto'} KTP (Kartu Tanda Penduduk) Indonesia. Tolong extract SEMUA data berikut dan return sebagai JSON object dengan format PERSIS seperti ini (jangan tambah teks lain, HANYA JSON):
 
 {
   "nama": "nama lengkap sesuai KTP",
@@ -37,14 +43,13 @@ export async function POST(req: NextRequest) {
 }
 
 Jika ada field yang tidak terbaca, isi dengan string kosong "". Pastikan NIK adalah 16 digit angka.` },
-          { type: 'image_url', image_url: { url: image } }
+          mediaContent
         ]
       }],
       thinking: { type: 'disabled' }
-    })
+    }) as any
 
     const content = response.choices[0]?.message?.content || ''
-    // Extract JSON from response (sometimes model wraps in ```json)
     let jsonStr = content.trim()
     const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
     if (jsonMatch) jsonStr = jsonMatch[0]
