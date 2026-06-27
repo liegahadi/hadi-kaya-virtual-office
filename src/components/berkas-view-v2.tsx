@@ -681,9 +681,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           </FormSection>
           {/* BSB-specific: Bendaharawan fields */}
           {bank === 'BSB_SYARIAH' && (
-          <FormSection icon={<User className="w-3 h-3" />} title="Data Bendaharawan (BSB)">
+          <FormSection icon={<User className="w-3 h-3" />} title="Data Bendaharawan & Atasan (BSB)">
             <FormField label="Nama Bendaharawan" value={state.applicant.bendaharawanName || ''} onChange={v => updateApplicant('bendaharawanName', v)} full />
             <FormField label="NIP Bendaharawan" value={state.applicant.bendaharawanNip || ''} onChange={v => updateApplicant('bendaharawanNip', v)} />
+            <FormField label="Nama Atasan" value={state.applicant.atasanName || ''} onChange={v => updateApplicant('atasanName', v)} full />
+            <FormField label="NIP Atasan" value={state.applicant.atasanNip || ''} onChange={v => updateApplicant('atasanNip', v)} />
           </FormSection>
           )}
           <FormSection icon={<Heart className="w-3 h-3" />} title="Status Keluarga">
