@@ -32,6 +32,8 @@ export interface ApplicantData {
   nip?: string;
   bendaharawanName?: string;
   bendaharawanNip?: string;
+  atasanName?: string;
+  atasanNip?: string;
 }
 
 export type SpouseJobType = 'NGANGGUR' | 'KARYAWAN' | 'WIRAUSAHA'
