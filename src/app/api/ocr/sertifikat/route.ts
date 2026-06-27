@@ -1,77 +1,48 @@
-// API: OCR Sertifikat - Uses Google Gemini (free tier, excellent OCR)
+// API: OCR Sertifikat - Uses Tesseract.js (100% free, no API key)
 
 import { NextRequest, NextResponse } from 'next/server'
+import Tesseract from 'tesseract.js'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-export const maxDuration = 30
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
     const { image } = await req.json()
     if (!image) return NextResponse.json({ success: false, error: 'Image required' }, { status: 400 })
-    if (!GEMINI_API_KEY) return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not set. Get free key at https://aistudio.google.com/apikey' }, { status: 500 })
 
     const isPdf = image.startsWith('data:application/pdf')
     if (isPdf) {
-      return NextResponse.json({ success: false, error: 'PDF belum didukung untuk OCR. Upload sebagai foto (JPG/PNG).' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'PDF belum didukung. Upload sebagai foto (JPG/PNG).' }, { status: 400 })
     }
 
-    const mimeMatch = image.match(/^data:(image\/\w+);base64,/)
-    if (!mimeMatch) {
-      return NextResponse.json({ success: false, error: 'Invalid image format' }, { status: 400 })
-    }
-    const mimeType = mimeMatch[1]
     const base64Data = image.split(',')[1]
+    const buffer = Buffer.from(base64Data, 'base64')
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: `Ini adalah foto Sertifikat Hak Milik (SHM) atau sertifikat tanah Indonesia. Tolong extract nomor sertifikat dan return sebagai JSON:
+    const result = await Tesseract.recognize(buffer, 'ind', {
+      logger: () => {},
+    })
 
-{
-  "nomorSertifikat": "nomor sertifikat",
-  "nib": "nomor NIB jika ada",
-  "luasTanah": "luas tanah dalam m2 jika terbaca",
-  "namaPemegangHak": "nama pemegang hak jika terbaca"
-}
+    const rawText = result.data.text
+    const allText = rawText.toUpperCase()
 
-Jika ada field yang tidak terbaca, isi dengan string kosong "".` },
-              { inline_data: { mime_type: mimeType, data: base64Data } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
-          },
-        }),
-      }
-    )
+    // Parse sertifikat fields
+    const nomorMatch = allText.match(/NOMOR\s*[:\-]?\s*(\d+)/) || allText.match(/NO\s*[:\-]?\s*(\d{4,})/)
+    const nibMatch = allText.match(/NIB\s*[:\-]?\s*(\d+)/)
+    const luasMatch = allText.match(/LUAS\s*(?:TANAH)?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*M2?/) || allText.match(/(\d+(?:[.,]\d+)?)\s*M2?/)
+    const namaMatch = allText.match(/(?:PEMEGANG\s*HAK|NAMA\s*[:\-]?)\s*[:\-]?\s*([A-Z\s.]+)/)
 
-    if (!response.ok) {
-      const errText = await response.text()
-      return NextResponse.json({ success: false, error: `Gemini API ${response.status}: ${errText.substring(0, 200)}` }, { status: 500 })
-    }
-
-    const data = await response.json()
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    let jsonStr = content.trim()
-    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
-    if (jsonMatch) jsonStr = jsonMatch[0]
-
-    try {
-      const ocrData = JSON.parse(jsonStr)
-      return NextResponse.json({ success: true, data: ocrData })
-    } catch {
-      return NextResponse.json({ success: false, error: 'Failed to parse', raw: content.substring(0, 500) }, { status: 500 })
-    }
+    return NextResponse.json({
+      success: true,
+      data: {
+        nomorSertifikat: nomorMatch ? nomorMatch[1] : '',
+        nib: nibMatch ? nibMatch[1] : '',
+        luasTanah: luasMatch ? luasMatch[1] : '',
+        namaPemegangHak: namaMatch ? namaMatch[1].trim() : '',
+      },
+      rawText: rawText.substring(0, 1000),
+    })
   } catch (error) {
     console.error('OCR Sertifikat error:', error)
     return NextResponse.json({ success: false, error: String(error).substring(0, 300) }, { status: 500 })
