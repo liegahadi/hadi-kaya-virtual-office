@@ -244,6 +244,7 @@ model Customer {
   lpaDate        DateTime?
   lpaNumber      String?
   berkasLengkap  Boolean  @default(false)
+  uploadedDocs   String?  // JSON string of { docId: dataUrl } for file persistence
 
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignedAgent  Agent?        @relation(fields: [assignedAgentId], references: [id])

@@ -336,7 +336,16 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [bank, setBank] = useState<string>(customer.bankName || customer.bankPipelines?.[0]?.bankName || 'BTN')
   const [saving, setSaving] = useState(false)
   const [flppGenerating, setFlppGenerating] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({})
+  // Load uploaded files from DB (persisted as JSON string in customer.uploadedDocs)
+  const loadUploadedFiles = (): Record<string, string> => {
+    try {
+      if (customer.uploadedDocs) {
+        return JSON.parse(customer.uploadedDocs)
+      }
+    } catch {}
+    return {}
+  }
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>(loadUploadedFiles)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'generate' | 'uploads'>('generate')
@@ -380,6 +389,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           houseSize: state.property.houseSize,
           shmNumber: state.property.shmNumber,
           nibNumber: state.property.nibNumber,
+          uploadedDocs: JSON.stringify(uploadedFiles),
         }),
       })
       const d = await res.json()

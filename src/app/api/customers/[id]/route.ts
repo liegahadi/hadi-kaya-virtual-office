@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       'blockLetter', 'houseNumber', 'shmNumber', 'nibNumber',
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
       'spouseOccupation', 'spouseAddress', 'motherMaidenName', 'emergencyContact',
-      'dateOfDocument', 'akadNumber', 'lpaNumber', 'personalityPreference', 'sourceLead', 'assignedAgentId',
+      'dateOfDocument', 'akadNumber', 'lpaNumber', 'uploadedDocs', 'personalityPreference', 'sourceLead', 'assignedAgentId',
     ]
 
     const updateData: any = {}
