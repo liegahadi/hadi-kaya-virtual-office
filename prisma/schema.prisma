@@ -671,6 +671,16 @@ model AuditLog {
 // 14. NOTIFICATIONS
 // ============================================================
 
+model NotarisSetting {
+  id        String   @id @default(cuid())
+  name      String   // nama + gelar notaris
+  address   String?
+  city      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Notification {
   id          String   @id @default(cuid())
   userId      String?
