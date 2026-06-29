@@ -68,7 +68,9 @@ const SIGNED_DOCS = [
   { id: 'aplikasi-signed', label: 'Form Aplikasi', desc: 'Form aplikasi KPR yang sudah ditandatangani' },
   { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan', desc: 'Sudah ditandatangani pemohon' },
   { id: 'rekening-koran-signed', label: 'Rekening Koran / Buku Tabungan', desc: '3-6 bulan terakhir (scan/foto)' },
-  { id: 'sp3k', label: 'SP3K / SPPK / SP4K', desc: 'Surat Persetujuan Pinjaman dari Bank' },
+  { id: 'sp3k-btn', label: 'SP3K (BTN)', desc: 'Surat Persetujuan Pinjaman BTN', showWhen: 'BTN' },
+  { id: 'sppk-mandiri', label: 'SPPK (Mandiri)', desc: 'Surat Persetujuan Pinjaman Mandiri', showWhen: 'MANDIRI' },
+  { id: 'sp4-bsb', label: 'SP4 (BSB Syariah)', desc: 'Surat Persetujuan Pembiayaan BSB', showWhen: 'BSB_SYARIAH' },
 ]
 
 function formatShortDate(d: string | Date | null | undefined): string {
@@ -608,7 +610,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       }
 
       // === AUTO-SET TANGGAL SP3K saat upload SP3K/SPPK/SP4K ===
-      if (docId === 'sp3k') {
+      if (docId === 'sp3k-btn' || docId === 'sppk-mandiri' || docId === 'sp4-bsb') {
         const today = new Date().toISOString().split('T')[0]
         setState(s => ({ ...s, sp3kDate: today }))
         toast.info(`📅 Tanggal SP3K otomatis di-set: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`)
@@ -620,9 +622,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
   const requiredUploads = getRequiredUploads(state.maritalStatus, state.spouse?.jobType)
   const uploadedCount = Object.keys(uploadedFiles).filter(k => requiredUploads.some(u => u.id === k)).length
-  const signedCount = Object.keys(uploadedFiles).filter(k => SIGNED_DOCS.some(u => u.id === k)).length
+  const signedCount = Object.keys(uploadedFiles).filter(k => SIGNED_DOCS.some(u => u.id === k && (!u.showWhen || u.showWhen === bank))).length
   const totalUploadCount = uploadedCount + signedCount
-  const totalDocs = requiredUploads.length + SIGNED_DOCS.length
+  const totalDocs = requiredUploads.length + SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank).length
 
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-card">
@@ -769,9 +771,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             </div>
           </div>
           <div>
-            <h4 className="text-[10px] font-bold text-violet-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Dokumen Cetak & TTD ({signedCount}/{SIGNED_DOCS.length})</h4>
+            <h4 className="text-[10px] font-bold text-violet-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Dokumen Cetak & TTD ({signedCount}/{SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank).length})</h4>
             <div className="space-y-1.5">
-              {SIGNED_DOCS.map(doc => {
+              {SIGNED_DOCS.filter(doc => !doc.showWhen || doc.showWhen === bank).map(doc => {
                 const isUploaded = !!uploadedFiles[doc.id]
                 return (
                   <div key={doc.id} className={cn('flex items-center gap-2 p-1.5 rounded border', isUploaded ? 'border-violet-700/30 bg-violet-950/10' : 'border-slate-200 dark:border-slate-700')}>
