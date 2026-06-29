@@ -39,9 +39,9 @@ export function PernyataanPengecekanSHGB({ data }: { data: BerkasState }) {
       <p style={{ marginBottom: '10px', fontSize: '11pt' }}>Adalah pemilik tanah yang terletak di:</p>
       <table style={{ width: '100%', marginBottom: '15px', fontSize: '11pt' }}>
         <tbody>
-          <tr><td style={{ width: '30%' }}>Desa/Kelurahan</td><td style={{ width: '3%' }}>:</td><td style={{ borderBottom: '1px dotted #000' }}>Jerambah Gantung</td></tr>
-          <tr><td>Kecamatan</td><td>:</td><td style={{ borderBottom: '1px dotted #000' }}>Gabek</td></tr>
-          <tr><td>Kabupaten/Kota</td><td>:</td><td style={{ borderBottom: '1px dotted #000' }}>Pangkalpinang</td></tr>
+          <tr><td style={{ width: '30%' }}>Desa/Kelurahan</td><td style={{ width: '3%' }}>:</td><td style={{ borderBottom: '1px dotted #000' }}>{property.certKelurahan || 'Jerambah Gantung'}</td></tr>
+          <tr><td>Kecamatan</td><td>:</td><td style={{ borderBottom: '1px dotted #000' }}>{property.certKecamatan || 'Gabek'}</td></tr>
+          <tr><td>Kabupaten/Kota</td><td>:</td><td style={{ borderBottom: '1px dotted #000' }}>{property.certCity || 'Pangkalpinang'}</td></tr>
           <tr><td>Provinsi</td><td>:</td><td style={{ borderBottom: '1px dotted #000' }}>Kepulauan Bangka Belitung</td></tr>
         </tbody>
       </table>
