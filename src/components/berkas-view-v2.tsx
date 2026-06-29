@@ -768,6 +768,47 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             {formMode === 'bank' && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
             {formMode === 'bank' && <FormField label="Tanggal SP3K" type="date" value={state.sp3kDate || ''} onChange={v => setState(s => ({ ...s, sp3kDate: v }))} />}
           </FormSection>
+          {/* Post-SP3K BTN file requirements - only when AJB stage for BTN */}
+          {formMode === 'bank' && docStage === 'ajb' && bank === 'BTN' && (
+            <div>
+              <h4 className="text-[10px] font-bold text-violet-400 uppercase mb-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Kebutuhan Post-SP3K BTN
+              </h4>
+              <div className="space-y-1">
+                {[
+                  'Surat Pernyataan Debitur PBG',
+                  'Standing Instruction',
+                  'Surat Pernyataan SPSU',
+                  'Surat Pernyataan PSU',
+                  'Surat Pernyataan Debitur',
+                  'Validasi PPH',
+                  'Validasi BPHTB',
+                  'Buku Tabungan',
+                  'SLF (Sertifikat Laik Fungsi)',
+                  'Standing Instruction LPA',
+                  'Hasil Checking Sertipikat (dari Notaris)',
+                  'Sertifikasi SLF',
+                  'Surat Pernyataan & Kuasa Pemblokiran',
+                  'Bale BTN',
+                  'Surat Kuasa Notaris',
+                ].map((label, i) => {
+                  const docId = `post-sp3k-${i}`
+                  const isUploaded = !!uploadedFiles[docId]
+                  return (
+                    <div key={docId} className={cn('flex items-center gap-2 p-1.5 rounded border text-[10px]', isUploaded ? 'border-emerald-700/30 bg-emerald-950/10' : 'border-violet-500/30 bg-violet-950/10')}>
+                      <span>{isUploaded ? '✅' : '⬜'}</span>
+                      <span className="flex-1">{i + 1}. {label}</span>
+                      {isUploaded && <button onClick={() => setPreviewUrl(uploadedFiles[docId])} className="text-muted-foreground hover:text-foreground"><Eye className="w-3 h-3" /></button>}
+                      <input type="file" accept="image/*,.pdf" className="hidden" id={`upload-${docId}`} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(docId, f); e.target.value = '' }} />
+                      <button onClick={() => document.getElementById(`upload-${docId}`)?.click()} disabled={uploadingId === docId} className={cn('text-[9px] px-1.5 py-0.5 rounded border', isUploaded ? 'border-border text-muted-foreground' : 'border-violet-500/30 text-violet-400')}>
+                        {uploadingId === docId ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : isUploaded ? 'Ganti' : 'Upload'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {/* Upload sections - ONLY in bank mode */}
           {formMode === 'bank' && (
           <>
@@ -819,11 +860,76 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <option value="">— Pilih Notaris —</option>
                     {notarisList.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
                   </select>
-                  <button onClick={() => { const n = prompt('Nama + Gelar Notaris:'); if (n) { fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, city: 'Pangkalpinang' }) }).then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => [...prev, d.data]); setSelectedNotaris(d.data.id) } }) } }}
-                    className="px-2 py-1 text-[9px] rounded border border-blue-500/30 text-blue-400 bg-blue-950/20">+ Tambah</button>
+                  <button onClick={() => {
+                    const n = prompt('Nama + Gelar Notaris:'); if (!n) return;
+                    const a = prompt('Alamat Kantor Notaris (opsional):') || '';
+                    fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, address: a, city: 'Pangkalpinang' }) })
+                      .then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => [...prev, d.data]); setSelectedNotaris(d.data.id); toast.success('Notaris ditambahkan!') } })
+                  }} className="px-2 py-1 text-[9px] rounded border border-blue-500/30 text-blue-400 bg-blue-950/20">+ Tambah</button>
                 </div>
+                {selectedNotaris && (() => { const n = notarisList.find(x => x.id === selectedNotaris); return n ? (
+                  <div className="mt-2 p-2 rounded border border-blue-500/20 bg-blue-950/10 text-[10px] space-y-1">
+                    <p><strong>Nama:</strong> {n.name}</p>
+                    {n.address && <p><strong>Alamat:</strong> {n.address}</p>}
+                    {n.city && <p><strong>Kota:</strong> {n.city}</p>}
+                    <button onClick={() => {
+                      const a = prompt('Alamat Kantor Notaris:', n.address || '');
+                      if (a !== null) fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name, address: a, city: n.city }) })
+                        .then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => prev.map(x => x.id === n.id ? { ...x, address: a } : x)); toast.success('Alamat diperbarui!') } })
+                    }} className="text-[9px] text-blue-400 hover:underline">✏️ Edit Alamat</button>
+                  </div>
+                ) : null; })()}
               </div>
             </FormSection>
+          )}
+
+          {/* Notaris file requirements - show when Notaris mode */}
+          {formMode === 'notaris' && (
+            <div>
+              <h4 className="text-[10px] font-bold text-blue-400 uppercase mb-2 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Kebutuhan Berkas Notaris
+              </h4>
+              <div className="space-y-1">
+                {[
+                  { id: 'pbg-imb', label: '1. PBG / IMB', source: 'bank', from: 'sertifikat' },
+                  { id: 'pbb-notaris', label: '2. PBB + Bukti Bayar', source: 'bphtb', from: 'pbb' },
+                  { id: 'pph-bukti', label: '3. PPH + Bukti Bayar', source: 'new' },
+                  { id: 'akta-pendirian', label: '4. Akta Pendirian PT + AHU', source: 'new' },
+                  { id: 'akta-perubahan', label: '5. Akta Perubahan PT + AHU', source: 'new' },
+                  { id: 'kwitansi-rumah-notaris', label: '6. Kwitansi Harga Rumah', source: 'new' },
+                  { id: 'ktp-notaris', label: '7. KTP Debitur', source: 'bank', from: 'ktp' },
+                  { id: 'spouse-ktp-notaris', label: '8. KTP Pasangan', source: 'bank', from: 'spouse-ktp', showWhen: state.maritalStatus === 'Sudah Menikah' },
+                  { id: 'kk-notaris', label: '9. Kartu Keluarga', source: 'bank', from: 'kk' },
+                  { id: 'npwp-notaris', label: '10. NPWP', source: 'bank', from: 'npwp' },
+                  { id: 'sp3k-notaris', label: '11. SP3K / SPPK / SP4', source: 'bank', from: bank === 'BTN' ? 'sp3k-btn' : bank === 'MANDIRI' ? 'sppk-mandiri' : 'sp4-bsb' },
+                  { id: 'status-nikah-notaris', label: '12. Akte Nikah / Cerai / Blm Menikah', source: 'bank', from: 'status-nikah' },
+                  { id: 'ktp-direktur', label: '13. KTP Direktur', source: 'new' },
+                  { id: 'bast-sertipikat', label: '14. BAST Penyerahan Sertipikat', source: 'generated' },
+                  { id: 'npwp-pt', label: '15. NPWP PT', source: 'new' },
+                  { id: 'surat-kuasa-notaris', label: '16. Surat Kuasa Notaris', source: 'generated' },
+                ].filter(d => !d.showWhen || d.showWhen).map(doc => {
+                  const isReady = doc.source === 'generated' || doc.source === 'bank' ? (doc.source === 'generated' || !!uploadedFiles[doc.from || '']) : !!uploadedFiles[doc.id]
+                  return (
+                    <div key={doc.id} className={cn('flex items-center gap-2 p-1.5 rounded border text-[10px]', isReady ? 'border-emerald-700/30 bg-emerald-950/10' : 'border-blue-500/30 bg-blue-950/10')}>
+                      <span>{isReady ? '✅' : '⬜'}</span>
+                      <span className="flex-1">{doc.label}</span>
+                      <span className="text-[8px] text-muted-foreground">
+                        {doc.source === 'generated' ? '⚡ Auto-generate' : doc.source === 'bank' ? '📦 Dari berkas bank' : doc.source === 'bphtb' ? '📦 Dari BPHTB' : '📤 Upload baru'}
+                      </span>
+                      {doc.source === 'new' && (
+                        <>
+                          {uploadedFiles[doc.id] && <button onClick={() => setPreviewUrl(uploadedFiles[doc.id])} className="text-muted-foreground hover:text-foreground"><Eye className="w-3 h-3" /></button>}
+                          <input type="file" accept="image/*,.pdf" className="hidden" id={`upload-${doc.id}`} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(doc.id, f); e.target.value = '' }} />
+                          <button onClick={() => document.getElementById(`upload-${doc.id}`)?.click()} disabled={uploadingId === doc.id} className="text-[9px] px-1.5 py-0.5 rounded border border-blue-500/30 text-blue-400">
+                            {uploadingId === doc.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : uploadedFiles[doc.id] ? 'Ganti' : 'Upload'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           )}
           {formMode !== 'bank' && (
             <div>
