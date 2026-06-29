@@ -38,7 +38,7 @@ export function SuratKuasaNotaris({ data, notarisName, notarisAddress }: { data:
         <li style={{ marginBottom: '5px' }}>Melakukan Pengecekan Sertifikat/Perubahan Data Yuridis.</li>
         <li style={{ marginBottom: '5px' }}>Mengurus balik nama/pemecahan/pengukuran/penggantian sertipikat baru Menurut SK.Meneg Agraria nomor: 10 tahun 1993.</li>
       </ol>
-      <p style={{ marginBottom: '15px', fontSize: '11pt' }}>Hak Guna Bangunan Nomor: <strong>{property.shmNumber || '...'}</strong> /Kel. Jerambah Gantung, Kec. Gabek Kota Pangkalpinang</p>
+      <p style={{ marginBottom: '15px', fontSize: '11pt' }}>Hak Guna Bangunan Nomor: <strong>{property.shmNumber || '...'}</strong> /Kel. {property.certKelurahan || 'Jerambah Gantung'}, Kec. {property.certKecamatan || 'Gabek'} Kota {property.certCity || 'Pangkalpinang'}</p>
       <p style={{ marginBottom: '20px', fontSize: '11pt', textAlign: 'justify' }}>Mengenai hak ini, maka Penerima kuasa berhak dan berwenang untuk menghadap kepada siapapun juga, termasuk pejabat Kantor Pertanahan, memberi Keterangan-keterangan, menandatangani surat-surat, menyerahkan dan/atau menerima surat/bukti hak, meminta atau memberikan tanda bukti penerimaan (kwitansi) serta melakukan segala tindakan yang dianggap perlu dan selaras dengan Peraturan Hukum tanpa tindakan yang dikecualikan.</p>
       <p style={{ marginBottom: '20px', fontSize: '11pt' }}>Demikianlah surat kuasa ini diberikan pada hari ini, {formatDate(dateOfDocument)}</p>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>

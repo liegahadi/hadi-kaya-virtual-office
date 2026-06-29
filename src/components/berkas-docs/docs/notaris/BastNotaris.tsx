@@ -29,7 +29,7 @@ export function BastNotaris({ data, notarisName }: { data: BerkasState; notarisN
         </tbody>
       </table>
       <p style={{ marginBottom: '15px', textAlign: 'justify', fontSize: '11pt' }}>
-        Bahwa dengan ini Pihak Developer telah menyerahkan kepada Pihak Notaris dan Pihak Notaris menyatakan telah menerima 1 (Satu) buku Sertifikat Hak Guna Bangunan/Milik No <strong>{property.shmNumber || '...'}</strong> tanggal {property.certificateDate ? formatDate(property.certificateDate) : '...'} Desa/Kelurahan Jerambah Gantung Kecamatan Gabek Kota Pangkalpinang tercatat atas nama <strong>{COMPANY_INFO.name}</strong>.
+        Bahwa dengan ini Pihak Developer telah menyerahkan kepada Pihak Notaris dan Pihak Notaris menyatakan telah menerima 1 (Satu) buku Sertifikat Hak Guna Bangunan/Milik No <strong>{property.shmNumber || '...'}</strong> tanggal {property.certificateDate ? formatDate(property.certificateDate) : '...'} Desa/Kelurahan {property.certKelurahan || 'Jerambah Gantung'} Kecamatan {property.certKecamatan || 'Gabek'} Kota {property.certCity || 'Pangkalpinang'} tercatat atas nama <strong>{COMPANY_INFO.name}</strong>.
       </p>
       <p style={{ marginBottom: '15px', textAlign: 'justify', fontSize: '11pt' }}>
         Penyerahan 1 (Satu) buku sertifikat tersebut oleh Pihak Developer adalah untuk proses cek bersih (clearence), balik nama dan pemasangan hak tanggungan di Kantor Pertanahan dalam jangka waktu 3 (tiga) bulan sejak berita acara ini ditandatangani. Apabila telah selesai, maka Pihak Notaris akan segera mengembalikan sertifikat tersebut kepada Pihak Developer.

@@ -849,6 +849,19 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           </>
           )}
 
+          {/* Notaris-specific: Sertifikat address fields */}
+          {formMode === 'notaris' && (
+          <FormSection icon={<Building2 className="w-3 h-3" />} title="Alamat Sertifikat (Notaris)">
+            <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
+            <FormField label="Tgl Terbit Sertifikat" type="date" value={state.property.certificateDate} onChange={v => updateProperty('certificateDate', v)} />
+            <FormField label="Jalan" value={state.property.certStreet} onChange={v => updateProperty('certStreet', v)} full />
+            <FormField label="Kelurahan" value={state.property.certKelurahan} onChange={v => updateProperty('certKelurahan', v)} />
+            <FormField label="Kecamatan" value={state.property.certKecamatan} onChange={v => updateProperty('certKecamatan', v)} />
+            <FormField label="Kota" value={state.property.certCity} onChange={v => updateProperty('certCity', v)} />
+            <FormField label="No. NIB" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
+          </FormSection>
+          )}
+
           {/* Notaris form fields - show when Notaris mode */}
           {formMode === 'notaris' && (
             <FormSection icon={<User className="w-3 h-3" />} title="Data Notaris">

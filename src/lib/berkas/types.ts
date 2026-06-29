@@ -58,8 +58,12 @@ export interface PropertyData {
   blockLetter: string;
   houseNumber: string;
   shmNumber: string;
-  nibNumber: string;
   certificateDate: string;
+  certStreet: string;
+  certKelurahan: string;
+  certKecamatan: string;
+  certCity: string;
+  nibNumber: string;
   pbgNumber: string;
   pbgDate: string;
   price: number;
