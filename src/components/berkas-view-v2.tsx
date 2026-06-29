@@ -68,6 +68,7 @@ const SIGNED_DOCS = [
   { id: 'aplikasi-signed', label: 'Form Aplikasi', desc: 'Form aplikasi KPR yang sudah ditandatangani' },
   { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan', desc: 'Sudah ditandatangani pemohon' },
   { id: 'rekening-koran-signed', label: 'Rekening Koran / Buku Tabungan', desc: '3-6 bulan terakhir (scan/foto)' },
+  { id: 'sp3k', label: 'SP3K / SPPK / SP4K', desc: 'Surat Persetujuan Pinjaman dari Bank' },
 ]
 
 function formatShortDate(d: string | Date | null | undefined): string {
@@ -330,6 +331,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       akadNumber: customer.akadNumber || '',
       lpaDate: customer.lpaDate ? new Date(customer.lpaDate).toISOString().split('T')[0] : '',
       lpaNumber: customer.lpaNumber || '',
+      sp3kDate: customer.sp3kDate ? new Date(customer.sp3kDate).toISOString().split('T')[0] : '',
     }
   }
   const [state, setState] = useState<BerkasState>(buildInitialState)
@@ -381,6 +383,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           dateOfDocument: state.dateOfDocument,
           akadDate: state.akadDate, akadNumber: state.akadNumber,
           lpaDate: state.lpaDate, lpaNumber: state.lpaNumber,
+          sp3kDate: state.sp3kDate,
           npwpNumber: state.applicant.npwpNumber,
           btnAccountNumber: state.applicant.btnAccountNumber,
           blockLetter: state.property.blockLetter,
@@ -604,6 +607,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         } catch (err) { console.error('Sertifikat OCR error:', err); toast.error('Gagal scan sertifikat') }
       }
 
+      // === AUTO-SET TANGGAL SP3K saat upload SP3K/SPPK/SP4K ===
+      if (docId === 'sp3k') {
+        const today = new Date().toISOString().split('T')[0]
+        setState(s => ({ ...s, sp3kDate: today }))
+        toast.info(`📅 Tanggal SP3K otomatis di-set: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`)
+      }
+
     } catch (err) { toast.error('Gagal upload: ' + (err instanceof Error ? err.message : 'unknown')) }
     finally { setUploadingId(null) }
   }
@@ -736,6 +746,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             {formMode === 'bank' && <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />}
             {formMode === 'bank' && <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />}
             {formMode === 'bank' && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
+            {formMode === 'bank' && <FormField label="Tanggal SP3K" type="date" value={state.sp3kDate || ''} onChange={v => setState(s => ({ ...s, sp3kDate: v }))} />}
           </FormSection>
           {/* Upload sections - ONLY in bank mode */}
           {formMode === 'bank' && (
@@ -978,7 +989,7 @@ function AddCustomerModal({ projectId, onClose, onCreated }: { projectId: string
     if (!name.trim()) { toast.error('Nama wajib'); return }
     setSaving(true)
     try {
-      const res = await fetch('/api/customers/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, whatsappNumber: wa, unitBlock: unit, bankName: 'BTN', projectId }) })
+      const res = await fetch('/api/customers/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, whatsappNumber: wa, unitBlock: unit, bankName: 'BTN', projectId, closingDate: new Date().toISOString() }) })
       const d = await res.json()
       if (d.success) { toast.success('Konsumen ditambahkan!'); onCreated() } else toast.error('Gagal')
     } catch { toast.error('Network error') } finally { setSaving(false) }
