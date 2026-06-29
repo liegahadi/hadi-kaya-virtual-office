@@ -26,6 +26,10 @@ import { SuratPernyataanTidakMemilikiRumah } from '@/components/berkas-docs/docs
 import { SuratPernyataanPenghasilan } from '@/components/berkas-docs/docs/common/SuratPernyataanPenghasilan'
 import { SuratPernyataanBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratPernyataanBPHTB'
 import { SuratKuasaBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratKuasaBPHTB'
+import { BastNotaris } from '@/components/berkas-docs/docs/notaris/BastNotaris'
+import { TandaTerimaNotaris } from '@/components/berkas-docs/docs/notaris/TandaTerimaNotaris'
+import { PernyataanPengecekanSHGB } from '@/components/berkas-docs/docs/notaris/PernyataanPengecekanSHGB'
+import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKuasaNotaris'
 
 // ============================================================
 // REQUIRED UPLOADS - Dokumen identitas wajib
@@ -359,7 +363,16 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [generateDocId, setGenerateDocId] = useState<string>('flpp')
   const [flppBlobUrl, setFlppBlobUrl] = useState<string | null>(null)
   const [flppLoading, setFlppLoading] = useState(false)
+  const [notarisList, setNotarisList] = useState<any[]>([])
+  const [selectedNotaris, setSelectedNotaris] = useState<string>('')
   const previewRef = useRef<HTMLDivElement>(null)
+
+  // Fetch notaris list
+  useEffect(() => {
+    fetch('/api/notaris').then(r => r.json()).then(d => {
+      if (d.success) setNotarisList(d.data)
+    }).catch(() => {})
+  }, [])
 
   function updateApplicant(field: keyof ApplicantData, val: any) { setState(s => ({ ...s, applicant: { ...s.applicant, [field]: val } })) }
   function updateProperty(field: keyof PropertyData, val: any) { setState(s => ({ ...s, property: { ...s.property, [field]: val } })) }
@@ -408,16 +421,20 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Download PDF - handles all document types
   async function handleDownloadFlpp() {
     // React component docs: SPR + BPHTB Surat Pernyataan + BPHTB Surat Kuasa
-    const reactDocs: Record<string, { component: any; name: string }> = {
+    const reactDocs: Record<string, { component: any; name: string; extraProps?: any }> = {
       'spr': { component: bank === 'MANDIRI' ? SPR_MANDIRI : SPR_BTN, name: 'SPR' },
       'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
       'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
       'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
       'bphtb-kuasa': { component: SuratKuasaBPHTB, name: 'Surat_Kuasa_BPHTB' },
+      'notaris-bast': { component: BastNotaris, name: 'BAST_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
+      'notaris-tanda-terima': { component: TandaTerimaNotaris, name: 'Tanda_Terima_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
+      'notaris-pernyataan': { component: PernyataanPengecekanSHGB, name: 'Pernyataan_Pengecekan_SHGB' },
+      'notaris-kuasa': { component: SuratKuasaNotaris, name: 'Surat_Kuasa_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name, notarisAddress: notarisList.find(n => n.id === selectedNotaris)?.address } },
     }
 
     if (reactDocs[generateDocId]) {
-      const { component: DocComponent, name } = reactDocs[generateDocId]
+      const { component: DocComponent, name, extraProps } = reactDocs[generateDocId]
       setFlppGenerating(true)
       let printArea: HTMLDivElement | null = null
       let root: any = null
@@ -428,7 +445,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         const { createRoot } = await import('react-dom/client')
         root = createRoot(printArea)
         document.body.appendChild(printArea)
-        await new Promise(resolve => { root.render(React.createElement(DocComponent, { data: state })); setTimeout(resolve, 800) })
+        await new Promise(resolve => { root.render(React.createElement(DocComponent, { data: state, ...extraProps })); setTimeout(resolve, 800) })
         const canvas = await html2canvas(printArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printArea.scrollWidth, windowHeight: printArea.scrollHeight })
         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
         const imgData = canvas.toDataURL('image/jpeg', 0.95)
@@ -500,13 +517,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && !flppLoading) loadFlppPreview()
+    if (previewMode === 'generate' && !['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
     // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
-    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa'].includes(generateDocId)) return
+    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -791,7 +808,23 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           </>
           )}
 
-          {/* BPHTB/Notaris file requirements - show when not in bank mode */}
+          {/* Notaris form fields - show when Notaris mode */}
+          {formMode === 'notaris' && (
+            <FormSection icon={<User className="w-3 h-3" />} title="Data Notaris">
+              <div className="col-span-2">
+                <label className="text-[9px] text-muted-foreground">Pilih Notaris</label>
+                <div className="flex gap-1 mt-0.5">
+                  <select value={selectedNotaris} onChange={e => setSelectedNotaris(e.target.value)}
+                    className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-xs">
+                    <option value="">— Pilih Notaris —</option>
+                    {notarisList.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                  </select>
+                  <button onClick={() => { const n = prompt('Nama + Gelar Notaris:'); if (n) { fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, city: 'Pangkalpinang' }) }).then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => [...prev, d.data]); setSelectedNotaris(d.data.id) } }) } }}
+                    className="px-2 py-1 text-[9px] rounded border border-blue-500/30 text-blue-400 bg-blue-950/20">+ Tambah</button>
+                </div>
+              </div>
+            </FormSection>
+          )}
           {formMode !== 'bank' && (
             <div>
               <h4 className="text-[10px] font-bold text-amber-400 uppercase mb-2 flex items-center gap-1">
@@ -881,13 +914,20 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('ajb-bank')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'ajb-bank' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> AJB Bank</button>
                     <button onClick={() => setGenerateDocId('surat-lpa-akad')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'surat-lpa-akad' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat LPA & Akad</button>
                   </>
+                ) : formMode === 'notaris' ? (
+                  <>
+                    <button onClick={() => setGenerateDocId('notaris-bast')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'notaris-bast' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> BAST</button>
+                    <button onClick={() => setGenerateDocId('notaris-tanda-terima')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'notaris-tanda-terima' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Tanda Terima</button>
+                    <button onClick={() => setGenerateDocId('notaris-pernyataan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'notaris-pernyataan' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Pernyataan Pengecekan</button>
+                    <button onClick={() => setGenerateDocId('notaris-kuasa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'notaris-kuasa' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Kuasa</button>
+                  </>
                 ) : (
                   <>
                     <button onClick={() => setGenerateDocId('bphtb-pernyataan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-pernyataan' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan</button>
                     <button onClick={() => setGenerateDocId('bphtb-kuasa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-kuasa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Kuasa</button>
                   </>
                 )}
-                {generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+                {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
               </div>
 
               {/* SPR Preview (React component) - BTN or Mandiri */}
@@ -927,8 +967,30 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )}
 
+              {/* Notaris Previews (React components) */}
+              {generateDocId === 'notaris-bast' && (() => { const n = notarisList.find(x => x.id === selectedNotaris); return (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><BastNotaris data={state} notarisName={n?.name} /></div>
+                </div>
+              )})()}
+              {generateDocId === 'notaris-tanda-terima' && (() => { const n = notarisList.find(x => x.id === selectedNotaris); return (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><TandaTerimaNotaris data={state} notarisName={n?.name} /></div>
+                </div>
+              )})()}
+              {generateDocId === 'notaris-pernyataan' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><PernyataanPengecekanSHGB data={state} /></div>
+                </div>
+              )}
+              {generateDocId === 'notaris-kuasa' && (() => { const n = notarisList.find(x => x.id === selectedNotaris); return (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SuratKuasaNotaris data={state} notarisName={n?.name} notarisAddress={n?.address} /></div>
+                </div>
+              )})()}
+
               {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
-              {generateDocId !== 'spr' && generateDocId !== 'pernyataan-rumah' && generateDocId !== 'pernyataan-penghasilan' && generateDocId !== 'bphtb-pernyataan' && generateDocId !== 'bphtb-kuasa' && (
+              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                   {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                   {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
