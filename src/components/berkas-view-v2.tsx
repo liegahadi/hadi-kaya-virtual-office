@@ -877,6 +877,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                       if (a !== null) fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name, address: a, city: n.city }) })
                         .then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => prev.map(x => x.id === n.id ? { ...x, address: a } : x)); toast.success('Alamat diperbarui!') } })
                     }} className="text-[9px] text-blue-400 hover:underline">✏️ Edit Alamat</button>
+                    <button onClick={() => {
+                      if (confirm(`Hapus notaris "${n.name}"?`)) {
+                        fetch('/api/notaris', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: n.id }) })
+                          .then(r => r.json()).then(d => { if (d.success) { setNotarisList(prev => prev.filter(x => x.id !== n.id)); setSelectedNotaris(''); toast.success('Notaris dihapus!') } })
+                      }
+                    }} className="text-[9px] text-red-400 hover:underline">🗑️ Hapus</button>
                   </div>
                 ) : null; })()}
               </div>

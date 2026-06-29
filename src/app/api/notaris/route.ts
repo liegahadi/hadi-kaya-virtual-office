@@ -12,7 +12,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, address, city } = await req.json()
+    const body = await req.json()
+    if (body.action === 'delete' && body.id) {
+      await db.notarisSetting.delete({ where: { id: body.id } })
+      return NextResponse.json({ success: true })
+    }
+    const { name, address, city } = body
     if (!name) return NextResponse.json({ success: false, error: 'name required' }, { status: 400 })
     const notaris = await db.notarisSetting.create({ data: { name, address: address || null, city: city || null } })
     return NextResponse.json({ success: true, data: notaris })
