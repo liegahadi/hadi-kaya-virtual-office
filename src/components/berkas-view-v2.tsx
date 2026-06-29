@@ -182,6 +182,7 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
               <div className="flex flex-col min-w-0"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Nama Konsumen</span><span className="text-sm font-semibold text-foreground truncate">{customer.name}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Bank</span><span className={cn('text-sm font-semibold', bankName ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground/60 italic')}>{bankName || 'belum diputuskan'}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Tgl Closing</span><span className="text-xs text-foreground">{formatShortDate(customer.closingDate)}</span></div>
+              <div className="flex flex-col"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Tgl SP3K</span><span className="text-xs text-foreground">{formatShortDate(customer.sp3kDate)}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Tgl Akad</span><span className="text-xs text-foreground">{formatShortDate(customer.akadDate)}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-muted-foreground uppercase tracking-wider">Status</span>
                 <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
