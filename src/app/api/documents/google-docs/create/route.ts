@@ -37,34 +37,74 @@ export async function POST(req: NextRequest) {
     const templateBuffer = Buffer.from(await templateRes.arrayBuffer())
 
     // Step 2: Upload to Google Drive and convert to Google Docs format
-    // googleapis requires a readable stream (not a Buffer) for media uploads
-    // If folderId is provided, create the file in that folder (uses folder owner's storage quota)
-    // If not provided, tries to create in Service Account's own Drive (may fail with quota error on free tier)
+    // Strategy: First upload as .docx file in the shared folder (uses folder owner's quota),
+    // then use Drive's "copy with conversion" to convert to Google Docs format
     const drive = getDriveClient()
     const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
 
-    const requestBody: any = {
-      name: fileName,
-      mimeType: 'application/vnd.google-apps.document', // Convert to Google Docs
-    }
-    // Add folder parent if provided (either from request body or env var)
     const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
+    let docId: string | undefined
+
     if (targetFolderId) {
-      requestBody.parents = [targetFolderId]
-    }
+      // Strategy A: Upload .docx in shared folder, then copy-convert to Google Docs
+      // Step A1: Upload .docx in folder (this uses folder owner's storage quota)
+      const uploadRes = await drive.files.create({
+        requestBody: {
+          name: `${fileName}.docx`,
+          parents: [targetFolderId],
+        },
+        media: {
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          body: Readable.from(templateBuffer),
+        },
+        fields: 'id, name',
+      })
 
-    const uploadRes = await drive.files.create({
-      requestBody,
-      media: {
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        body: Readable.from(templateBuffer),
-      },
-      fields: 'id, name, webViewLink',
-    })
+      const docxFileId = uploadRes.data.id
+      if (!docxFileId) {
+        return NextResponse.json({ success: false, error: 'Failed to upload .docx template' }, { status: 500 })
+      }
 
-    const docId = uploadRes.data.id
-    if (!docId) {
-      return NextResponse.json({ success: false, error: 'Failed to create Google Doc (no ID returned)' }, { status: 500 })
+      // Step A2: Copy with conversion to Google Docs format
+      const copyRes = await drive.files.copy({
+        fileId: docxFileId,
+        requestBody: {
+          name: fileName,
+          mimeType: 'application/vnd.google-apps.document',
+          parents: [targetFolderId],
+        },
+        fields: 'id, name, webViewLink',
+      })
+
+      docId = copyRes.data.id
+
+      // Step A3: Delete original .docx file (keep only the Google Doc)
+      try {
+        await drive.files.delete({ fileId: docxFileId })
+      } catch (e) {
+        console.error('Failed to delete original .docx (non-fatal):', e)
+      }
+
+      if (!docId) {
+        return NextResponse.json({ success: false, error: 'Failed to convert to Google Docs format' }, { status: 500 })
+      }
+    } else {
+      // Strategy B: Direct create with conversion (only works if SA has Drive quota)
+      const uploadRes = await drive.files.create({
+        requestBody: {
+          name: fileName,
+          mimeType: 'application/vnd.google-apps.document',
+        },
+        media: {
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          body: Readable.from(templateBuffer),
+        },
+        fields: 'id, name, webViewLink',
+      })
+      docId = uploadRes.data.id
+      if (!docId) {
+        return NextResponse.json({ success: false, error: 'Failed to create Google Doc' }, { status: 500 })
+      }
     }
 
     // Step 3: Fill placeholders with form data
