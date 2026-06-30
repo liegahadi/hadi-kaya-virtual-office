@@ -133,3 +133,72 @@ Stage Summary:
   * src/components/berkas-docs/docs/common/TemplatePopover.tsx
 - Files Deleted:
   * src/components/berkas-docs/docs/common/TemplateUploadForm.tsx (replaced by compact popover version)
+
+---
+Task ID: phase-inline-editor-v3
+Agent: Main (GLM)
+Task: Rebuild SK Kerja & Slip Gaji as inline Word/Google Docs-style editor with 20 templates + Lokasi Kerja modal
+
+Work Log:
+- User clarified 4 points: (1) Remove slip-gaji & sk-kerja from preview area, (2) Add Lokasi Kerja button next to them with Google Maps form + embed + drag-drop denah, (3) When clicking SK Kerja/Slip Gaji, inside should be like Google Docs (edit font, size, etc inline), (4) Templates should be provided by system (20 varieties), not uploaded by user.
+- Installed Tiptap editor packages: @tiptap/react, @tiptap/starter-kit, @tiptap/extension-text-align, @tiptap/extension-font-family, @tiptap/extension-text-style, @tiptap/extension-underline, @tiptap/extension-color, @tiptap/extension-highlight, plus html-to-docx for HTML→DOCX conversion.
+- Created 20 SK Kerja templates (src/lib/berkas/templates/sk-kerja-templates.ts):
+  * Categories: Umum, Tech/Startup, Pemerintahan, Perbankan, Mining, Pendidikan, Kesehatan, Retail, Konstruksi, Manufaktur, Hospitality, F&B, BUMN, Agritech, Logistik, Telco, Oil & Gas, Maritime, UMKM
+  * Each has unique kop surat, color scheme, layout, font family
+  * Placeholders: {nama}, {nik}, {tempat_lahir}, {tanggal_lahir}, {jabatan}, {perusahaan}, {alamat_perusahaan}, {gaji}, {lama_bekerja}, {tanggal}, {kota}, {atasan}, {nip_atasan}
+- Created 20 Slip Gaji templates (src/lib/berkas/templates/slip-gaji-templates.ts):
+  * Same 20 categories with matching visual style
+  * Each generates 7 sheets (6 months back + current) using engine
+  * Inline loops: {{#tunjangan_tetap}}{label}: {amount}{{/tunjangan_tetap}} for items
+- Created template engine (src/lib/berkas/templates/engine.ts):
+  * buildSkKerjaData, buildSlipGajiData (with 7-slip array)
+  * fillSkKerjaTemplate, fillSlipGajiTemplate (with loop rendering)
+  * Format Rupiah & Indonesian dates automatically
+- Created API /api/documents/html-to-docx (POST): converts HTML to .docx using html-to-docx package. Receives {html, fileName, orientation}, returns .docx file.
+- Created DocumentEditorModal (src/components/berkas-docs/DocumentEditorModal.tsx):
+  * Full-screen modal with 2 views: 'templates' (grid picker with search & category filter) and 'editor' (Tiptap editor)
+  * Toolbar: font family (8 fonts), font size (12 sizes), bold/italic/underline, alignment (left/center/right), bullet/numbered lists, text color (12 colors), highlight (12 colors)
+  * Save button: stores edited HTML to uploadedFiles['{docType}-html']
+  * Download button: POSTs HTML to /api/documents/html-to-docx → downloads .docx
+- Created LokasiKerjaModal (src/components/berkas-docs/LokasiKerjaModal.tsx):
+  * 2-column layout: form (left) + live preview (right)
+  * Form: alamat lengkap, Google Maps link (auto-extracts coords/place), nama atasan, no HP, jam operasional, waktu hubungi
+  * Photo uploads: tampak depan, tampak dalam, denah/sketsa
+  * Live Google Maps iframe preview (auto-generated from link)
+  * Denah overlay on map: draggable (mouse-down + mouse-move) — user can position denah on top of map
+- Updated BerkasView v2:
+  * Removed Slip Gaji & SK Kerja tab buttons from preview tab row (line 1269)
+  * Removed template preview block (iframe srcDoc) for slip-gaji & sk-kerja (line 1353-1417)
+  * Replaced TemplatePopover buttons in action bar with 3 new modal-opener buttons:
+    - SK Kerja button → opens DocumentEditorModal
+    - Slip Gaji button → opens DocumentEditorModal
+    - Lokasi Kerja button → opens LokasiKerjaModal (NEW, with MapPin icon, blue accent)
+  * Status indicators: emerald (already saved) / amber (not yet) / blue (Lokasi Kerja ready/empty)
+  * Added DocumentEditorModal & LokasiKerjaModal rendering at end of BerkasEditor
+- E2E verified:
+  * Local: /api/documents/html-to-docx returns 20KB .docx, valid Word file structure
+  * Production: same endpoint on Vercel returns 20KB .docx (HTTP 200)
+- Vercel deploy: pushed to GitHub → auto-deployed → status Ready (1 min ago, 56s build)
+
+Stage Summary:
+- SK Kerja, Slip Gaji, Lokasi Kerja sekarang diakses via 3 tombol di action bar (sebelah dropdown Bank)
+- Klik tombol → buka modal full-screen
+- DocumentEditorModal: pilih 1 dari 20 template → form data otomatis terisi → edit inline seperti Word (font, size, bold, alignment, color, dll) → simpan → download .docx
+- LokasiKerjaModal: isi alamat + Google Maps link → preview map live → upload foto depan/dalam → upload denah → drag denah di atas map
+- Slip Gaji auto-generate 7 sheets (6 bulan ke belakang + 1 depan)
+- Templates disediakan sistem (20 jenis per dokumen), user tidak perlu upload sendiri
+- Files Created:
+  * src/lib/berkas/templates/sk-kerja-templates.ts (20 templates)
+  * src/lib/berkas/templates/slip-gaji-templates.ts (20 templates)
+  * src/lib/berkas/templates/engine.ts (placeholder + loop rendering)
+  * src/components/berkas-docs/DocumentEditorModal.tsx (Tiptap editor)
+  * src/components/berkas-docs/LokasiKerjaModal.tsx (Google Maps + denah)
+  * src/app/api/documents/html-to-docx/route.ts
+- Files Modified:
+  * src/components/berkas-view-v2.tsx (removed old preview tabs + added modal openers)
+  * package.json (added @tiptap/*, html-to-docx)
+
+Next Steps:
+- User test: refresh production page → expand customer → Entry stage → action bar shows 3 new buttons (SK Kerja, Slip Gaji, Lokasi Kerja)
+- Click SK Kerja → modal opens → pick template (e.g. "Bank / Keuangan") → form data fills → edit font/layout → Download .docx
+- Click Lokasi Kerja → modal opens → paste Google Maps link → map auto-loads → upload denah → drag denah on map
