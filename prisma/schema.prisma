@@ -41,6 +41,21 @@ model AppUser {
   settings       UserSetting[]
 }
 
+// Google OAuth tokens - untuk akses Google Drive & Docs API sebagai user (bukan Service Account)
+// Owner login sekali → refresh_token disimpan → sistem bisa akses Drive kapan saja
+// Untuk MVP: 1 token global (single owner, app belum ada login system)
+model GoogleToken {
+  id              String   @id @default("owner") // hardcoded "owner" for MVP single-user
+  accessToken     String
+  refreshToken    String
+  expiryDate      DateTime? // when access token expires
+  tokenType       String   @default("Bearer")
+  scope           String
+  email           String?  // email Google account yang login
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model UserSetting {
   id        String   @id @default(cuid())
   userId    String
