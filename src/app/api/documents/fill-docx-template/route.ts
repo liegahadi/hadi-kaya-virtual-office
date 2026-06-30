@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     if (!templateFile) {
       return NextResponse.json({ error: 'Template file is required' }, { status: 400 })
     }
-    if (!docType || !['sk-kerja', 'slip-gaji'].includes(docType)) {
+    if (!docType || !['sk-kerja', 'slip-gaji', 'combined'].includes(docType)) {
       return NextResponse.json({ error: 'Invalid docType' }, { status: 400 })
     }
     if (!stateJson) {
@@ -110,7 +110,26 @@ export async function POST(req: NextRequest) {
     const templateBuffer = Buffer.from(await templateFile.arrayBuffer())
 
     // Build data based on doc type
-    const data = docType === 'sk-kerja' ? buildSkKerjaData(state) : buildSlipGajiData(state)
+    // For 'combined': merge SK data (top-level fields) + Slip data ({slips: [...7 items]})
+    let data: Record<string, any>
+    if (docType === 'sk-kerja') {
+      data = buildSkKerjaData(state)
+    } else if (docType === 'slip-gaji') {
+      data = buildSlipGajiData(state)
+    } else {
+      // combined: SK fields at top level + slips array
+      const skData = buildSkKerjaData(state)
+      const slipData = buildSlipGajiData(state)
+      // Each slip inherits the SK top-level fields (perusahaan, alamat_perusahaan, kota, etc.)
+      // so the kop surat in each slip page is consistent
+      const slips = slipData.slips.map((slip: any) => ({
+        ...slip,
+        perusahaan: skData.perusahaan,
+        alamat_perusahaan: skData.alamat_perusahaan,
+        kota: skData.kota,
+      }))
+      data = { ...skData, slips }
+    }
 
     // Load template into PizZip
     const zip = new PizZip(templateBuffer)
@@ -133,7 +152,9 @@ export async function POST(req: NextRequest) {
 
     const fileName = docType === 'sk-kerja'
       ? `SK_Kerja_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.docx`
-      : `Slip_Gaji_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.docx`
+      : docType === 'slip-gaji'
+      ? `Slip_Gaji_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.docx`
+      : `SK_Slip_Gaji_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.docx`
 
     // Wrap in Blob for NextResponse compatibility
     const blob = new Blob([filledDocx as BlobPart], {
