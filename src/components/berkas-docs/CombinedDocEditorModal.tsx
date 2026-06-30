@@ -22,6 +22,7 @@ interface CombinedDocEditorModalProps {
   open: boolean
   onClose: () => void
   state: BerkasState
+  customerId?: string
 }
 
 interface TemplateInfo {
@@ -41,21 +42,31 @@ interface CreatedDoc {
 }
 
 const TEMPLATES: TemplateInfo[] = [
-  { id: 'formal', name: 'Standard Formal', category: 'Umum', description: 'Format formal standar - kop surat dengan border, tabel rapih', filePath: '/templates/combined/template-formal.docx' },
-  { id: 'modern', name: 'Modern Tech', category: 'Tech/Startup', description: 'Layout modern dengan accent biru, cocok untuk perusahaan teknologi', filePath: '/templates/combined/template-modern.docx' },
-  { id: 'pemerintah', name: 'Instansi Pemerintah', category: 'Pemerintahan', description: 'Format khas surat dinas pemerintahan', filePath: '/templates/combined/template-pemerintah.docx' },
-  { id: 'bank', name: 'Bank / Keuangan', category: 'Perbankan', description: 'Format untuk karyawan bank dengan kop surat formal navy', filePath: '/templates/combined/template-bank.docx' },
-  { id: 'rs', name: 'Rumah Sakit', category: 'Kesehatan', description: 'Format untuk karyawan RS dengan kop medis merah', filePath: '/templates/combined/template-rs.docx' },
-  { id: 'mining', name: 'Pertambangan', category: 'Mining', description: 'Format karyawan tambang dengan header coklat', filePath: '/templates/combined/template-mining.docx' },
-  { id: 'hotel', name: 'Perhotelan', category: 'Hospitality', description: 'Format karyawan hotel dengan style elegan italic', filePath: '/templates/combined/template-hotel.docx' },
-  { id: 'retail', name: 'Retail / Supermarket', category: 'Retail', description: 'Format karyawan retail dengan accent oranye', filePath: '/templates/combined/template-retail.docx' },
-  { id: 'konstruksi', name: 'Konstruksi', category: 'Konstruksi', description: 'Format karyawan konstruksi dengan header dark', filePath: '/templates/combined/template-konstruksi.docx' },
-  { id: 'informal', name: 'Warung / Toko / Kafe (Informal)', category: 'Informal', description: 'Format sederhana untuk warung, toko sembako, kafe kecil - pakai "Upah" bukan "Gaji"', filePath: '/templates/combined/template-informal.docx' },
+  { id: '01', name: 'Template 1', category: '', description: 'Layout standar paling umum - kop surat border hitam, font Times New Roman. Cocok untuk semua jenis usaha.', filePath: '/templates/combined/template-01.docx' },
+  { id: '02', name: 'Template 2', category: '', description: 'Layout modern dengan accent biru, font Arial. Tampilan clean untuk usaha yang lebih kontemporer.', filePath: '/templates/combined/template-02.docx' },
+  { id: '03', name: 'Template 3', category: '', description: 'Sangat sederhana tanpa border - cocok untuk warung, warkop, usaha kecil. Font Calibri.', filePath: '/templates/combined/template-03.docx' },
+  { id: '04', name: 'Template 4', category: '', description: 'Layout dengan kotak kop surat (boxed) - font Tahoma. Untuk toko sembako / kelontong.', filePath: '/templates/combined/template-04.docx' },
+  { id: '05', name: 'Template 5', category: '', description: 'Accent hijau segar, font Georgia. Cocok untuk kafe / restoran kecil dengan nuansa hangat.', filePath: '/templates/combined/template-05.docx' },
+  { id: '06', name: 'Template 6', category: '', description: 'Accent oranye energik, font Verdana. Cocok untuk bengkel / jasa service.', filePath: '/templates/combined/template-06.docx' },
+  { id: '07', name: 'Template 7', category: '', description: 'Layout formal dengan border ganda - font Cambria. Untuk CV / PT kecil yang butuh tampilan formal.', filePath: '/templates/combined/template-07.docx' },
+  { id: '08', name: 'Template 8', category: '', description: 'Accent ungu, font Arial. Untuk salon / barbershop / jasa kecantikan.', filePath: '/templates/combined/template-08.docx' },
+  { id: '09', name: 'Template 9', category: '', description: 'Layout simple dengan garis bawah saja - font Times New Roman. Untuk usaha perorangan / jasa mandiri.', filePath: '/templates/combined/template-09.docx' },
+  { id: '10', name: 'Template 10', category: '', description: 'Accent coklat tanah, font Georgia. Cocok untuk UD (Usaha Dagang) / toko bangunan.', filePath: '/templates/combined/template-10.docx' },
+  { id: '11', name: 'Template 11', category: '', description: 'Gradient header oranye-kuning, font Calibri. Untuk warung makan / depot.', filePath: '/templates/combined/template-11.docx' },
+  { id: '12', name: 'Template 12', category: '', description: 'Layout klasik dengan italic, font Georgia. Untuk hotel / penginapan kecil.', filePath: '/templates/combined/template-12.docx' },
+  { id: '13', name: 'Template 13', category: '', description: 'Accent merah, font Arial. Untuk rumah makan / restoran dengan branding kuat.', filePath: '/templates/combined/template-13.docx' },
+  { id: '14', name: 'Template 14', category: '', description: 'Layout super minimal tanpa warna - font Tahoma. Untuk jasa service (AC, kulkas, dll).', filePath: '/templates/combined/template-14.docx' },
+  { id: '15', name: 'Template 15', category: '', description: 'Accent teal/cyan, font Verdana. Untuk laundry / cuci sepatu.', filePath: '/templates/combined/template-15.docx' },
+  { id: '16', name: 'Template 16', category: '', description: 'Layout dengan tabel rapi berborder - font Cambria. Untuk konveksi / penjahit rumahan.', filePath: '/templates/combined/template-16.docx' },
+  { id: '17', name: 'Template 17', category: '', description: 'Accent pink, font Arial. Untuk online shop / reseller rumahan.', filePath: '/templates/combined/template-17.docx' },
+  { id: '18', name: 'Template 18', category: '', description: 'Layout formal standar dengan font Times New Roman. Untuk supir / delivery / ojol.', filePath: '/templates/combined/template-18.docx' },
+  { id: '19', name: 'Template 19', category: '', description: 'Accent navy biru tua, font Calibri. Untuk toko sembako grosir.', filePath: '/templates/combined/template-19.docx' },
+  { id: '20', name: 'Template 20', category: '', description: 'Layout paling sederhana - hanya nama usaha dan alamat, tanpa warna. Font Arial. Universal untuk semua usaha informal.', filePath: '/templates/combined/template-20.docx' },
 ]
 
 const CATEGORIES = [...new Set(TEMPLATES.map(t => t.category))]
 
-export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEditorModalProps) {
+export function CombinedDocEditorModal({ open, onClose, state, customerId }: CombinedDocEditorModalProps) {
   const [view, setView] = useState<'templates' | 'editor'>('templates')
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null)
   const [creating, setCreating] = useState(false)
@@ -100,6 +111,7 @@ export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEdit
         body: JSON.stringify({
           templatePath: template.filePath,
           state,
+          customerId,
         }),
       })
       const d = await res.json()
@@ -313,10 +325,10 @@ export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEdit
                   href={createdDoc.editUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300 flex items-center gap-1.5"
-                  title="Buka di Google Docs (tab baru)"
+                  className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1.5 font-medium"
+                  title="Buka di Google Docs (tab baru) - full editor dengan semua fitur"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" /> Buka di Google Docs
+                  <ExternalLink className="w-3.5 h-3.5" /> Buka di Google Docs (Full Editor)
                 </a>
                 <button
                   onClick={handleDownload}
@@ -350,19 +362,6 @@ export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEdit
                   />
                 </div>
                 <div className="text-sm text-slate-600">{filteredTemplates.length} dari {TEMPLATES.length} template</div>
-              </div>
-              <div className="flex gap-1.5 flex-wrap">
-                <button
-                  onClick={() => setActiveCategory('all')}
-                  className={cn('px-3 py-1 text-xs rounded-full border', activeCategory === 'all' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-300 hover:border-cyan-500')}
-                >Semua</button>
-                {CATEGORIES.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={cn('px-3 py-1 text-xs rounded-full border', activeCategory === cat ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-300 hover:border-cyan-500')}
-                  >{cat}</button>
-                ))}
               </div>
             </div>
 
@@ -410,11 +409,26 @@ export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEdit
 
         {/* Editor View (Google Docs embedded) */}
         {view === 'editor' && createdDoc && (
-          <div className="flex-1 overflow-hidden bg-slate-100">
+          <div className="flex-1 overflow-hidden bg-slate-100 flex flex-col">
+            {/* Info banner */}
+            <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 flex items-center justify-between shrink-0">
+              <p className="text-[11px] text-emerald-700">
+                📝 Editor inline (mode minimal) — untuk full editor dengan semua tab & fitur Google Docs:
+              </p>
+              <a
+                href={createdDoc.editUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1 font-medium"
+              >
+                <ExternalLink className="w-3 h-3" /> Buka Full Editor
+              </a>
+            </div>
+            {/* Google Docs iframe (embedded mode) */}
             <iframe
               key={iframeKey}
               src={createdDoc.embedUrl}
-              className="w-full h-full border-0"
+              className="w-full flex-1 border-0"
               title="Google Docs Editor"
               allow="fullscreen"
             />
