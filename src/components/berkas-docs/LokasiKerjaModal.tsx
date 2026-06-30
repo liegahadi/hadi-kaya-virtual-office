@@ -1,13 +1,12 @@
 'use client'
-// LOKASI KERJA MODAL - Google Maps form + embed + drag-drop denah
+// LOKASI KERJA MODAL - Google Maps form + embed
 // Features:
-// - Form: alamat, link Google Maps, nama atasan, no HP, jam operasional, waktu hubungi
-// - Live Google Maps embed (auto-extract coords/place from link)
+// - Form: alamat, link Google Maps (full), short link maps.app.goo.gl (string only for bank),
+//   nama atasan, no HP, jam operasional, waktu hubungi
+// - Live Google Maps embed (from full link)
 // - Photo uploads: tampak depan + tampak dalam
-// - Drag-drop denah (photo) — can be moved around
-import React, { useState, useEffect, useRef } from 'react'
-import { X, Save, MapPin, Phone, Clock, User, Upload, ImageIcon, Move } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import React, { useState } from 'react'
+import { X, MapPin, Upload, ImageIcon, Link as LinkIcon, ExternalLink, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { BerkasState, JobType } from '@/lib/berkas/types'
 
@@ -18,34 +17,36 @@ interface LokasiKerjaModalProps {
   onUpdate: (field: string, val: any) => void
 }
 
+// Generate Google Maps embed URL from a link
+// Uses the embed format that doesn't show "Some custom on-map content could not be displayed" warning
 function getMapsEmbed(link: string): string {
   if (!link) return ''
   // Try coords pattern: @-2.1234,106.4567
   const coordsMatch = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
   if (coordsMatch) {
-    return `https://www.google.com/maps?q=${coordsMatch[1]},${coordsMatch[2]}&z=16&output=embed`
+    return `https://maps.google.com/maps?q=${coordsMatch[1]},${coordsMatch[2]}&z=16&output=embed`
   }
   // Try place pattern: /place/City+Name/
-  const placeMatch = link.match(/place\/([^\/]+)/)
+  const placeMatch = link.match(/place\/([^\/\?]+)/)
   if (placeMatch) {
-    return `https://www.google.com/maps?q=${decodeURIComponent(placeMatch[1])}&z=16&output=embed`
+    const placeName = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ')
+    return `https://maps.google.com/maps?q=${encodeURIComponent(placeName)}&z=16&output=embed`
   }
-  // Try short link / general URL — use as search query
-  // For maps.app.goo.gl short links, just pass the URL as q param
-  if (link.includes('maps.app.goo.gl') || link.includes('maps.google.com')) {
-    return `https://www.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
+  // For short links (maps.app.goo.gl/...) - try to use as query
+  // Note: short links may show warning, suggest user to use full link with coordinates
+  if (link.includes('maps.app.goo.gl')) {
+    return `https://maps.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
   }
-  return `https://www.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
+  // General URL — use as search query
+  return `https://maps.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
 }
 
 export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerjaModalProps) {
   const a = state.applicant as any
   const isWirausaha = state.applicant.jobType === JobType.ENTREPRENEUR
   const mapsEmbed = a.workplaceMapsLink ? getMapsEmbed(a.workplaceMapsLink) : ''
-  const [dragging, setDragging] = useState(false)
-  const [denahPos, setDenahPos] = useState({ x: 20, y: 20 })
-  const dragStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  // Check if the link is a short link (may show warning)
+  const isShortLink = a.workplaceMapsLink?.includes('maps.app.goo.gl')
 
   async function handlePhotoUpload(field: string, file: File) {
     if (!file.type.startsWith('image/')) {
@@ -69,44 +70,6 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
       toast.error('Gagal upload foto')
     }
   }
-
-  // Drag-drop denah
-  function handleDenahMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    setDragging(true)
-    const rect = (e.target as HTMLElement).getBoundingClientRect()
-    const containerRect = containerRef.current?.getBoundingClientRect()
-    if (!containerRect) return
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: rect.left - containerRect.left,
-      offsetY: rect.top - containerRect.top,
-    }
-  }
-
-  useEffect(() => {
-    if (!dragging) return
-    function handleMouseMove(e: MouseEvent) {
-      if (!dragStartRef.current || !containerRef.current) return
-      const dx = e.clientX - dragStartRef.current.x
-      const dy = e.clientY - dragStartRef.current.y
-      setDenahPos({
-        x: Math.max(0, dragStartRef.current.offsetX + dx),
-        y: Math.max(0, dragStartRef.current.offsetY + dy),
-      })
-    }
-    function handleMouseUp() {
-      setDragging(false)
-      dragStartRef.current = null
-    }
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [dragging])
 
   if (!open) return null
 
@@ -148,16 +111,39 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-600 mb-1 block">Google Maps Link (paste dari Google Maps)</label>
+                  <label className="text-xs text-slate-600 mb-1 block flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Link Google Maps (full URL — untuk embed peta)
+                  </label>
                   <input
                     type="text"
                     value={a.workplaceMapsLink || ''}
                     onChange={e => onUpdate('workplaceMapsLink', e.target.value)}
-                    placeholder="https://maps.app.goo.gl/... atau https://maps.google.com/..."
+                    placeholder="https://maps.google.com/... atau https://www.google.com/maps/..."
                     className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
                     Buka Google Maps → klik kanan lokasi → copy link → paste di sini
+                  </p>
+                  {isShortLink && (
+                    <p className="text-[10px] text-amber-600 mt-1 bg-amber-50 border border-amber-200 rounded p-1.5">
+                      ⚠️ Link pendek (maps.app.goo.gl) mungkin menampilkan warning di peta. Untuk hasil terbaik, gunakan link full yang mengandung koordinat (contoh: <code>https://www.google.com/maps/@-2.123,106.456,17z</code>).
+                    </p>
+                  )}
+                </div>
+                {/* NEW: Short link field (string only, for bank requirement) */}
+                <div>
+                  <label className="text-xs text-slate-600 mb-1 block flex items-center gap-1">
+                    <LinkIcon className="w-3 h-3" /> Short Link Google Maps (untuk bank)
+                  </label>
+                  <input
+                    type="text"
+                    value={a.workplaceMapsShortLink || ''}
+                    onChange={e => onUpdate('workplaceMapsShortLink', e.target.value)}
+                    placeholder="https://maps.app.goo.gl/xxxxx"
+                    className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Short link <code>maps.app.goo.gl/...</code> — khusus untuk dikirim ke bank (tidak terhubung ke peta di sini)
                   </p>
                 </div>
               </div>
@@ -220,7 +206,7 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
               </div>
             </div>
 
-            {/* Photo Upload */}
+            {/* Photo Upload (depan + dalam only, no denah) */}
             <div className="bg-white rounded-lg p-4 border border-slate-200">
               <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-blue-500" /> Foto Tempat {isWirausaha ? 'Usaha' : 'Kerja'}
@@ -282,49 +268,9 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
                 </div>
               </div>
             </div>
-
-            {/* Denah Upload (drag-drop) */}
-            <div className="bg-white rounded-lg p-4 border border-slate-200">
-              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
-                <Move className="w-4 h-4 text-blue-500" /> Denah / Sketsa Lokasi (opsional, bisa dipindah)
-              </h3>
-              <div className="space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  id="workplace-denah-modal"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload('workplaceDenahPhoto', f); e.target.value = '' }}
-                />
-                {!a.workplaceDenahPhoto && (
-                  <button
-                    onClick={() => document.getElementById('workplace-denah-modal')?.click()}
-                    className="w-full py-3 text-xs border-2 border-dashed border-slate-300 rounded text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5"
-                  >
-                    <Upload className="w-4 h-4" /> Upload denah (boleh denah lokasi / sketsa)
-                  </button>
-                )}
-                {a.workplaceDenahPhoto && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => document.getElementById('workplace-denah-modal')?.click()}
-                      className="text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-600 hover:bg-blue-50"
-                    >
-                      Ganti Denah
-                    </button>
-                    <button
-                      onClick={() => onUpdate('workplaceDenahPhoto', null)}
-                      className="text-[10px] px-2 py-1 rounded border border-red-500/30 text-red-600 hover:bg-red-50"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
-          {/* RIGHT: Preview - Google Maps embed + denah overlay */}
+          {/* RIGHT: Preview - Google Maps embed */}
           <div className="space-y-3">
             <div className="bg-white rounded-lg p-3 border border-slate-200">
               <div className="flex items-center justify-between mb-2">
@@ -336,13 +282,13 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
                     href={a.workplaceMapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-blue-600 hover:underline"
+                    className="text-[10px] text-blue-600 hover:underline flex items-center gap-1"
                   >
-                    Buka di Google Maps ↗
+                    Buka di Google Maps <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 )}
               </div>
-              <div ref={containerRef} className="relative w-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200" style={{ height: '500px' }}>
+              <div className="w-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200" style={{ height: '500px' }}>
                 {mapsEmbed ? (
                   <iframe
                     src={mapsEmbed}
@@ -355,32 +301,22 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-6">
                     <MapPin className="w-12 h-12 mb-2 text-slate-300" />
                     <p className="text-sm font-medium text-slate-500">Belum ada lokasi</p>
-                    <p className="text-xs mt-1 text-center">Paste Google Maps link di form sebelah kiri untuk menampilkan peta.</p>
-                  </div>
-                )}
-                {/* Denah overlay — draggable */}
-                {a.workplaceDenahPhoto && (
-                  <div
-                    onMouseDown={handleDenahMouseDown}
-                    className="absolute cursor-move bg-white border-2 border-blue-500 rounded shadow-lg overflow-hidden"
-                    style={{ left: denahPos.x, top: denahPos.y, width: '180px', height: '180px', zIndex: 10 }}
-                    title="Drag untuk pindahkan denah"
-                  >
-                    <img src={a.workplaceDenahPhoto} alt="Denah" className="w-full h-full object-cover" />
-                    <div className="absolute top-0 left-0 right-0 bg-blue-500/80 text-white text-[9px] px-1 py-0.5 flex items-center gap-1">
-                      <Move className="w-2 h-2" /> Denah (drag)
-                    </div>
+                    <p className="text-xs mt-1 text-center">Paste Google Maps link (full URL) di form sebelah kiri untuk menampilkan peta.</p>
                   </div>
                 )}
               </div>
-              {a.workplaceDenahPhoto && (
-                <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1">
-                  <Move className="w-3 h-3" /> Drag kotak denah di atas peta untuk memposisikan sesuai lokasi sebenarnya.
-                </p>
+              {/* Short link display (if filled) */}
+              {a.workplaceMapsShortLink && (
+                <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-[10px] text-blue-600 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <LinkIcon className="w-3 h-3" /> Short Link untuk Bank
+                  </p>
+                  <p className="text-[11px] font-mono text-blue-800 break-all">{a.workplaceMapsShortLink}</p>
+                </div>
               )}
             </div>
 
-            {/* Photo previews */}
+            {/* Photo previews (depan + dalam only) */}
             {(a.workplaceFrontPhoto || a.workplaceInsidePhoto) && (
               <div className="bg-white rounded-lg p-3 border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
@@ -414,7 +350,7 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
             onClick={onClose}
             className="px-4 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1.5"
           >
-            <Save className="w-3.5 h-3.5" /> Selesai
+            Selesai
           </button>
         </div>
       </div>

@@ -315,6 +315,29 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         btnAccountNumber: customer.btnAccountNumber || '',
         npwpNumber: customer.npwpNumber || '',
         jobType: (customer.occupation === 'Wirausaha' ? JobType.ENTREPRENEUR : JobType.EMPLOYEE),
+        // Workplace info (Lokasi Kerja) - restore from DB
+        atasanName: customer.atasanName || '',
+        atasanNip: customer.atasanNip || '',
+        workplaceFrontPhoto: customer.workplaceFrontPhoto || '',
+        workplaceInsidePhoto: customer.workplaceInsidePhoto || '',
+        workplaceMapsLink: customer.workplaceMapsLink || '',
+        workplaceMapsShortLink: customer.workplaceMapsShortLink || '',
+        workplaceJamOperasional: customer.workplaceJamOperasional || '',
+        workplaceWaktuHubungi: customer.workplaceWaktuHubungi || '',
+        // Slip gaji components - restore from DB
+        gajiPokok: customer.gajiPokok || 0,
+        ...(customer.slipGajiData ? (() => {
+          try {
+            const parsed = JSON.parse(customer.slipGajiData)
+            return {
+              tunjanganTetap: parsed.tunjanganTetap || [],
+              tunjanganVariabel: parsed.tunjanganVariabel || [],
+              potongan: parsed.potongan || [],
+              tanggalTerimaGaji: parsed.tanggalTerimaGaji || '',
+              periodeSlip: parsed.periodeSlip || '',
+            }
+          } catch { return {} }
+        })() : {}),
       },
       maritalStatus: customer.maritalStatus === 'MENIKAH' ? MaritalStatus.MARRIED : MaritalStatus.SINGLE,
       spouse: customer.spouseName ? {
@@ -422,6 +445,24 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           houseSize: state.property.houseSize,
           shmNumber: state.property.shmNumber,
           nibNumber: state.property.nibNumber,
+          // Workplace info (Lokasi Kerja)
+          atasanName: (state.applicant as any).atasanName,
+          atasanNip: (state.applicant as any).atasanNip,
+          workplaceFrontPhoto: (state.applicant as any).workplaceFrontPhoto,
+          workplaceInsidePhoto: (state.applicant as any).workplaceInsidePhoto,
+          workplaceMapsLink: (state.applicant as any).workplaceMapsLink,
+          workplaceMapsShortLink: (state.applicant as any).workplaceMapsShortLink,
+          workplaceJamOperasional: (state.applicant as any).workplaceJamOperasional,
+          workplaceWaktuHubungi: (state.applicant as any).workplaceWaktuHubungi,
+          // Slip gaji components
+          gajiPokok: (state.applicant as any).gajiPokok,
+          slipGajiData: JSON.stringify({
+            tunjanganTetap: (state.applicant as any).tunjanganTetap || [],
+            tunjanganVariabel: (state.applicant as any).tunjanganVariabel || [],
+            potongan: (state.applicant as any).potongan || [],
+            tanggalTerimaGaji: (state.applicant as any).tanggalTerimaGaji,
+            periodeSlip: (state.applicant as any).periodeSlip,
+          }),
           uploadedDocs: JSON.stringify(uploadedFiles),
         }),
       })
@@ -1290,7 +1331,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
                     {/* NEW: Dokumen Kerja preview tab (shows saved SK+Slip HTML + Denah from Lokasi Kerja) */}
-                    <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja {(uploadedFiles['combined-doc-html'] || (state.applicant as any).workplaceDenahPhoto || (state.applicant as any).workplaceFrontPhoto) ? '✓' : ''}</button>
+                    <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja {(uploadedFiles['combined-doc-html'] || (state.applicant as any).workplaceFrontPhoto || (state.applicant as any).workplaceMapsLink) ? '✓' : ''}</button>
                     {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (CombinedDocumentEditorModal), bukan di sini */}
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
@@ -1373,7 +1414,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )})()}
 
-              {/* Dokumen Kerja Preview - shows saved SK+Slip HTML + Denah + Foto Tempat Kerja */}
+              {/* Dokumen Kerja Preview - shows saved SK+Slip HTML + Lokasi Kerja (peta + foto) */}
               {generateDocId === 'dok-kerja' && (
                 <div className="space-y-4 text-slate-900" style={{ colorScheme: 'light' }}>
                   {/* Section 1: SK Kerja + Slip Gaji (combined doc) */}
@@ -1407,7 +1448,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     )}
                   </div>
 
-                  {/* Section 2: Lokasi Kerja - Denah + Foto */}
+                  {/* Section 2: Lokasi Kerja - Google Maps + Foto + Short Link */}
                   <div className="bg-white rounded-lg p-4 border border-slate-200">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-600" /> Lokasi Tempat Kerja</h3>
@@ -1418,23 +1459,30 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                         Edit Lokasi
                       </button>
                     </div>
-                    {/* Google Maps embed */}
+                    {/* Google Maps embed - using maps.google.com format to avoid warning */}
                     {(state.applicant as any).workplaceMapsLink && (
                       <div className="mb-3">
                         <iframe
-                          src={`https://www.google.com/maps?q=${encodeURIComponent((state.applicant as any).workplaceMapsLink)}&z=16&output=embed`}
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent((state.applicant as any).workplaceMapsLink)}&z=16&output=embed`}
                           className="w-full h-64 rounded border border-slate-200"
                           title="Lokasi Tempat Kerja"
                           loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
                         />
                       </div>
                     )}
-                    {/* Photos grid */}
-                    <div className="grid grid-cols-3 gap-2">
+                    {/* Short link untuk bank (NEW) */}
+                    {(state.applicant as any).workplaceMapsShortLink && (
+                      <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-[10px] text-blue-600 font-bold uppercase mb-0.5">Short Link untuk Bank</p>
+                        <p className="text-[11px] font-mono text-blue-800 break-all">{(state.applicant as any).workplaceMapsShortLink}</p>
+                      </div>
+                    )}
+                    {/* Photos grid (depan + dalam only, NO denah) */}
+                    <div className="grid grid-cols-2 gap-2">
                       {[
                         { label: 'Tampak Depan', val: (state.applicant as any).workplaceFrontPhoto },
                         { label: 'Tampak Dalam', val: (state.applicant as any).workplaceInsidePhoto },
-                        { label: 'Denah / Sketsa', val: (state.applicant as any).workplaceDenahPhoto },
                       ].map((photo, i) => (
                         <div key={i} className="border border-slate-200 rounded p-2 text-center">
                           <p className="text-[10px] text-slate-600 mb-1">{photo.label}</p>
