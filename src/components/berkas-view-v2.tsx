@@ -5,7 +5,7 @@ import {
   Plus, ChevronDown, ChevronRight, User, Briefcase, Heart,
   Save, Loader2, Download, X, Building2, FileText, FileDown,
   RefreshCw, Eye, Printer, Upload, Send, MessageSquare,
-  LayoutGrid, Files, Calendar, Banknote, CheckCircle2, Circle,
+  LayoutGrid, Files, Calendar, Banknote, CheckCircle2, Circle, MapPin,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +33,8 @@ import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKu
 import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
 import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
 import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
+import { DocumentEditorModal } from '@/components/berkas-docs/DocumentEditorModal'
+import { LokasiKerjaModal } from '@/components/berkas-docs/LokasiKerjaModal'
 
 // ============================================================
 // REQUIRED UPLOADS - Dokumen identitas wajib
@@ -373,6 +375,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Preview HTML for filled template (loaded from /api/documents/preview-docx-template)
   const [templatePreviewHtml, setTemplatePreviewHtml] = useState<string | null>(null)
   const [templateLoading, setTemplateLoading] = useState(false)
+  // Modal states for SK Kerja / Slip Gaji / Lokasi Kerja editors
+  const [editorModalOpen, setEditorModalOpen] = useState<null | 'sk-kerja' | 'slip-gaji'>(null)
+  const [lokasiModalOpen, setLokasiModalOpen] = useState(false)
+  // Saved edited HTML for SK Kerja & Slip Gaji (stored in uploadedFiles under 'sk-kerja-html' / 'slip-gaji-html')
+  // These are the user's edited versions from the DocumentEditorModal
   const previewRef = useRef<HTMLDivElement>(null)
 
   // Fetch notaris list
@@ -535,12 +542,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   // Download single React component PDF (for preview tabs)
-  // NOTE: slip-gaji & sk-kerja use template-based download (handleDownloadTemplateDoc)
+  // NOTE: slip-gaji & sk-kerja are now edited via DocumentEditorModal (separate modal, not in preview tabs)
   async function handleDownloadSingleReact() {
-    // Template-based docs → redirect to template download
-    if (generateDocId === 'slip-gaji') return handleDownloadTemplateDoc('slip-gaji')
-    if (generateDocId === 'sk-kerja') return handleDownloadTemplateDoc('sk-kerja')
-
     const reactDocs: Record<string, { component: any; name: string; extraProps?: any }> = {
       'spr': { component: bank === 'MANDIRI' ? SPR_MANDIRI : SPR_BTN, name: 'SPR' },
       'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
@@ -846,6 +849,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const totalUploadCount = uploadedCount + signedCount
   const totalDocs = requiredUploads.length + SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank).length
 
+  // Check if workplace data is filled (for Lokasi Kerja button status indicator)
+  const a_workplaceHasData = !!(state.applicant as any).workplaceMapsLink || !!(state.applicant as any).workplaceFrontPhoto || !!(state.applicant as any).companyAddress
+
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-card">
       <div className="flex items-center gap-2 p-3 bg-accent/10 flex-wrap">
@@ -870,19 +876,51 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah</option>
           </select>
         )}
-        {/* Template upload buttons for SK Kerja & Slip Gaji - only in bank mode Entry */}
+        {/* Editor buttons for SK Kerja, Slip Gaji, Lokasi Kerja - only in bank mode Entry */}
         {formMode === 'bank' && docStage === 'entry' && (
           <>
-            <TemplatePopover
-              docType="sk-kerja"
-              templateDataUrl={uploadedFiles['sk-kerja-template'] || null}
-              onTemplateUpload={(dataUrl) => handleTemplateUpload('sk-kerja-template', dataUrl)}
-            />
-            <TemplatePopover
-              docType="slip-gaji"
-              templateDataUrl={uploadedFiles['slip-gaji-template'] || null}
-              onTemplateUpload={(dataUrl) => handleTemplateUpload('slip-gaji-template', dataUrl)}
-            />
+            <button
+              onClick={() => setEditorModalOpen('sk-kerja')}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
+                uploadedFiles['sk-kerja-html']
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                  : 'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+              )}
+              title="Buka editor SK Kerja (Word-style inline editor)"
+            >
+              <FileText className="w-3 h-3" />
+              <span>SK Kerja</span>
+              {uploadedFiles['sk-kerja-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+            </button>
+            <button
+              onClick={() => setEditorModalOpen('slip-gaji')}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
+                uploadedFiles['slip-gaji-html']
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                  : 'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+              )}
+              title="Buka editor Slip Gaji (Word-style inline editor)"
+            >
+              <FileText className="w-3 h-3" />
+              <span>Slip Gaji</span>
+              {uploadedFiles['slip-gaji-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+            </button>
+            <button
+              onClick={() => setLokasiModalOpen(true)}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
+                (a_workplaceHasData)
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                  : 'bg-blue-50 dark:bg-blue-950/20 border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+              )}
+              title="Buka form Lokasi Tempat Kerja (Google Maps + foto + denah)"
+            >
+              <MapPin className="w-3 h-3" />
+              <span>Lokasi Kerja</span>
+              {a_workplaceHasData && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+            </button>
           </>
         )}
         <div className="ml-auto flex gap-2">
@@ -1266,8 +1304,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     </>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
-                    <button onClick={() => setGenerateDocId('slip-gaji')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'slip-gaji' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Slip Gaji</button>
-                    <button onClick={() => setGenerateDocId('sk-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'sk-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SK Kerja</button>
+                    {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (DocumentEditorModal), bukan di sini */}
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
@@ -1349,80 +1386,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )})()}
 
-              {/* Slip Gaji & SK Kerja Preview - Template-based (NOT React) */}
-              {(generateDocId === 'slip-gaji' || generateDocId === 'sk-kerja') && (
-                <div className="space-y-3">
-                  {(() => {
-                    const docType = generateDocId as 'sk-kerja' | 'slip-gaji'
-                    const templateKey = `${docType}-template`
-                    const hasTemplate = !!uploadedFiles[templateKey]
-                    if (!hasTemplate) {
-                      return (
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-8 text-center border-2 border-dashed border-cyan-500/30">
-                          <FileText className="w-12 h-12 mx-auto text-cyan-500/50 mb-3" />
-                          <h3 className="text-base font-bold mb-1">Belum ada template {docType === 'sk-kerja' ? 'SK Kerja' : 'Slip Gaji'}</h3>
-                          <p className="text-xs text-muted-foreground mb-4 max-w-md mx-auto">
-                            Upload template <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-cyan-600">.docx</code> dari perusahaan tempat kerja konsumen di sidebar kiri.
-                            Setiap perusahaan bisa punya template berbeda (kop surat, layout, logo).
-                            Sistem akan isi otomatis dengan data dari form.
-                          </p>
-                          <div className="flex gap-2 justify-center">
-                            <a
-                              href={docType === 'sk-kerja' ? '/templates/samples/template-SK-Kerja.docx' : '/templates/samples/template-Slip-Gaji.docx'}
-                              download
-                              className="px-3 py-1.5 rounded text-xs bg-cyan-600 text-white hover:bg-cyan-500 inline-flex items-center gap-1.5"
-                            >
-                              <Download className="w-3 h-3" /> Download Sample Template
-                            </a>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mt-3">
-                            Setelah download, edit di Word/Google Docs (ganti kop surat, layout) → upload di sidebar kiri.
-                          </p>
-                        </div>
-                      )
-                    }
-                    return (
-                      <>
-                        <div className="bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-2 flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-[10px] text-cyan-700 dark:text-cyan-300">
-                            <FileText className="w-3 h-3" />
-                            <span>Template terupload • Preview otomatis dari template perusahaan</span>
-                          </div>
-                          <button
-                            onClick={() => loadTemplatePreview(docType)}
-                            disabled={templateLoading}
-                            className="text-[9px] px-2 py-1 rounded border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            <RefreshCw className={cn('w-3 h-3', templateLoading && 'animate-spin')} /> Refresh
-                          </button>
-                        </div>
-                        <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
-                          {templateLoading && !templatePreviewHtml && (
-                            <div className="flex items-center justify-center h-full">
-                              <Loader2 className="w-6 h-6 animate-spin text-cyan-600" />
-                              <span className="ml-2 text-sm text-muted-foreground">Loading template preview...</span>
-                            </div>
-                          )}
-                          {templatePreviewHtml && (
-                            <iframe
-                              srcDoc={templatePreviewHtml}
-                              className="w-full h-full border-0"
-                              title={`Preview ${docType}`}
-                              sandbox="allow-same-origin"
-                            />
-                          )}
-                          {!templateLoading && !templatePreviewHtml && (
-                            <div className="flex items-center justify-center h-full flex-col gap-2">
-                              <FileText className="w-10 h-10 text-muted-foreground/30" />
-                              <p className="text-sm text-muted-foreground">Klik Refresh untuk load preview</p>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              )}
+              {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (DocumentEditorModal). */}
 
               {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
               {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId) && (
@@ -1473,6 +1437,29 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           </div>
         </div>
       )}
+
+      {/* Document Editor Modals (SK Kerja & Slip Gaji) - inline Word/Google Docs-style editor */}
+      {editorModalOpen && (
+        <DocumentEditorModal
+          open={!!editorModalOpen}
+          onClose={() => setEditorModalOpen(null)}
+          docType={editorModalOpen}
+          state={state}
+          savedHtml={uploadedFiles[`${editorModalOpen}-html`] || null}
+          onSave={(html) => {
+            setUploadedFiles(prev => ({ ...prev, [`${editorModalOpen}-html`]: html }))
+            toast.success('Perubahan disimpan. Jangan lupa klik Simpan di form untuk persist ke database.')
+          }}
+        />
+      )}
+
+      {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}
+      <LokasiKerjaModal
+        open={lokasiModalOpen}
+        onClose={() => setLokasiModalOpen(false)}
+        state={state}
+        onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)}
+      />
     </div>
   )
 }
