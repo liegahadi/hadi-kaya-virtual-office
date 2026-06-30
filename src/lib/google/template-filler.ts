@@ -2,7 +2,7 @@
 // Replaces {placeholders} in a Google Doc using the Docs API batchUpdate method
 // Each placeholder like {nama} gets replaced with the actual value
 // For loops like {#items}...{/items}, we expand them by inserting multiple rows
-import { getDocsClient } from './auth'
+import { getDocsClient, getDocsClientOAuth, isOAuthConfigured, isGoogleConnected } from './auth'
 
 interface SlipItem { label: string; amount: number }
 
@@ -105,7 +105,18 @@ export function buildSlipGajiData(state: any): any[] {
 //    - For each item, duplicate the content and replace {label}/{amount}
 //    - Delete the original
 export async function fillGoogleDocPlaceholders(docId: string, state: any): Promise<void> {
-  const docs = getDocsClient()
+  // Prefer OAuth (user login) - works because file is owned by user
+  // Fall back to Service Account if OAuth not configured
+  let docs: any
+  if (isOAuthConfigured()) {
+    const connected = await isGoogleConnected()
+    if (!connected) {
+      throw new Error('Google not connected. Owner needs to login first.')
+    }
+    docs = await getDocsClientOAuth()
+  } else {
+    docs = getDocsClient()
+  }
 
   // Step 1: Get document content
   const doc = await docs.documents.get({ documentId: docId })

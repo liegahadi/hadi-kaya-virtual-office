@@ -6,7 +6,7 @@
 // Response: { success: true, docId, editUrl, embedUrl, downloadUrl }
 import { NextRequest, NextResponse } from 'next/server'
 import { Readable } from 'stream'
-import { getDriveClient, getDocsClient, isGoogleConfigured } from '@/lib/google/auth'
+import { getDriveClientOAuth, getDocsClientOAuth, isOAuthConfigured, isGoogleConnected, getDriveClient, isGoogleConfigured } from '@/lib/google/auth'
 import { fillGoogleDocPlaceholders } from '@/lib/google/template-filler'
 
 export const runtime = 'nodejs'
@@ -14,10 +14,28 @@ export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
-    if (!isGoogleConfigured()) {
+    // Prefer OAuth (user login) - works because files saved in user's Drive (has storage quota)
+    // Fall back to Service Account only if OAuth not configured
+    let drive: any
+    let usingOAuth = false
+
+    if (isOAuthConfigured()) {
+      const connected = await isGoogleConnected()
+      if (!connected) {
+        return NextResponse.json({
+          success: false,
+          error: 'GOOGLE_NOT_CONNECTED',
+          message: 'Owner belum login Google. Klik tombol "Connect Google Drive" untuk login.',
+        }, { status: 401 })
+      }
+      drive = await getDriveClientOAuth()
+      usingOAuth = true
+    } else if (isGoogleConfigured()) {
+      drive = getDriveClient() // Service Account (legacy)
+    } else {
       return NextResponse.json({
         success: false,
-        error: 'Google Service Account belum dikonfigurasi. Set env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY',
+        error: 'Google not configured. Set OAuth env vars: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET',
       }, { status: 500 })
     }
 
@@ -27,7 +45,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 1: Fetch the .docx template from public folder
-    // templatePath is like "/templates/combined/template-formal.docx"
     const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
     const templateUrl = templatePath.startsWith('http') ? templatePath : `${baseUrl}${templatePath}`
     const templateRes = await fetch(templateUrl)
@@ -37,68 +54,61 @@ export async function POST(req: NextRequest) {
     const templateBuffer = Buffer.from(await templateRes.arrayBuffer())
 
     // Step 2: Upload to Google Drive and convert to Google Docs format
-    // Strategy: First upload as .docx file in the shared folder (uses folder owner's quota),
-    // then use Drive's "copy with conversion" to convert to Google Docs format
-    const drive = getDriveClient()
     const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
-
     const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
     let docId: string | undefined
 
-    if (targetFolderId) {
-      // Strategy A: Upload .docx in shared folder, then copy-convert to Google Docs
-      // Step A1: Upload .docx in folder (this uses folder owner's storage quota)
+    if (usingOAuth) {
+      // OAUTH: Direct create with conversion - file saved in user's Drive (has storage quota)
+      const requestBody: any = {
+        name: fileName,
+        mimeType: 'application/vnd.google-apps.document',
+      }
+      if (targetFolderId) {
+        requestBody.parents = [targetFolderId]
+      }
+
       const uploadRes = await drive.files.create({
-        requestBody: {
-          name: `${fileName}.docx`,
-          parents: [targetFolderId],
+        requestBody,
+        media: {
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          body: Readable.from(templateBuffer),
         },
+        fields: 'id, name, webViewLink',
+      })
+      docId = uploadRes.data.id || undefined
+      if (!docId) {
+        return NextResponse.json({ success: false, error: 'Failed to create Google Doc' }, { status: 500 })
+      }
+    } else if (targetFolderId) {
+      // SERVICE ACCOUNT + folder: upload .docx then copy-convert (legacy)
+      const uploadRes = await drive.files.create({
+        requestBody: { name: `${fileName}.docx`, parents: [targetFolderId] },
         media: {
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           body: Readable.from(templateBuffer),
         },
         fields: 'id, name',
       })
-
       const docxFileId = uploadRes.data.id
       if (!docxFileId) {
         return NextResponse.json({ success: false, error: 'Failed to upload .docx template' }, { status: 500 })
       }
-
-      // Step A2: Copy with conversion to Google Docs format
       const copyRes = await drive.files.copy({
         fileId: docxFileId,
-        requestBody: {
-          name: fileName,
-          mimeType: 'application/vnd.google-apps.document',
-          parents: [targetFolderId],
-        },
+        requestBody: { name: fileName, mimeType: 'application/vnd.google-apps.document', parents: [targetFolderId] },
         fields: 'id, name, webViewLink',
       })
-
       docId = copyRes.data.id || undefined
-
-      // Step A3: Delete original .docx file (keep only the Google Doc)
-      try {
-        await drive.files.delete({ fileId: docxFileId })
-      } catch (e) {
-        console.error('Failed to delete original .docx (non-fatal):', e)
-      }
-
+      try { await drive.files.delete({ fileId: docxFileId }) } catch (e) { console.error('Failed to delete original .docx (non-fatal):', e) }
       if (!docId) {
         return NextResponse.json({ success: false, error: 'Failed to convert to Google Docs format' }, { status: 500 })
       }
     } else {
-      // Strategy B: Direct create with conversion (only works if SA has Drive quota)
+      // SERVICE ACCOUNT no folder: direct create (will likely fail with quota)
       const uploadRes = await drive.files.create({
-        requestBody: {
-          name: fileName,
-          mimeType: 'application/vnd.google-apps.document',
-        },
-        media: {
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          body: Readable.from(templateBuffer),
-        },
+        requestBody: { name: fileName, mimeType: 'application/vnd.google-apps.document' },
+        media: { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: Readable.from(templateBuffer) },
         fields: 'id, name, webViewLink',
       })
       docId = uploadRes.data.id || undefined
@@ -115,19 +125,22 @@ export async function POST(req: NextRequest) {
       // Continue — user can still edit manually
     }
 
-    // Step 4: Set permission to "Anyone with link can edit"
-    // This allows embedding in iframe and editing without OAuth
-    await drive.permissions.create({
-      fileId: docId,
-      requestBody: {
-        role: 'writer',
-        type: 'anyone',
-      },
-    })
+    // Step 4: Set permission to "Anyone with link can edit" (only needed for Service Account / shared folders)
+    // For OAuth: file is already owned by user, they can share manually if needed
+    if (!usingOAuth) {
+      try {
+        await drive.permissions.create({
+          fileId: docId,
+          requestBody: { role: 'writer', type: 'anyone' },
+        })
+      } catch (e) {
+        console.error('Failed to set permission (non-fatal):', e)
+      }
+    }
 
     // Step 5: Build URLs
     const editUrl = `https://docs.google.com/document/d/${docId}/edit`
-    const embedUrl = `https://docs.google.com/document/d/${docId}/edit?rm=minimal` // minimal editor (no menu bar)
+    const embedUrl = `https://docs.google.com/document/d/${docId}/edit?rm=minimal`
     const downloadUrl = `/api/documents/google-docs/${docId}/download`
 
     return NextResponse.json({
@@ -137,6 +150,7 @@ export async function POST(req: NextRequest) {
       editUrl,
       embedUrl,
       downloadUrl,
+      usingOAuth,
     })
   } catch (err: any) {
     console.error('google-docs/create error:', err)

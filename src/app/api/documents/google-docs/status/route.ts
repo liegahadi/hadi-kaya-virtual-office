@@ -1,19 +1,28 @@
 // GET /api/documents/google-docs/status
-// Returns whether Google Service Account is configured + debug info
+// Returns Google connection status + OAuth configuration info
 import { NextResponse } from 'next/server'
-import { isGoogleConfigured, debugCredentials } from '@/lib/google/auth'
+import {
+  isOAuthConfigured, isGoogleConfigured, isGoogleConnected,
+  getConnectedAccountInfo, debugCredentials, getRedirectUri
+} from '@/lib/google/auth'
 
 export const runtime = 'nodejs'
 
 export async function GET() {
+  const connected = await isGoogleConnected()
+  const accountInfo = connected ? await getConnectedAccountInfo() : null
+
   return NextResponse.json({
     success: true,
-    configured: isGoogleConfigured(),
-    hasFolderId: !!process.env.GOOGLE_DRIVE_FOLDER_ID,
-    folderId: process.env.GOOGLE_DRIVE_FOLDER_ID ? process.env.GOOGLE_DRIVE_FOLDER_ID.substring(0, 8) + '...' : null,
-    message: isGoogleConfigured()
-      ? 'Google Service Account is configured'
-      : 'Google Service Account not configured. Set env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY',
-    debug: isGoogleConfigured() ? debugCredentials() : null,
+    // OAuth config (preferred)
+    oauthConfigured: isOAuthConfigured(),
+    // Service Account config (legacy)
+    serviceAccountConfigured: isGoogleConfigured(),
+    // Whether owner has logged in (only relevant for OAuth)
+    connected,
+    account: accountInfo,
+    // What redirect URI the user needs to add to Google Console
+    redirectUri: getRedirectUri(),
+    debug: debugCredentials(),
   })
 }
