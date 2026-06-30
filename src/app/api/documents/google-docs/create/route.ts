@@ -45,12 +45,33 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 1: Fetch the .docx template from public folder
-    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    // IMPORTANT: Must use PRODUCTION URL, not VERCEL_URL (which has hash and is protected by Vercel Authentication)
+    // If we use VERCEL_URL, the fetch returns Vercel login HTML instead of the .docx file
+    const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.NEXT_PUBLIC_SITE_URL
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.VERCEL_ENV === 'production'
+      ? 'https://hadi-kaya-virtual-office.vercel.app'
+      : 'http://localhost:3000'
+
     const templateUrl = templatePath.startsWith('http') ? templatePath : `${baseUrl}${templatePath}`
     const templateRes = await fetch(templateUrl)
     if (!templateRes.ok) {
       return NextResponse.json({ success: false, error: `Failed to fetch template: ${templateRes.status}` }, { status: 500 })
     }
+
+    // Verify we got actual .docx content, not Vercel login HTML page
+    const contentType = templateRes.headers.get('content-type') || ''
+    if (!contentType.includes('application/vnd.openxmlformats-officedocument') && !contentType.includes('application/octet-stream') && !contentType.includes('application/zip')) {
+      // Probably got HTML (Vercel login page or 404)
+      const bodyPreview = (await templateRes.text()).substring(0, 200)
+      return NextResponse.json({
+        success: false,
+        error: `Template fetch returned wrong content type: ${contentType}. Expected .docx. Body preview: ${bodyPreview}`,
+      }, { status: 500 })
+    }
+
     const templateBuffer = Buffer.from(await templateRes.arrayBuffer())
 
     // Step 2: Upload to Google Drive and convert to Google Docs format
