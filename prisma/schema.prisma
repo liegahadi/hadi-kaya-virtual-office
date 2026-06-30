@@ -244,14 +244,15 @@ model Customer {
   lpaDate        DateTime?
   lpaNumber      String?
   berkasLengkap  Boolean  @default(false)
-  atasanNip?: string;
-  workplaceFrontPhoto?: String?;
-  workplaceInsidePhoto?: String?;
-  workplaceMapsLink?: String?;
-  workplaceJamOperasional?: String?;
-  workplaceWaktuHubungi?: String?;
-  gajiPokok?: Int?;
-  slipGajiData?: String?; // JSON: { tunjanganTetap, tunjanganVariabel, potongan, tanggalTerima, periode }
+  atasanName     String?
+  atasanNip      String?
+  workplaceFrontPhoto String?
+  workplaceInsidePhoto String?
+  workplaceMapsLink String?
+  workplaceJamOperasional String?
+  workplaceWaktuHubungi String?
+  gajiPokok      Int?
+  slipGajiData   String?  // JSON: tunjangan, potongan, tanggalTerima, periode
   uploadedDocs   String?  // JSON string of { docId: dataUrl } for file persistence
 
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)

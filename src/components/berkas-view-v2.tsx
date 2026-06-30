@@ -30,6 +30,10 @@ import { BastNotaris } from '@/components/berkas-docs/docs/notaris/BastNotaris'
 import { TandaTerimaNotaris } from '@/components/berkas-docs/docs/notaris/TandaTerimaNotaris'
 import { PernyataanPengecekanSHGB } from '@/components/berkas-docs/docs/notaris/PernyataanPengecekanSHGB'
 import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKuasaNotaris'
+import { SlipGaji } from '@/components/berkas-docs/docs/common/SlipGaji'
+import { SkKerja } from '@/components/berkas-docs/docs/common/SkKerja'
+import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
+import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
 
 // ============================================================
 // REQUIRED UPLOADS - Dokumen identitas wajib
@@ -361,6 +365,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [docStage, setDocStage] = useState<'entry' | 'ajb' | 'bphtb'>('entry')
   const [formMode, setFormMode] = useState<'bank' | 'bphtb' | 'notaris'>('bank')
   const [generateDocId, setGenerateDocId] = useState<string>('flpp')
+  const [kopSurat, setKopSurat] = useState<string>('')
   const [flppBlobUrl, setFlppBlobUrl] = useState<string | null>(null)
   const [flppLoading, setFlppLoading] = useState(false)
   const [notarisList, setNotarisList] = useState<any[]>([])
@@ -538,6 +543,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       'notaris-tanda-terima': { component: TandaTerimaNotaris, name: 'Tanda_Terima_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
       'notaris-pernyataan': { component: PernyataanPengecekanSHGB, name: 'Pernyataan_Pengecekan_SHGB' },
       'notaris-kuasa': { component: SuratKuasaNotaris, name: 'Surat_Kuasa_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name, notarisAddress: notarisList.find(n => n.id === selectedNotaris)?.address } },
+      'slip-gaji': { component: SlipGaji, name: 'Slip_Gaji', extraProps: { kopSurat, bulanKe: 0 } },
+      'sk-kerja': { component: SkKerja, name: 'SK_Kerja', extraProps: { kopSurat } },
     }
 
     if (!reactDocs[generateDocId]) return false
@@ -593,13 +600,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (previewMode === 'generate' && !['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && !flppLoading) loadFlppPreview()
+    if (!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId) && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
     // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
-    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId)) return
+    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -886,6 +893,28 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               </div>
             </div>
           )}
+          {/* Slip Gaji & SK Kerja Form + Lokasi Tempat Kerja - show in bank mode Entry */}
+          {formMode === 'bank' && docStage === 'entry' && (
+            <SlipGajiForm state={state} onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)} />
+          )}
+          {formMode === 'bank' && docStage === 'entry' && (
+            <div>
+              <label className="text-[9px] text-muted-foreground">Kop Surat Perusahaan (paste dari Word/Google Docs)</label>
+              <textarea value={kopSurat} onChange={e => setKopSurat(e.target.value)}
+                placeholder="Paste kop surat di sini..."
+                className="w-full mt-0.5 bg-background/50 border border-border rounded px-2 py-1 text-xs min-h-[60px]" />
+            </div>
+          )}
+          {formMode === 'bank' && docStage === 'entry' && (
+            <LokasiTempatKerja state={state}
+              onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)}
+              onPhotoUpload={async (field, file) => {
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = () => reject(new Error('fail')); reader.readAsDataURL(file)
+                })
+                updateApplicant(field as keyof ApplicantData, dataUrl)
+              }} />
+          )}
           {/* Upload sections - ONLY in bank mode */}
           {formMode === 'bank' && (
           <>
@@ -1110,6 +1139,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     </>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
+                    <button onClick={() => setGenerateDocId('slip-gaji')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'slip-gaji' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Slip Gaji</button>
+                    <button onClick={() => setGenerateDocId('sk-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'sk-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SK Kerja</button>
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
@@ -1191,8 +1222,22 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )})()}
 
+              {/* Slip Gaji Preview */}
+              {generateDocId === 'slip-gaji' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SlipGaji data={state} kopSurat={kopSurat} bulanKe={0} /></div>
+                </div>
+              )}
+
+              {/* SK Kerja Preview */}
+              {generateDocId === 'sk-kerja' && (
+                <div ref={previewRef} className="flex justify-center">
+                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}><SkKerja data={state} kopSurat={kopSurat} /></div>
+                </div>
+              )}
+
               {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
-              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && (
+              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId) && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                   {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                   {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
