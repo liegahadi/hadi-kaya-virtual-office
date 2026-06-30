@@ -1,12 +1,13 @@
 'use client'
-// DOCUMENT EDITOR MODAL - Inline Word/Google Docs-like editor
+// COMBINED DOCUMENT EDITOR MODAL
+// 1 modal = 1 file containing: Kop Surat + SK Kerja + page break + 7 Slip Gaji sheets
 // Features:
-// - Template picker (20 templates)
-// - Tiptap rich text editor (font family, font size, bold/italic/underline, alignment, color)
-// - Auto-fills form data into template
-// - Save edits to state
-// - Download as .docx
-import React, { useState, useEffect, useCallback } from 'react'
+// - Template picker (10 styles, each with consistent kop surat for SK & Slip)
+// - Tiptap rich text editor (font family, size, bold/italic/underline, alignment, color, lists)
+// - Image upload + paste support (for logo / kop surat)
+// - Save edits to state (uploadedFiles['combined-doc-html'])
+// - Download as 1 .docx file
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -15,21 +16,20 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import { Underline } from '@tiptap/extension-underline'
 import { Color } from '@tiptap/extension-color'
 import { Highlight } from '@tiptap/extension-highlight'
-import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette } from 'lucide-react'
+import Image from '@tiptap/extension-image'
+import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { BerkasState } from '@/lib/berkas/types'
-import { SK_KERJA_TEMPLATES, SK_KERJA_CATEGORIES, SkKerjaTemplate } from '@/lib/berkas/templates/sk-kerja-templates'
-import { SLIP_GAJI_TEMPLATES, SLIP_GAJI_CATEGORIES, SlipGajiTemplate } from '@/lib/berkas/templates/slip-gaji-templates'
-import { fillSkKerjaTemplate, fillSlipGajiTemplate, wrapSkKerjaHtml } from '@/lib/berkas/templates/engine'
+import { COMBINED_TEMPLATES, COMBINED_CATEGORIES } from '@/lib/berkas/templates/combined-templates'
+import { buildCombinedDocument } from '@/lib/berkas/templates/engine'
 
-interface DocumentEditorModalProps {
+interface CombinedDocumentEditorModalProps {
   open: boolean
   onClose: () => void
-  docType: 'sk-kerja' | 'slip-gaji'
   state: BerkasState
-  savedHtml: string | null  // previously saved edited HTML
-  onSave: (html: string) => void  // callback when user saves
+  savedHtml: string | null
+  onSave: (html: string) => void
 }
 
 const FONT_FAMILIES = [
@@ -47,7 +47,7 @@ const FONT_SIZES = ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt'
 
 const COLORS = ['#000000', '#dc2626', '#ea580c', '#d97706', '#059669', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#4b5563', '#1e293b', '#fbbf24']
 
-export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, onSave }: DocumentEditorModalProps) {
+export function CombinedDocumentEditorModal({ open, onClose, state, savedHtml, onSave }: CombinedDocumentEditorModalProps) {
   const [view, setView] = useState<'templates' | 'editor'>(savedHtml ? 'editor' : 'templates')
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -57,29 +57,70 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
   const [showHighlightPicker, setShowHighlightPicker] = useState(false)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
-
-  const isSkKerja = docType === 'sk-kerja'
-  const templates = isSkKerja ? SK_KERJA_TEMPLATES : SLIP_GAJI_TEMPLATES
-  const categories = isSkKerja ? SK_KERJA_CATEGORIES : SLIP_GAJI_CATEGORIES
-  const docLabel = isSkKerja ? 'SK Kerja' : 'Slip Gaji'
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        // Disable heading if not needed
-      }),
+      StarterKit.configure({}),
       Underline,
       TextStyle,
       FontFamily,
       Color,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'editor-image',
+        },
+      }),
     ],
     content: '',
     editorProps: {
       attributes: {
         class: 'tiptap-editor max-w-none focus:outline-none min-h-[500px] p-8 bg-white',
-        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.5; color: #000;',
+        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.6; color: #000;',
+      },
+      // Handle paste of images
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items
+        if (!items) return false
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              const reader = new FileReader()
+              reader.onload = () => {
+                const dataUrl = reader.result as string
+                editor?.chain().focus().setImage({ src: dataUrl }).run()
+              }
+              reader.readAsDataURL(file)
+              return true
+            }
+          }
+        }
+        return false
+      },
+      // Handle drop of images
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files
+        if (!files || files.length === 0) return false
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          if (file.type.startsWith('image/')) {
+            event.preventDefault()
+            const reader = new FileReader()
+            reader.onload = () => {
+              const dataUrl = reader.result as string
+              editor?.chain().focus().setImage({ src: dataUrl }).run()
+            }
+            reader.readAsDataURL(file)
+            return true
+          }
+        }
+        return false
       },
     },
   })
@@ -94,46 +135,21 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
     }
   }, [open, editor, savedHtml])
 
-  // Cleanup editor on close
-  useEffect(() => {
-    if (!open && editor) {
-      // Don't destroy — just leave it
-    }
-  }, [open, editor])
-
   const handleSelectTemplate = useCallback((templateId: string) => {
     if (!editor) return
-    const template = templates.find(t => t.id === templateId)
-    if (!template) return
-
-    let filledHtml: string
-    if (isSkKerja) {
-      // SK Kerja: template.html is the full inner content
-      filledHtml = fillSkKerjaTemplate((template as SkKerjaTemplate).html, state)
-    } else {
-      // Slip Gaji: generates 7 pages, each with template.body
-      const slipTemplate = template as SlipGajiTemplate
-      // For the editor, we want all 7 pages visible — separated by horizontal rule
-      // Use the engine but render as 7 sections separated by <hr>
-      filledHtml = fillSlipGajiTemplateForEditor(slipTemplate, state)
+    try {
+      // Generate combined document HTML (SK + 7 slips) with form data filled
+      const combinedHtml = buildCombinedDocument(templateId, state)
+      editor.commands.setContent(combinedHtml)
+      setSelectedTemplate(templateId)
+      setView('editor')
+      toast.success(`Template "${COMBINED_TEMPLATES.find(t => t.id === templateId)?.name}" dimuat. SK Kerja + 7 Slip Gaji siap diedit.`)
+    } catch (err) {
+      toast.error('Gagal load template: ' + (err instanceof Error ? err.message : 'unknown'))
     }
+  }, [editor, state])
 
-    editor.commands.setContent(filledHtml)
-    setSelectedTemplate(templateId)
-    setView('editor')
-    toast.success(`Template "${template.name}" dimuat. Silakan edit di editor.`)
-  }, [editor, templates, isSkKerja, state])
-
-  // Generate 7 sheets for slip gaji but as one continuous HTML (for editor)
-  function fillSlipGajiTemplateForEditor(template: SlipGajiTemplate, state: BerkasState): string {
-    // Use the engine to generate 7 pages
-    const fullHtml = fillSlipGajiTemplate(template.body, template.css, state)
-    // Extract the body content (between <body> and </body>)
-    const bodyMatch = fullHtml.match(/<body>([\s\S]*?)<\/body>/)
-    return bodyMatch ? bodyMatch[1].trim() : fullHtml
-  }
-
-  // Editor toolbar handlers
+  // Toolbar handlers
   const setFontFamily = (font: string) => {
     if (!editor) return
     editor.chain().focus().setFontFamily(font).run()
@@ -142,9 +158,6 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
   const applyFontSize = (size: string) => {
     if (!editor) return
     setFontSize(size)
-    // Apply via inline style on selection
-    editor.chain().focus().setMark('textStyle', { attrs: { fontSize: size } }).run()
-    // Alternative: use CSS via execCommand
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
       const range = sel.getRangeAt(0)
@@ -153,7 +166,6 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
       try {
         range.surroundContents(span)
       } catch {
-        // Fallback: extract and surround
         const contents = range.extractContents()
         span.appendChild(contents)
         range.insertNode(span)
@@ -173,13 +185,39 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
     setShowHighlightPicker(false)
   }
 
+  // Image upload (for logo)
+  const handleImageUpload = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar')
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('Ukuran gambar max 3MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      editor?.chain().focus().setImage({ src: dataUrl }).run()
+      toast.success('Logo/gambar berhasil ditambahkan!')
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   const handleSave = () => {
     if (!editor) return
     setSaving(true)
     try {
       const html = editor.getHTML()
       onSave(html)
-      toast.success(`${docLabel} berhasil disimpan!`)
+      toast.success('Dokumen (SK + Slip Gaji) berhasil disimpan!')
     } catch (err) {
       toast.error('Gagal simpan: ' + (err instanceof Error ? err.message : 'unknown'))
     } finally {
@@ -192,21 +230,24 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
     setDownloading(true)
     try {
       const html = editor.getHTML()
-      // Wrap with inline CSS for proper rendering in Word
-      const wrappedHtml = isSkKerja
-        ? `<div style="font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.5;">${html}</div>`
-        : html  // slip gaji already has styling
+      // Wrap with print CSS for proper page breaks in Word
+      const wrappedHtml = `<div style="font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000;">
+<style>
+  @page { size: A4; margin: 1.5cm 2cm; }
+  table { border-collapse: collapse; }
+  .editor-image { max-width: 100%; }
+  p[style*="page-break-after"] { page-break-after: always; }
+  hr[style*="page-break-after"] { page-break-after: always; border: none; }
+</style>
+${html}
+</div>`
 
-      const fileName = `${docLabel.replace(/\s/g, '_')}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
+      const fileName = `SK_Slip_Gaji_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
 
       const res = await fetch('/api/documents/html-to-docx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: wrappedHtml,
-          fileName,
-          orientation: 'portrait',
-        }),
+        body: JSON.stringify({ html: wrappedHtml, fileName, orientation: 'portrait' }),
       })
 
       if (!res.ok) {
@@ -221,7 +262,7 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
       a.download = `${fileName}.docx`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.success(`${docLabel} berhasil di-download (.docx)!`)
+      toast.success('Dokumen berhasil di-download (.docx) - berisi SK Kerja + 7 Slip Gaji!')
     } catch (err) {
       toast.error('Gagal download: ' + (err instanceof Error ? err.message : 'unknown'))
     } finally {
@@ -230,7 +271,7 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
   }
 
   // Filter templates
-  const filteredTemplates = templates.filter(t => {
+  const filteredTemplates = COMBINED_TEMPLATES.filter(t => {
     const matchesSearch = !searchQuery ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -259,10 +300,10 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-cyan-600" />
               <h2 className="text-base font-bold text-slate-800">
-                {docLabel} Editor
+                Editor Dokumen (SK Kerja + Slip Gaji)
                 {selectedTemplate && view === 'editor' && (
                   <span className="ml-2 text-xs font-normal text-slate-500">
-                    · {templates.find(t => t.id === selectedTemplate)?.name}
+                    · {COMBINED_TEMPLATES.find(t => t.id === selectedTemplate)?.name}
                   </span>
                 )}
               </h2>
@@ -296,7 +337,6 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
         {/* Template Picker View */}
         {view === 'templates' && (
           <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
-            {/* Search & Filter */}
             <div className="p-4 border-b bg-white">
               <div className="flex gap-3 items-center mb-3">
                 <div className="relative flex-1 max-w-md">
@@ -305,12 +345,12 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder={`Cari template ${docLabel.toLowerCase()}...`}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-cyan-500"
+                    placeholder="Cari template..."
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-cyan-500 text-slate-900"
                   />
                 </div>
                 <div className="text-sm text-slate-600">
-                  {filteredTemplates.length} dari {templates.length} template
+                  {filteredTemplates.length} dari {COMBINED_TEMPLATES.length} template
                 </div>
               </div>
               <div className="flex gap-1.5 flex-wrap">
@@ -325,7 +365,7 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
                 >
                   Semua
                 </button>
-                {categories.map(cat => (
+                {COMBINED_CATEGORIES.map(cat => (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
@@ -342,7 +382,6 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
               </div>
             </div>
 
-            {/* Templates Grid */}
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {filteredTemplates.map(template => (
@@ -368,13 +407,14 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
               {filteredTemplates.length === 0 && (
                 <div className="text-center py-12 text-slate-500">
                   <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm">Tidak ada template yang cocok dengan pencarian.</p>
+                  <p className="text-sm">Tidak ada template yang cocok.</p>
                 </div>
               )}
             </div>
 
-            <div className="p-3 border-t bg-white text-[11px] text-slate-500 text-center">
-              💡 Pilih template → data form akan otomatis terisi → edit sesuka hati (font, ukuran, layout) → simpan & download .docx
+            <div className="p-3 border-t bg-white text-[11px] text-slate-600 space-y-1">
+              <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
+              <p>🎨 Pilih template → data form otomatis terisi → edit bebas (font, ukuran, layout, <strong>paste logo</strong>) → simpan & download .docx</p>
             </div>
           </div>
         )}
@@ -387,7 +427,7 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
               {/* Font family */}
               <select
                 onChange={e => setFontFamily(e.target.value)}
-                className="text-xs px-2 py-1 border border-slate-300 rounded hover:border-slate-400 focus:outline-none focus:border-cyan-500"
+                className="text-xs px-2 py-1 border border-slate-300 rounded hover:border-slate-400 focus:outline-none focus:border-cyan-500 text-slate-700"
                 title="Font Family"
               >
                 {FONT_FAMILIES.map(f => (
@@ -399,11 +439,29 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
               <select
                 value={fontSize}
                 onChange={e => applyFontSize(e.target.value)}
-                className="text-xs px-2 py-1 border border-slate-300 rounded hover:border-slate-400 focus:outline-none focus:border-cyan-500 w-16"
+                className="text-xs px-2 py-1 border border-slate-300 rounded hover:border-slate-400 focus:outline-none focus:border-cyan-500 w-16 text-slate-700"
                 title="Font Size"
               >
                 {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+
+              <div className="w-px h-6 bg-slate-300 mx-1" />
+
+              {/* Image upload (logo) - NEW */}
+              <button
+                onClick={handleImageUpload}
+                className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex items-center gap-1"
+                title="Upload / Sisipkan gambar (logo, kop surat)"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
 
               <div className="w-px h-6 bg-slate-300 mx-1" />
 
@@ -523,8 +581,11 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
                 )}
               </div>
 
-              <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500">
-                <span className="hidden md:inline">Klik di editor untuk mengedit • Drag untuk pilih text</span>
+              <div className="ml-auto flex items-center gap-3 text-[11px] text-slate-600">
+                <span className="flex items-center gap-1 bg-cyan-50 dark:bg-cyan-950/30 px-2 py-1 rounded border border-cyan-200">
+                  <ImageIcon className="w-3 h-3" />
+                  Paste logo langsung / klik tombol gambar
+                </span>
               </div>
             </div>
 

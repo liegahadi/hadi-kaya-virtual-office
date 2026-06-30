@@ -33,7 +33,7 @@ import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKu
 import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
 import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
 import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
-import { DocumentEditorModal } from '@/components/berkas-docs/DocumentEditorModal'
+import { CombinedDocumentEditorModal } from '@/components/berkas-docs/CombinedDocumentEditorModal'
 import { LokasiKerjaModal } from '@/components/berkas-docs/LokasiKerjaModal'
 
 // ============================================================
@@ -375,11 +375,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Preview HTML for filled template (loaded from /api/documents/preview-docx-template)
   const [templatePreviewHtml, setTemplatePreviewHtml] = useState<string | null>(null)
   const [templateLoading, setTemplateLoading] = useState(false)
-  // Modal states for SK Kerja / Slip Gaji / Lokasi Kerja editors
-  const [editorModalOpen, setEditorModalOpen] = useState<null | 'sk-kerja' | 'slip-gaji'>(null)
+  // Modal states for combined doc (SK + Slip) & Lokasi Kerja
+  const [combinedDocModalOpen, setCombinedDocModalOpen] = useState(false)
   const [lokasiModalOpen, setLokasiModalOpen] = useState(false)
-  // Saved edited HTML for SK Kerja & Slip Gaji (stored in uploadedFiles under 'sk-kerja-html' / 'slip-gaji-html')
-  // These are the user's edited versions from the DocumentEditorModal
+  // Saved edited HTML for combined doc (stored in uploadedFiles['combined-doc-html'])
   const previewRef = useRef<HTMLDivElement>(null)
 
   // Fetch notaris list
@@ -722,13 +721,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId) && !flppLoading) loadFlppPreview()
+    if (!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja'].includes(generateDocId) && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
     // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
-    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId)) return
+    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja'].includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -876,36 +875,22 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah</option>
           </select>
         )}
-        {/* Editor buttons for SK Kerja, Slip Gaji, Lokasi Kerja - only in bank mode Entry */}
+        {/* Editor buttons for Combined Doc (SK+Slip) & Lokasi Kerja - only in bank mode Entry */}
         {formMode === 'bank' && docStage === 'entry' && (
           <>
             <button
-              onClick={() => setEditorModalOpen('sk-kerja')}
+              onClick={() => setCombinedDocModalOpen(true)}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
-                uploadedFiles['sk-kerja-html']
+                uploadedFiles['combined-doc-html']
                   ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                   : 'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
               )}
-              title="Buka editor SK Kerja (Word-style inline editor)"
+              title="Buka editor SK Kerja + Slip Gaji (1 file, kop surat sama, edit inline seperti Word)"
             >
               <FileText className="w-3 h-3" />
-              <span>SK Kerja</span>
-              {uploadedFiles['sk-kerja-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
-            </button>
-            <button
-              onClick={() => setEditorModalOpen('slip-gaji')}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
-                uploadedFiles['slip-gaji-html']
-                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-                  : 'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-              )}
-              title="Buka editor Slip Gaji (Word-style inline editor)"
-            >
-              <FileText className="w-3 h-3" />
-              <span>Slip Gaji</span>
-              {uploadedFiles['slip-gaji-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+              <span>SK + Slip Gaji</span>
+              {uploadedFiles['combined-doc-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
             </button>
             <button
               onClick={() => setLokasiModalOpen(true)}
@@ -1304,7 +1289,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     </>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
-                    {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (DocumentEditorModal), bukan di sini */}
+                    {/* NEW: Dokumen Kerja preview tab (shows saved SK+Slip HTML + Denah from Lokasi Kerja) */}
+                    <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja {(uploadedFiles['combined-doc-html'] || (state.applicant as any).workplaceDenahPhoto || (state.applicant as any).workplaceFrontPhoto) ? '✓' : ''}</button>
+                    {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (CombinedDocumentEditorModal), bukan di sini */}
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
@@ -1386,10 +1373,94 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )})()}
 
-              {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (DocumentEditorModal). */}
+              {/* Dokumen Kerja Preview - shows saved SK+Slip HTML + Denah + Foto Tempat Kerja */}
+              {generateDocId === 'dok-kerja' && (
+                <div className="space-y-4 text-slate-900" style={{ colorScheme: 'light' }}>
+                  {/* Section 1: SK Kerja + Slip Gaji (combined doc) */}
+                  <div className="bg-white rounded-lg p-4 border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5"><FileText className="w-4 h-4 text-cyan-600" /> SK Kerja + Slip Gaji</h3>
+                      <button
+                        onClick={() => setCombinedDocModalOpen(true)}
+                        className="text-[10px] px-2 py-1 rounded border border-cyan-500/30 text-cyan-600 hover:bg-cyan-50"
+                      >
+                        {uploadedFiles['combined-doc-html'] ? 'Edit Dokumen' : 'Buat Dokumen'}
+                      </button>
+                    </div>
+                    {uploadedFiles['combined-doc-html'] ? (
+                      <div
+                        className="bg-slate-50 rounded p-3 max-h-[500px] overflow-y-auto border border-slate-200"
+                        style={{ color: '#000' }}
+                        dangerouslySetInnerHTML={{ __html: uploadedFiles['combined-doc-html'] }}
+                      />
+                    ) : (
+                      <div className="bg-slate-50 rounded p-8 text-center border-2 border-dashed border-slate-300">
+                        <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs text-slate-500 mb-3">Belum ada dokumen SK + Slip Gaji</p>
+                        <button
+                          onClick={() => setCombinedDocModalOpen(true)}
+                          className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-500"
+                        >
+                          Buat Dokumen Sekarang
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 2: Lokasi Kerja - Denah + Foto */}
+                  <div className="bg-white rounded-lg p-4 border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-600" /> Lokasi Tempat Kerja</h3>
+                      <button
+                        onClick={() => setLokasiModalOpen(true)}
+                        className="text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                      >
+                        Edit Lokasi
+                      </button>
+                    </div>
+                    {/* Google Maps embed */}
+                    {(state.applicant as any).workplaceMapsLink && (
+                      <div className="mb-3">
+                        <iframe
+                          src={`https://www.google.com/maps?q=${encodeURIComponent((state.applicant as any).workplaceMapsLink)}&z=16&output=embed`}
+                          className="w-full h-64 rounded border border-slate-200"
+                          title="Lokasi Tempat Kerja"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    {/* Photos grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Tampak Depan', val: (state.applicant as any).workplaceFrontPhoto },
+                        { label: 'Tampak Dalam', val: (state.applicant as any).workplaceInsidePhoto },
+                        { label: 'Denah / Sketsa', val: (state.applicant as any).workplaceDenahPhoto },
+                      ].map((photo, i) => (
+                        <div key={i} className="border border-slate-200 rounded p-2 text-center">
+                          <p className="text-[10px] text-slate-600 mb-1">{photo.label}</p>
+                          {photo.val ? (
+                            <img src={photo.val} alt={photo.label} className="w-full h-32 object-cover rounded" />
+                          ) : (
+                            <div className="w-full h-32 flex items-center justify-center bg-slate-50 rounded text-[10px] text-slate-400">Belum ada</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Info */}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div><span className="text-slate-500">Alamat:</span> {(state.applicant as any).companyAddress || '-'}</div>
+                      <div><span className="text-slate-500">Jam Operasional:</span> {(state.applicant as any).workplaceJamOperasional || '-'}</div>
+                      <div><span className="text-slate-500">Atasan:</span> {(state.applicant as any).atasanName || '-'}</div>
+                      <div><span className="text-slate-500">No. HP Atasan:</span> {(state.applicant as any).atasanNip || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (CombinedDocumentEditorModal). */}
 
               {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
-              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja'].includes(generateDocId) && (
+              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja'].includes(generateDocId) && (
                 <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                   {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                   {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
@@ -1438,20 +1509,17 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         </div>
       )}
 
-      {/* Document Editor Modals (SK Kerja & Slip Gaji) - inline Word/Google Docs-style editor */}
-      {editorModalOpen && (
-        <DocumentEditorModal
-          open={!!editorModalOpen}
-          onClose={() => setEditorModalOpen(null)}
-          docType={editorModalOpen}
-          state={state}
-          savedHtml={uploadedFiles[`${editorModalOpen}-html`] || null}
-          onSave={(html) => {
-            setUploadedFiles(prev => ({ ...prev, [`${editorModalOpen}-html`]: html }))
-            toast.success('Perubahan disimpan. Jangan lupa klik Simpan di form untuk persist ke database.')
-          }}
-        />
-      )}
+      {/* Combined Document Editor Modal (SK Kerja + 7 Slip Gaji in 1 file) */}
+      <CombinedDocumentEditorModal
+        open={combinedDocModalOpen}
+        onClose={() => setCombinedDocModalOpen(false)}
+        state={state}
+        savedHtml={uploadedFiles['combined-doc-html'] || null}
+        onSave={(html) => {
+          setUploadedFiles(prev => ({ ...prev, ['combined-doc-html']: html }))
+          toast.success('Dokumen (SK + Slip Gaji) disimpan. Klik Simpan di form untuk persist ke database.')
+        }}
+      />
 
       {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}
       <LokasiKerjaModal

@@ -1,8 +1,8 @@
 // TEMPLATE ENGINE - Fill HTML templates with form data
-// For Slip Gaji: generates 7 sheets (6 months back + current + 1 forward) using {#slips} loop
-// For inline item loops: {{#tunjangan_tetap}}{label}: {amount}{{/tunjangan_tetap}}
+// Combined mode: SK Kerja + 7 Slip Gaji sheets in ONE document with shared kop surat
 
 import { BerkasState } from '@/lib/berkas/types'
+import { getSkBody, getSlipBody, COMBINED_TEMPLATES } from '@/lib/berkas/templates/combined-templates'
 
 interface SlipItem { label: string; amount: number }
 
@@ -18,7 +18,7 @@ function formatDateID(d: string | Date): string {
   } catch { return '...' }
 }
 
-// Replace simple {placeholder} (single curly braces) in text
+// Replace simple {placeholder} in text
 function replacePlaceholders(text: string, data: Record<string, any>): string {
   return text.replace(/\{(\w+)\}/g, (match, key) => {
     if (key in data) return String(data[key] ?? '')
@@ -27,14 +27,11 @@ function replacePlaceholders(text: string, data: Record<string, any>): string {
 }
 
 // Replace inline loops {{#items}}content with {label} {amount}{{/items}}
-// Renders each item as a separate row
 function replaceInlineLoops(text: string, data: Record<string, any>): string {
-  // Pattern: {{#arrayName}}content{{/arrayName}}
   return text.replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (match, key, content) => {
     const items = data[key]
     if (!Array.isArray(items)) return ''
     return items.map(item => {
-      // Replace {label} and {amount} in content
       return content
         .replace(/\{label\}/g, String(item.label ?? ''))
         .replace(/\{amount\}/g, String(item.amount ?? ''))
@@ -42,7 +39,7 @@ function replaceInlineLoops(text: string, data: Record<string, any>): string {
   })
 }
 
-// Build SK Kerja data
+// Build SK Kerja data (single set, shared across document)
 export function buildSkKerjaData(state: BerkasState): Record<string, any> {
   const a = state.applicant as any
   return {
@@ -67,7 +64,7 @@ export function buildSkKerjaData(state: BerkasState): Record<string, any> {
   }
 }
 
-// Build Slip Gaji data — wraps in {#slips} array for 7-sheet generation
+// Build Slip Gaji data — 7 sheets (6 months back + current)
 export function buildSlipGajiData(state: BerkasState): Record<string, any> {
   const a = state.applicant as any
   const gajiPokok = a.gajiPokok || a.monthlyIncome || 0
@@ -82,7 +79,6 @@ export function buildSlipGajiData(state: BerkasState): Record<string, any> {
   const gajiKotor = gajiPokok + totalTunjanganTetap + totalTunjanganVariabel
   const gajiBersih = gajiKotor - totalPotongan
 
-  // Build 7 slips: 6 months back → current → next month
   const now = new Date()
   const slips: any[] = []
   for (let i = 6; i >= 0; i--) {
@@ -96,7 +92,6 @@ export function buildSlipGajiData(state: BerkasState): Record<string, any> {
       total_potongan: formatRupiah(totalPotongan),
       gaji_kotor: formatRupiah(gajiKotor),
       gaji_bersih: formatRupiah(gajiBersih),
-      // Items for inline loops — converted to display format
       tunjangan_tetap: tunjanganTetap.map(t => ({
         label: t.label,
         amount: formatRupiah(t.amount),
@@ -109,84 +104,47 @@ export function buildSlipGajiData(state: BerkasState): Record<string, any> {
         label: p.label,
         amount: formatRupiah(p.amount),
       })),
+      // Shared fields from SK (so kop surat has same data)
       nama: a.fullName || '',
       nik: a.ktpNumber || '',
       jabatan: a.jobTitle || '',
       perusahaan: a.companyName || '',
+      alamat_perusahaan: a.companyAddress || '',
+      kota: 'Pangkalpinang',
     })
   }
 
   return { slips }
 }
 
-// Fill SK Kerja template HTML with form data
-export function fillSkKerjaTemplate(templateHtml: string, state: BerkasState): string {
-  const data = buildSkKerjaData(state)
-  let html = templateHtml
-  // First replace inline loops (none for SK Kerja)
-  html = replaceInlineLoops(html, data)
-  // Then replace simple placeholders
-  html = replacePlaceholders(html, data)
-  return html
+// Fill a section (SK or slip) with data: replace placeholders + inline loops
+function fillSection(html: string, data: Record<string, any>): string {
+  let result = html
+  result = replaceInlineLoops(result, data)
+  result = replacePlaceholders(result, data)
+  return result
 }
 
-// Fill Slip Gaji template HTML with form data — generates 7 sheets
-// Wraps the body in a loop that produces 7 pages
-export function fillSlipGajiTemplate(templateBody: string, css: string, state: BerkasState): string {
-  const data = buildSlipGajiData(state)
-  const slips = data.slips
+// Build the COMBINED document: SK + page break + 7 slip sheets
+// All in one HTML string ready to be loaded into Tiptap editor
+export function buildCombinedDocument(templateId: string, state: BerkasState): string {
+  const template = COMBINED_TEMPLATES.find(t => t.id === templateId) || COMBINED_TEMPLATES[0]
+  const style = template.id.replace('combined-', '')
 
-  // Generate 7 pages by repeating the body for each slip
-  const pagesHtml = slips.map(slip => {
-    let pageHtml = templateBody
-    // First replace inline loops {{#tunjangan_tetap}}...{{/}}
-    pageHtml = replaceInlineLoops(pageHtml, slip)
-    // Then replace simple {placeholder}
-    pageHtml = replacePlaceholders(pageHtml, slip)
-    return `<div class="slip-page">${pageHtml}</div>`
-  }).join('\n')
+  const skData = buildSkKerjaData(state)
+  const slipData = buildSlipGajiData(state)
 
-  // Wrap in full HTML document
-  return `<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<title>Slip Gaji - ${state.applicant.fullName || 'Konsumen'}</title>
-<style>
-${css}
-@media print {
-  body { margin: 0; }
-  .slip-page { page-break-after: always; }
-}
-</style>
-</head>
-<body>
-${pagesHtml}
-</body>
-</html>`
-}
+  // Build SK section (filled)
+  const skHtml = fillSection(getSkBody(style), skData)
 
-// Wrap SK Kerja HTML in full document
-export function wrapSkKerjaHtml(innerHtml: string): string {
-  return `<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<title>SK Kerja</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; color: #000; margin: 0; padding: 0; }
-  .doc-page { width: 210mm; min-height: 297mm; padding: 20mm 25mm; box-sizing: border-box; margin: 0 auto; background: #fff; }
-  @media print {
-    body { margin: 0; }
-  }
-  @media screen {
-    body { background: #f0f0f0; padding: 20px 0; }
-    .doc-page { box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-bottom: 20px; }
-  }
-</style>
-</head>
-<body>
-<div class="doc-page">${innerHtml}</div>
-</body>
-</html>`
+  // Build 7 slip sections (each filled with its own slip data, but sharing kop surat fields)
+  const pageBreak = '<p style="page-break-after:always;">&nbsp;</p><hr style="page-break-after:always;border:none;">'
+  const slipPages = slipData.slips.map((slip: any) => {
+    return fillSection(getSlipBody(style), slip)
+  }).join(`\n${pageBreak}\n`)
+
+  // Combine: SK + page break + 7 slips
+  return `${skHtml}
+${pageBreak}
+${slipPages}`
 }
