@@ -249,6 +249,7 @@ model Customer {
   workplaceFrontPhoto String?
   workplaceInsidePhoto String?
   workplaceMapsLink String?
+  workplaceMapsShortLink String?  // short link maps.app.goo.gl/... (untuk bank)
   workplaceJamOperasional String?
   workplaceWaktuHubungi String?
   gajiPokok      Int?

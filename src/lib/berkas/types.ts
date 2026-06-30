@@ -37,7 +37,8 @@ export interface ApplicantData {
   // Workplace info
   workplaceFrontPhoto?: string;
   workplaceInsidePhoto?: string;
-  workplaceMapsLink?: string;
+  workplaceMapsLink?: string;          // full Google Maps link (untuk embed peta)
+  workplaceMapsShortLink?: string;     // short link maps.app.goo.gl/... (string only, untuk bank)
   workplaceJamOperasional?: string;
   workplaceWaktuHubungi?: string;
   // Slip gaji components

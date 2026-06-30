@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Type definitions for field coercion
     const floatFields = ['monthlyIncome', 'spouseIncome']
-    const intFields = ['dependents', 'fileSize', 'sortOrder', 'landSize', 'houseSize']
+    const intFields = ['dependents', 'fileSize', 'sortOrder', 'landSize', 'houseSize', 'gajiPokok']
     const booleanFields = ['berkasLengkap', 'hasExistingLoan', 'hasExistingHouse', 'isExistingMigration', 'isRequired', 'isActive']
     const dateFields = ['closingDate', 'berkasLengkapDate', 'berkasMasukBankDate', 'sp3kDate', 'akadDate', 'stageUpdatedAt', 'submittedAt', 'sp3kAt', 'akadAt', 'rejectAt', 'bookedAt', 'uploadedAt']
 
@@ -49,6 +49,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       'spouseName', 'spouseNik', 'spouseBirthPlace', 'spouseBirthDate',
       'spouseOccupation', 'spouseAddress', 'motherMaidenName', 'emergencyContact',
       'dateOfDocument', 'akadNumber', 'lpaNumber', 'uploadedDocs', 'personalityPreference', 'sourceLead', 'assignedAgentId',
+      // Workplace info (Lokasi Kerja)
+      'atasanName', 'atasanNip',
+      'workplaceFrontPhoto', 'workplaceInsidePhoto',
+      'workplaceMapsLink', 'workplaceMapsShortLink',
+      'workplaceJamOperasional', 'workplaceWaktuHubungi',
+      // Slip gaji data
+      'slipGajiData',
     ]
 
     const updateData: any = {}
