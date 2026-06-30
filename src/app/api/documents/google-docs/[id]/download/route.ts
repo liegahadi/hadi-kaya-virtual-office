@@ -1,19 +1,27 @@
 // GET /api/documents/google-docs/[id]/download
 // Exports a Google Doc as .docx file (using Drive API export)
 import { NextRequest, NextResponse } from 'next/server'
-import { getDriveClient, isGoogleConfigured } from '@/lib/google/auth'
+import { getDriveClient, getDriveClientOAuth, isOAuthConfigured, isGoogleConnected, isGoogleConfigured } from '@/lib/google/auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!isGoogleConfigured()) {
-      return NextResponse.json({ error: 'Google Service Account not configured' }, { status: 500 })
+    let drive: any
+    if (isOAuthConfigured()) {
+      const connected = await isGoogleConnected()
+      if (!connected) {
+        return NextResponse.json({ error: 'GOOGLE_NOT_CONNECTED', message: 'Owner belum login Google' }, { status: 401 })
+      }
+      drive = await getDriveClientOAuth()
+    } else if (isGoogleConfigured()) {
+      drive = getDriveClient()
+    } else {
+      return NextResponse.json({ error: 'Google not configured' }, { status: 500 })
     }
 
     const { id } = await params
-    const drive = getDriveClient()
 
     // Export the Google Doc as .docx
     const exportRes = await drive.files.export({
