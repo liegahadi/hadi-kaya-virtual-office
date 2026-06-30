@@ -5,6 +5,7 @@
 // Request body: { templatePath: string, state: BerkasState }
 // Response: { success: true, docId, editUrl, embedUrl, downloadUrl }
 import { NextRequest, NextResponse } from 'next/server'
+import { Readable } from 'stream'
 import { getDriveClient, getDocsClient, isGoogleConfigured } from '@/lib/google/auth'
 import { fillGoogleDocPlaceholders } from '@/lib/google/template-filler'
 
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     const templateBuffer = Buffer.from(await templateRes.arrayBuffer())
 
     // Step 2: Upload to Google Drive and convert to Google Docs format
+    // googleapis requires a readable stream (not a Buffer) for media uploads
     const drive = getDriveClient()
     const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
 
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
       },
       media: {
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        body: templateBuffer,
+        body: Readable.from(templateBuffer),
       },
       fields: 'id, name, webViewLink, embedLink',
     })
