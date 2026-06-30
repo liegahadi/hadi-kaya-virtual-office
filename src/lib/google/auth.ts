@@ -80,10 +80,37 @@ export function isOAuthConfigured(): boolean {
 }
 
 export function getRedirectUri(): string {
-  // Use env var if set, otherwise auto-detect from VERCEL_URL or localhost
+  // Priority:
+  // 1. GOOGLE_REDIRECT_URI env var (explicit override)
+  // 2. VERCEL_PROJECT_PRODUCTION_URL (Vercel auto-sets this on all plans)
+  // 3. NEXT_PUBLIC_SITE_URL env var (common convention)
+  // 4. Hardcoded production URL for this project (fallback — change if domain changes)
+  // 5. VERCEL_URL (unique deploy URL — works but mismatches Google Console setup)
+  // 6. localhost for dev
+
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/api/auth/google/callback`
-  if (process.env.NEXT_PUBLIC_VERCEL_URL) return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/api/auth/google/callback`
+
+  // Vercel auto-sets VERCEL_PROJECT_PRODUCTION_URL on all plans (e.g. "hadi-kaya-virtual-office.vercel.app")
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/auth/google/callback`
+  }
+
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/google/callback`
+  }
+
+  // Hardcoded production URL for this specific project
+  // (fallback when Vercel env vars not available, e.g. local dev with VERCEL_URL set)
+  if (process.env.VERCEL_ENV === 'production') {
+    return 'https://hadi-kaya-virtual-office.vercel.app/api/auth/google/callback'
+  }
+
+  // For preview/unique deploy URLs (VERCEL_URL has hash like project-abc123.vercel.app)
+  // This will mismatch Google Console - user should set GOOGLE_REDIRECT_URI for preview deploys
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}/api/auth/google/callback`
+  }
+
   return 'http://localhost:3000/api/auth/google/callback'
 }
 
