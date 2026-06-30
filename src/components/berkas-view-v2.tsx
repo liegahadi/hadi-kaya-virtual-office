@@ -33,7 +33,7 @@ import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKu
 import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
 import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
 import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
-import { CombinedDocDownloadModal } from '@/components/berkas-docs/CombinedDocDownloadModal'
+import { CombinedDocEditorModal } from '@/components/berkas-docs/CombinedDocEditorModal'
 import { LokasiKerjaModal } from '@/components/berkas-docs/LokasiKerjaModal'
 
 // ============================================================
@@ -922,12 +922,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               onClick={() => setCombinedDocModalOpen(true)}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8',
-                'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                uploadedFiles['combined-doc-html']
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                  : 'bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
               )}
-              title="Download SK Kerja + Slip Gaji (.docx) untuk dibuka di Google Docs / Word"
+              title="Edit SK Kerja + Slip Gaji di dalam sistem (Google-Docs-like editor)"
             >
               <FileText className="w-3 h-3" />
               <span>SK + Slip Gaji</span>
+              {uploadedFiles['combined-doc-html'] && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
             </button>
             <button
               onClick={() => setLokasiModalOpen(true)}
@@ -1410,30 +1413,41 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )})()}
 
-              {/* Dokumen Kerja Preview - shows Lokasi Kerja (peta + foto) + button to download SK+Slip */}
+              {/* Dokumen Kerja Preview - shows saved edited SK+Slip HTML + Lokasi Kerja (peta + foto) */}
               {generateDocId === 'dok-kerja' && (
                 <div className="space-y-4 text-slate-900" style={{ colorScheme: 'light' }}>
-                  {/* Section 1: SK Kerja + Slip Gaji - download button */}
+                  {/* Section 1: SK Kerja + Slip Gaji (edited HTML preview) */}
                   <div className="bg-white rounded-lg p-4 border border-slate-200">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold flex items-center gap-1.5"><FileText className="w-4 h-4 text-cyan-600" /> SK Kerja + Slip Gaji (.docx)</h3>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5"><FileText className="w-4 h-4 text-cyan-600" /> SK Kerja + Slip Gaji</h3>
                       <button
                         onClick={() => setCombinedDocModalOpen(true)}
-                        className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-700 flex items-center gap-1.5"
+                        className="text-[10px] px-2 py-1 rounded border border-cyan-500/30 text-cyan-600 hover:bg-cyan-50"
                       >
-                        <FileText className="w-3.5 h-3.5" /> Pilih Template & Download
+                        {uploadedFiles['combined-doc-html'] ? 'Edit Dokumen' : 'Buat Dokumen'}
                       </button>
                     </div>
-                    <div className="bg-slate-50 rounded p-3 border border-slate-200 text-xs text-slate-600">
-                      <p className="font-bold text-slate-700 mb-1">Cara pakai:</p>
-                      <ol className="list-decimal list-inside space-y-0.5">
-                        <li>Klik tombol di atas untuk buka modal template</li>
-                        <li>Pilih template sesuai jenis tempat kerja konsumen (10 pilihan)</li>
-                        <li>Download file <code className="px-1 py-0.5 bg-white rounded text-cyan-600">.docx</code> — otomatis terisi data form (SK + 7 Slip Gaji)</li>
-                        <li>Buka di <strong>Google Docs</strong> (upload ke Drive → Open with → Google Docs) atau <strong>Word</strong></li>
-                        <li>Edit kop surat (paste logo, ubah layout), simpan, kirim ke bank</li>
-                      </ol>
-                    </div>
+                    {uploadedFiles['combined-doc-html'] ? (
+                      <div
+                        className="bg-slate-50 rounded p-3 max-h-[500px] overflow-y-auto border border-slate-200"
+                        style={{ color: '#000' }}
+                        dangerouslySetInnerHTML={{ __html: uploadedFiles['combined-doc-html'] }}
+                      />
+                    ) : (
+                      <div className="bg-slate-50 rounded p-8 text-center border-2 border-dashed border-slate-300">
+                        <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs text-slate-500 mb-3">Belum ada dokumen SK + Slip Gaji</p>
+                        <button
+                          onClick={() => setCombinedDocModalOpen(true)}
+                          className="text-xs px-3 py-1.5 rounded bg-cyan-600 text-white hover:bg-cyan-500"
+                        >
+                          Buat Dokumen Sekarang
+                        </button>
+                        <p className="text-[10px] text-slate-400 mt-3">
+                          Pilih template → data form otomatis terisi → edit bebas (font, ukuran, paste logo) → simpan & download .docx
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Section 2: Lokasi Kerja - Google Maps + Foto + Short Link */}
@@ -1459,14 +1473,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                         />
                       </div>
                     )}
-                    {/* Short link untuk bank (NEW) */}
+                    {/* Short link untuk bank */}
                     {(state.applicant as any).workplaceMapsShortLink && (
                       <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-[10px] text-blue-600 font-bold uppercase mb-0.5">Short Link untuk Bank</p>
                         <p className="text-[11px] font-mono text-blue-800 break-all">{(state.applicant as any).workplaceMapsShortLink}</p>
                       </div>
                     )}
-                    {/* Photos grid (depan + dalam only, NO denah) */}
+                    {/* Photos grid (depan + dalam only) */}
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { label: 'Tampak Depan', val: (state.applicant as any).workplaceFrontPhoto },
@@ -1545,11 +1559,16 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         </div>
       )}
 
-      {/* Combined Doc Download Modal (SK Kerja + 7 Slip Gaji as real .docx) */}
-      <CombinedDocDownloadModal
+      {/* Combined Doc Editor Modal (edit SK + Slip Gaji inside the system) */}
+      <CombinedDocEditorModal
         open={combinedDocModalOpen}
         onClose={() => setCombinedDocModalOpen(false)}
         state={state}
+        savedHtml={uploadedFiles['combined-doc-html'] || null}
+        onSave={(html) => {
+          setUploadedFiles(prev => ({ ...prev, ['combined-doc-html']: html }))
+          toast.success('Dokumen tersimpan. Klik Simpan di form untuk persist ke database.')
+        }}
       />
 
       {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}
