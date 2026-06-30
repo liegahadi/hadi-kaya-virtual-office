@@ -100,3 +100,36 @@ Stage Summary:
 Next Steps:
 - User can now test: pick a customer → Entry (Pre-Bank) → sidebar shows Template Upload Forms → download sample, customize in Word, upload back → click Slip Gaji / SK Kerja preview → see filled template → download .docx
 - Future enhancement: saved templates library (per workplace, reusable across customers)
+
+---
+Task ID: phase-sk-slip-template-fix-location
+Agent: Main (GLM)
+Task: Move SK Kerja & Slip Gaji template upload UI from sidebar to top action bar (per user screenshot feedback)
+
+Work Log:
+- User sent screenshot with red box marking empty area in top action bar (between Bank dropdown and Simpan/Single/Download All buttons), saying "harusnya ada disana" (should be there).
+- Analyzed screenshot via VLM: red box is the empty space in the action bar of BerkasEditor, between the bank selector and the action buttons. User wanted template upload feature moved from left sidebar to that action bar location.
+- Created new compact `TemplatePopover` component (src/components/berkas-docs/docs/common/TemplatePopover.tsx):
+  * Small button in action bar showing template name (SK Kerja / Slip Gaji) + status icon (CheckCircle2 if uploaded, Upload icon if not)
+  * Click opens a popover with full template UI (file upload dropzone, sample download, placeholder list, remove button)
+  * Popover closes on outside click
+  * Color-coded: cyan when uploaded, amber when not uploaded
+  * Replaces the larger TemplateUploadForm component (now removed)
+- Updated `berkas-view-v2.tsx`:
+  * Removed TemplateUploadForm imports & sidebar usage
+  * Added 2 TemplatePopover buttons in the top action bar (line 873-887) between Bank selector and Simpan/Single/Download All
+  * Only visible in bank mode + Entry stage (where SK Kerja & Slip Gaji are relevant)
+  * Deleted unused TemplateUploadForm.tsx file
+- Verified build: TypeScript clean, dev server runs without errors
+
+Stage Summary:
+- SK Kerja & Slip Gaji template upload buttons now appear in the top action bar (where user wanted them)
+- Each button is compact (~h-8 matching other action buttons)
+- Click button → popover with full template UI (upload, sample download, placeholder reference, remove)
+- Status icon visible at a glance (green check = ready, upload icon = not yet uploaded)
+- Files Modified:
+  * src/components/berkas-view-v2.tsx (replaced sidebar TemplateUploadForm with action bar TemplatePopover)
+- Files Created:
+  * src/components/berkas-docs/docs/common/TemplatePopover.tsx
+- Files Deleted:
+  * src/components/berkas-docs/docs/common/TemplateUploadForm.tsx (replaced by compact popover version)

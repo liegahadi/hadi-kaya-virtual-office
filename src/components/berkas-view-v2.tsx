@@ -32,7 +32,7 @@ import { PernyataanPengecekanSHGB } from '@/components/berkas-docs/docs/notaris/
 import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKuasaNotaris'
 import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
 import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
-import { TemplateUploadForm } from '@/components/berkas-docs/docs/common/TemplateUploadForm'
+import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
 
 // ============================================================
 // REQUIRED UPLOADS - Dokumen identitas wajib
@@ -870,6 +870,21 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah</option>
           </select>
         )}
+        {/* Template upload buttons for SK Kerja & Slip Gaji - only in bank mode Entry */}
+        {formMode === 'bank' && docStage === 'entry' && (
+          <>
+            <TemplatePopover
+              docType="sk-kerja"
+              templateDataUrl={uploadedFiles['sk-kerja-template'] || null}
+              onTemplateUpload={(dataUrl) => handleTemplateUpload('sk-kerja-template', dataUrl)}
+            />
+            <TemplatePopover
+              docType="slip-gaji"
+              templateDataUrl={uploadedFiles['slip-gaji-template'] || null}
+              onTemplateUpload={(dataUrl) => handleTemplateUpload('slip-gaji-template', dataUrl)}
+            />
+          </>
+        )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />} Simpan</Button>
           <Button size="sm" onClick={handleDownloadSingleReact} disabled={flppGenerating} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs" title="Download dokumen yang sedang di-preview saja">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}Single</Button>
@@ -1012,23 +1027,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               </div>
             </div>
           )}
-          {/* Slip Gaji & SK Kerja Form + Template Upload + Lokasi Tempat Kerja - show in bank mode Entry */}
+          {/* Slip Gaji & SK Kerja Form + Lokasi Tempat Kerja - show in bank mode Entry */}
+          {/* NOTE: Template upload for SK Kerja & Slip Gaji is in the top action bar (TemplatePopover) */}
           {formMode === 'bank' && docStage === 'entry' && (
             <SlipGajiForm state={state} onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)} />
-          )}
-          {formMode === 'bank' && docStage === 'entry' && (
-            <TemplateUploadForm
-              docType="sk-kerja"
-              templateDataUrl={uploadedFiles['sk-kerja-template'] || null}
-              onTemplateUpload={(dataUrl) => handleTemplateUpload('sk-kerja-template', dataUrl)}
-            />
-          )}
-          {formMode === 'bank' && docStage === 'entry' && (
-            <TemplateUploadForm
-              docType="slip-gaji"
-              templateDataUrl={uploadedFiles['slip-gaji-template'] || null}
-              onTemplateUpload={(dataUrl) => handleTemplateUpload('slip-gaji-template', dataUrl)}
-            />
           )}
           {formMode === 'bank' && docStage === 'entry' && (
             <LokasiTempatKerja state={state}
