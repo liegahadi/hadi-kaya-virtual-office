@@ -34,6 +34,19 @@ export interface ApplicantData {
   bendaharawanNip?: string;
   atasanName?: string;
   atasanNip?: string;
+  // Workplace info
+  workplaceFrontPhoto?: string;
+  workplaceInsidePhoto?: string;
+  workplaceMapsLink?: string;
+  workplaceJamOperasional?: string;
+  workplaceWaktuHubungi?: string;
+  // Slip gaji components
+  gajiPokok?: number;
+  tunjanganTetap?: { label: string; amount: number }[];
+  tunjanganVariabel?: { label: string; amount: number }[];
+  potongan?: { label: string; amount: number }[];
+  tanggalTerimaGaji?: string;
+  periodeSlip?: string;
 }
 
 export type SpouseJobType = 'NGANGGUR' | 'KARYAWAN' | 'WIRAUSAHA'
