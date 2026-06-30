@@ -1431,8 +1431,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
       {previewUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setPreviewUrl(null)}>
-          <div className="max-w-3xl w-full max-h-[90vh] overflow-auto bg-white rounded-lg" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between p-2 border-b"><span className="text-sm font-medium">Preview Dokumen</span><button onClick={() => setPreviewUrl(null)}><X className="w-4 h-4" /></button></div>
+          <div className="max-w-3xl w-full max-h-[90vh] overflow-auto bg-white text-slate-900 rounded-lg" style={{ colorScheme: 'light' }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between p-2 border-b"><span className="text-sm font-medium text-slate-900">Preview Dokumen</span><button onClick={() => setPreviewUrl(null)} className="text-slate-700 hover:text-slate-900"><X className="w-4 h-4" /></button></div>
             {previewUrl.startsWith('data:image') ? <img src={previewUrl} alt="Preview" className="w-full" /> : previewUrl.startsWith('data:application/pdf') ? <iframe src={previewUrl} className="w-full h-[80vh]" title="Preview" /> : previewUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <img src={previewUrl} alt="Preview" className="w-full" /> : <iframe src={previewUrl} className="w-full h-[80vh]" title="Preview" />}
           </div>
         </div>

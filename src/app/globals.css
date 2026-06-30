@@ -258,3 +258,58 @@
 .chat-fade-in {
   animation: chat-fade-in 0.3s ease-out;
 }
+
+/* ============================================
+   TIPTAP EDITOR - Force dark text on white bg
+   (Override app's dark theme for document editor)
+   ============================================ */
+.tiptap-editor {
+  color: #000 !important;
+  background: #fff !important;
+}
+.tiptap-editor * {
+  color: inherit;
+}
+.tiptap-editor p,
+.tiptap-editor h1,
+.tiptap-editor h2,
+.tiptap-editor h3,
+.tiptap-editor h4,
+.tiptap-editor h5,
+.tiptap-editor h6,
+.tiptap-editor li,
+.tiptap-editor td,
+.tiptap-editor th,
+.tiptap-editor span,
+.tiptap-editor div,
+.tiptap-editor strong,
+.tiptap-editor em,
+.tiptap-editor u {
+  color: #000;
+}
+.tiptap-editor table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tiptap-editor td,
+.tiptap-editor th {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+}
+.tiptap-editor ul,
+.tiptap-editor ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.tiptap-editor p {
+  margin: 8px 0;
+}
+.tiptap-editor:focus {
+  outline: none;
+}
+
+/* Modal text override - force dark text in modal contexts */
+.modal-light-text,
+.modal-light-text * {
+  color: inherit;
+}
