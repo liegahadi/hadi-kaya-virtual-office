@@ -259,8 +259,9 @@ export function CombinedDocEditorModal({ open, onClose, state }: CombinedDocEdit
               Connect Google Drive
             </a>
             <p className="text-[10px] text-slate-500 mt-4">
-              Dengan klik tombol di atas, kamu akan diarahkan ke halaman login Google.
-              Setelah login, kamu akan kembali otomatis ke halaman ini.
+              Klik tombol di atas → login Google → otomatis kembali ke halaman ini.
+              <br/>
+              <strong>Penting:</strong> Setelah login, refresh halaman ini (tekan F5) lalu buka modal lagi.
             </p>
           </div>
         </div>
