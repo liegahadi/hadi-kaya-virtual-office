@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         fields: 'id, name, webViewLink',
       })
 
-      docId = copyRes.data.id
+      docId = copyRes.data.id || undefined
 
       // Step A3: Delete original .docx file (keep only the Google Doc)
       try {
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
         },
         fields: 'id, name, webViewLink',
       })
-      docId = uploadRes.data.id
+      docId = uploadRes.data.id || undefined
       if (!docId) {
         return NextResponse.json({ success: false, error: 'Failed to create Google Doc' }, { status: 500 })
       }
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       docId,
-      fileName: uploadRes.data.name,
+      fileName,
       editUrl,
       embedUrl,
       downloadUrl,
