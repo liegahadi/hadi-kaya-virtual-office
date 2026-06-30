@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    const { templatePath, state } = await req.json()
+    const { templatePath, state, folderId } = await req.json()
     if (!templatePath || !state) {
       return NextResponse.json({ success: false, error: 'templatePath and state are required' }, { status: 400 })
     }
@@ -38,14 +38,23 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Upload to Google Drive and convert to Google Docs format
     // googleapis requires a readable stream (not a Buffer) for media uploads
+    // If folderId is provided, create the file in that folder (uses folder owner's storage quota)
+    // If not provided, tries to create in Service Account's own Drive (may fail with quota error on free tier)
     const drive = getDriveClient()
     const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
 
+    const requestBody: any = {
+      name: fileName,
+      mimeType: 'application/vnd.google-apps.document', // Convert to Google Docs
+    }
+    // Add folder parent if provided (either from request body or env var)
+    const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
+    if (targetFolderId) {
+      requestBody.parents = [targetFolderId]
+    }
+
     const uploadRes = await drive.files.create({
-      requestBody: {
-        name: fileName,
-        mimeType: 'application/vnd.google-apps.document', // Convert to Google Docs
-      },
+      requestBody,
       media: {
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         body: Readable.from(templateBuffer),
