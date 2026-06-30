@@ -78,8 +78,8 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
     content: '',
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[500px] p-8 bg-white',
-        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.5;',
+        class: 'tiptap-editor max-w-none focus:outline-none min-h-[500px] p-8 bg-white',
+        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.5; color: #000;',
       },
     },
   })
@@ -243,7 +243,7 @@ export function DocumentEditorModal({ open, onClose, docType, state, savedHtml, 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" style={{ backdropFilter: 'blur(4px)' }}>
-      <div className="bg-white w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col overflow-hidden">
+      <div className="bg-white text-slate-900 w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col overflow-hidden" style={{ colorScheme: 'light' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-slate-50 shrink-0">
           <div className="flex items-center gap-3">

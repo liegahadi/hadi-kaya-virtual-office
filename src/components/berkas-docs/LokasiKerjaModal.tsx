@@ -108,7 +108,7 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" style={{ backdropFilter: 'blur(4px)' }}>
-      <div className="bg-white w-full h-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden rounded-lg">
+      <div className="bg-white text-slate-900 w-full h-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden rounded-lg" style={{ colorScheme: 'light' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-slate-50 shrink-0">
           <div className="flex items-center gap-2">
