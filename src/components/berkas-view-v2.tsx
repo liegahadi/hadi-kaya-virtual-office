@@ -418,9 +418,116 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     finally { setSaving(false) }
   }
 
-  // Download PDF - handles all document types
+  // Download PDF - MERGE mode: combine all uploads + generated docs into ONE PDF
   async function handleDownloadFlpp() {
-    // React component docs: SPR + BPHTB Surat Pernyataan + BPHTB Surat Kuasa
+    setFlppGenerating(true)
+    try {
+      // Collect files to merge based on current mode/bank/stage
+      const filesToMerge: Array<{ docId: string; dataUrl: string; label: string }> = []
+      const templateDocsToMerge: Array<{ templatePath: string }> = []
+
+      if (formMode === 'bank') {
+        // === BANK MODE ===
+        if (docStage === 'entry') {
+          // Entry (Pre-Bank): merge all required uploads + signed docs + generated docs
+          // 1. Required uploads (KTP, KK, NPWP, etc.)
+          const requiredDocIds = ['ktp', 'kk', 'npwp', 'status-nikah', 'slip-gaji', 'sk-kerja', 'surat-rumah', 'sertifikat', 'pbb']
+          requiredDocIds.forEach(id => {
+            if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+          })
+          // Spouse docs if married
+          if (state.maritalStatus === MaritalStatus.MARRIED) {
+            ['spouse-tidak-bekerja', 'spouse-slip-gaji', 'spouse-sk-kerja', 'spouse-nib', 'spouse-laporan-keuangan'].forEach(id => {
+              if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+            })
+          }
+          // 2. Signed docs (FLPP, SPR, aplikasi, pernyataan penghasilan, rekening koran, SP3K)
+          const signedDocIds = ['flpp-signed', 'spr-signed', 'aplikasi-signed', 'pernyataan-penghasilan-signed', 'rekening-koran-signed', 'sp3k-btn', 'sppk-mandiri', 'sp4-bsb']
+          signedDocIds.forEach(id => {
+            if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+          })
+          // 3. Template overlay docs (FLPP BTN / Mandiri Pernyataan)
+          if (bank === 'BTN') {
+            templateDocsToMerge.push({ templatePath: '/public/templates/btn-flpp-template.pdf' })
+          } else if (bank === 'MANDIRI') {
+            templateDocsToMerge.push({ templatePath: '/public/templates/mandiri-pernyataan-pemohon.pdf' })
+          } else if (bank === 'BSB_SYARIAH') {
+            ['bsb-flpp', 'bsb-spr', 'bsb-permohonan', 'bsb-kuasa-bendaharawan', 'bsb-pernyataan', 'bsb-sbum'].forEach(id => {
+              templateDocsToMerge.push({ templatePath: `/public/templates/${id.replace('bsb-', 'bsb-')}.pdf` })
+            })
+          }
+        } else if (docStage === 'ajb' && bank === 'BTN') {
+          // AJB (Post-SP3K): merge all post-SP3K uploads
+          for (let i = 0; i < 15; i++) {
+            const id = `post-sp3k-${i}`
+            if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+          }
+          // Also include AJB Bank + LPA overlay PDFs
+          templateDocsToMerge.push({ templatePath: '/public/templates/btn-ajb-bank.pdf' })
+          templateDocsToMerge.push({ templatePath: '/public/templates/btn-surat-lpa-akad.pdf' })
+        }
+      } else if (formMode === 'bphtb') {
+        // === BPHTB MODE ===
+        // All BPHTB uploads + surat pernyataan + surat kuasa (React → need client-side render)
+        ['bphtb-bukti-bayar-pbb', 'bphtb-kwitansi', 'bphtb-sppk'].forEach(id => {
+          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+        })
+        // Also pull from bank uploads
+        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => {
+          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+        })
+        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) {
+          filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
+        }
+      } else if (formMode === 'notaris') {
+        // === NOTARIS MODE ===
+        // All notaris uploads
+        ['pph-bukti', 'akta-pendirian', 'akta-perubahan', 'kwitansi-rumah-notaris', 'ktp-direktur', 'npwp-pt'].forEach(id => {
+          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+        })
+        // Pull from bank uploads
+        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => {
+          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
+        })
+        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) {
+          filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
+        }
+        const sp3kId = bank === 'BTN' ? 'sp3k-btn' : bank === 'MANDIRI' ? 'sppk-mandiri' : 'sp4-bsb'
+        if (uploadedFiles[sp3kId]) filesToMerge.push({ docId: sp3kId, dataUrl: uploadedFiles[sp3kId], label: sp3kId })
+      }
+
+      // If no files to merge, fall back to single doc download
+      if (filesToMerge.length === 0 && templateDocsToMerge.length === 0) {
+        toast.info('Tidak ada berkas untuk di-download. Upload dokumen dulu.')
+        setFlppGenerating(false)
+        return
+      }
+
+      // Call merge API
+      const res = await fetch('/api/documents/merge-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: filesToMerge, templateDocs: templateDocsToMerge }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const modeLabel = formMode === 'bank' ? `${bank}_${docStage}` : formMode
+      a.href = url
+      a.download = `Berkas_${modeLabel}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+      toast.success(`Berhasil download ${filesToMerge.length} berkas dalam 1 PDF!`)
+    } catch (err) {
+      console.error('Download error:', err)
+      toast.error('Gagal download: ' + (err instanceof Error ? err.message : 'unknown'))
+    } finally {
+      setFlppGenerating(false)
+    }
+  }
+
+  // Download single React component PDF (for preview tabs)
+  async function handleDownloadSingleReact() {
     const reactDocs: Record<string, { component: any; name: string; extraProps?: any }> = {
       'spr': { component: bank === 'MANDIRI' ? SPR_MANDIRI : SPR_BTN, name: 'SPR' },
       'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
@@ -433,63 +540,32 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       'notaris-kuasa': { component: SuratKuasaNotaris, name: 'Surat_Kuasa_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name, notarisAddress: notarisList.find(n => n.id === selectedNotaris)?.address } },
     }
 
-    if (reactDocs[generateDocId]) {
-      const { component: DocComponent, name, extraProps } = reactDocs[generateDocId]
-      setFlppGenerating(true)
-      let printArea: HTMLDivElement | null = null
-      let root: any = null
-      try {
-        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
-        printArea = document.createElement('div')
-        Object.assign(printArea.style, { position: 'fixed', left: '0', top: '0', width: '210mm', zIndex: '-9999', visibility: 'hidden', pointerEvents: 'none', opacity: '0', background: '#ffffff' })
-        const { createRoot } = await import('react-dom/client')
-        root = createRoot(printArea)
-        document.body.appendChild(printArea)
-        await new Promise(resolve => { root.render(React.createElement(DocComponent, { data: state, ...extraProps })); setTimeout(resolve, 800) })
-        const canvas = await html2canvas(printArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printArea.scrollWidth, windowHeight: printArea.scrollHeight })
-        const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
-        const imgData = canvas.toDataURL('image/jpeg', 0.95)
-        const imgWidth = 210, imgHeight = (canvas.height * imgWidth) / canvas.width
-        let heightLeft = imgHeight, position = 0
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
-        heightLeft -= 297
-        while (heightLeft > 0) { position = heightLeft - imgHeight; pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight); heightLeft -= 297 }
-        pdf.save(`${name}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`)
-        toast.success(`${name} PDF berhasil di-download!`)
-      } catch (err) { toast.error(`Gagal generate ${name}: ` + (err instanceof Error ? err.message : 'unknown')) }
-      finally { try { if (root) root.unmount(); if (printArea?.parentNode) printArea.parentNode.removeChild(printArea) } catch {} setFlppGenerating(false) }
-    } else if (generateDocId === 'flpp') {
-      setFlppGenerating(true)
-      try {
-        const res = await fetch('/api/documents/generate-flpp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url; a.download = `FLPP_BTN_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
-        toast.success('FLPP PDF berhasil di-download!')
-      } catch (err) { toast.error('Gagal generate FLPP: ' + (err instanceof Error ? err.message : 'unknown')) }
-      finally { setFlppGenerating(false) }
-    } else {
-      // AJB, Mandiri, or BSB documents (PDF overlay)
-      setFlppGenerating(true)
-      try {
-        const isMandiri = generateDocId.startsWith('mandiri-')
-        const isBsb = generateDocId.startsWith('bsb-')
-        const endpoint = isBsb ? '/api/documents/generate-bsb' : isMandiri ? '/api/documents/generate-mandiri' : '/api/documents/generate-ajb'
-        const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
-        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, docId: realDocId }) })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url; a.download = `${realDocId.toUpperCase()}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
-        toast.success('PDF berhasil di-download!')
-      } catch (err) { toast.error('Gagal generate PDF: ' + (err instanceof Error ? err.message : 'unknown')) }
-      finally { setFlppGenerating(false) }
-    }
+    if (!reactDocs[generateDocId]) return false
+    const { component: DocComponent, name, extraProps } = reactDocs[generateDocId]
+    setFlppGenerating(true)
+    let printArea: HTMLDivElement | null = null
+    let root: any = null
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+      printArea = document.createElement('div')
+      Object.assign(printArea.style, { position: 'absolute', left: '-9999px', top: '0', width: '210mm', background: '#ffffff' })
+      const { createRoot } = await import('react-dom/client')
+      root = createRoot(printArea)
+      document.body.appendChild(printArea)
+      await new Promise(resolve => { root.render(React.createElement(DocComponent, { data: state, ...extraProps })); setTimeout(resolve, 800) })
+      const canvas = await html2canvas(printArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printArea.scrollWidth, windowHeight: printArea.scrollHeight })
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      const imgWidth = 210, imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight, position = 0
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
+      heightLeft -= 297
+      while (heightLeft > 0) { position = heightLeft - imgHeight; pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight); heightLeft -= 297 }
+      pdf.save(`${name}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`)
+      toast.success(`${name} PDF berhasil di-download!`)
+      return true
+    } catch (err) { toast.error(`Gagal generate ${name}: ` + (err instanceof Error ? err.message : 'unknown')); return false }
+    finally { try { if (root) root.unmount(); if (printArea?.parentNode) printArea.parentNode.removeChild(printArea) } catch {} setFlppGenerating(false) }
   }
 
   // PDF preview via API overlay — handles FLPP + AJB documents
@@ -670,7 +746,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />} Simpan</Button>
-          <Button size="sm" onClick={handleDownloadFlpp} disabled={flppGenerating} className="bg-orange-600 hover:bg-orange-700 h-8 text-xs">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}{flppGenerating ? 'Generating...' : 'Download PDF'}</Button>
+          <Button size="sm" onClick={handleDownloadSingleReact} disabled={flppGenerating} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs" title="Download dokumen yang sedang di-preview saja">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}Single</Button>
+          <Button size="sm" onClick={handleDownloadFlpp} disabled={flppGenerating} className="bg-orange-600 hover:bg-orange-700 h-8 text-xs" title="Download semua berkas dalam 1 PDF">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}{flppGenerating ? 'Generating...' : 'Download All'}</Button>
         </div>
       </div>
 
