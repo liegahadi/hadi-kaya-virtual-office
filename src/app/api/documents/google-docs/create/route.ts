@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Readable } from 'stream'
 import { getDriveClientOAuth, getDocsClientOAuth, isOAuthConfigured, isGoogleConnected, getDriveClient, isGoogleConfigured } from '@/lib/google/auth'
 import { fillGoogleDocPlaceholders } from '@/lib/google/template-filler'
+import { ensureCustomerFolder } from '@/lib/google/folders'
+import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    const { templatePath, state, folderId } = await req.json()
+    const { templatePath, state, folderId, customerId } = await req.json()
     if (!templatePath || !state) {
       return NextResponse.json({ success: false, error: 'templatePath and state are required' }, { status: 400 })
     }
@@ -74,9 +76,23 @@ export async function POST(req: NextRequest) {
 
     const templateBuffer = Buffer.from(await templateRes.arrayBuffer())
 
-    // Step 2: Upload to Google Drive and convert to Google Docs format
+    // Step 2: Ensure customer folder structure exists in Google Drive
+    // Structure: Hadi Kaya Docs > [Perumahan] > Berkas Konsumen > [Nama Konsumen - Blok Unit]
+    let customerFolderId: string | undefined = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
+
+    if (usingOAuth && !customerFolderId) {
+      // Auto-create folder structure (only for OAuth, not Service Account)
+      try {
+        customerFolderId = await ensureCustomerFolder(state, customerId)
+      } catch (folderErr: any) {
+        console.error('Folder creation error (non-fatal, will create in root):', folderErr?.message)
+        // Continue without folder — file will be created in root Drive
+      }
+    }
+
+    // Step 3: Upload to Google Drive and convert to Google Docs format
     const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
-    const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
+    const targetFolderId = customerFolderId
     let docId: string | undefined
 
     if (usingOAuth) {
@@ -163,8 +179,25 @@ export async function POST(req: NextRequest) {
 
     // Step 5: Build URLs
     const editUrl = `https://docs.google.com/document/d/${docId}/edit`
-    const embedUrl = `https://docs.google.com/document/d/${docId}/edit?rm=minimal`
+    const embedUrl = `https://docs.google.com/document/d/${docId}/edit?rm=minimal&ui=2`
     const downloadUrl = `/api/documents/google-docs/${docId}/download`
+
+    // Step 6: Save doc metadata to database (so we can list docs per customer later)
+    try {
+      await db.googleDoc.create({
+        data: {
+          docId,
+          customerId: customerId || null,
+          fileName,
+          folderId: targetFolderId || null,
+          docType: 'sk-slip-gaji',
+          editUrl,
+        },
+      })
+    } catch (dbErr: any) {
+      console.error('DB save error (non-fatal):', dbErr?.message)
+      // Continue — the Google Doc is already created, just DB tracking failed
+    }
 
     return NextResponse.json({
       success: true,
@@ -175,6 +208,7 @@ export async function POST(req: NextRequest) {
       downloadUrl,
       usingOAuth,
       fillError, // null if success, error message if placeholder filling failed
+      folderId: targetFolderId, // customer folder ID in Google Drive
     })
   } catch (err: any) {
     console.error('google-docs/create error:', err)

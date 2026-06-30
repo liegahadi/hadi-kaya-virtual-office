@@ -56,6 +56,22 @@ model GoogleToken {
   updatedAt       DateTime @updatedAt
 }
 
+// Track Google Docs created per customer
+// Setiap doc yang dibuat via sistem disimpan di sini + di Google Drive folder customer
+model GoogleDoc {
+  id          String   @id @default(cuid())
+  docId       String   @unique // Google Doc ID (from Drive)
+  customerId  String?  // link to Customer
+  fileName    String
+  folderId    String?  // Google Drive folder ID (customer folder)
+  docType     String   @default("sk-slip-gaji") // sk-slip-gaji | spr | flpp | etc
+  editUrl     String
+  templateId  String?  // which template was used
+  createdAt   DateTime @default(now())
+
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+}
+
 model UserSetting {
   id        String   @id @default(cuid())
   userId    String
@@ -277,6 +293,7 @@ model Customer {
   conversations  Conversation[]
   stageHistory   CustomerStageHistory[]
   documents      Document[]
+  googleDocs     GoogleDoc[]
   surveySchedules SurveySchedule[]
   bankPipelines  BankPipeline[]
 

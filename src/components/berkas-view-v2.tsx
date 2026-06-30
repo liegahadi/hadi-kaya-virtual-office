@@ -1547,6 +1547,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         open={combinedDocModalOpen}
         onClose={() => setCombinedDocModalOpen(false)}
         state={state}
+        customerId={customer.id}
       />
 
       {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}
