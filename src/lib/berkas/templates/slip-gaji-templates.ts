@@ -1198,6 +1198,255 @@ export const SLIP_GAJI_TEMPLATES: SlipGajiTemplate[] = [
   <p class="name">( ............................. )</p>
 </div>`
   },
+
+  // 21. Warung / Warkop (Informal)
+  {
+    id: 'slip-warung',
+    name: 'Warung / Warkop',
+    category: 'Informal',
+    description: 'Slip gaji untuk pekerja warung/warkop - sangat sederhana',
+    css: COMMON_CSS,
+    body: `<div class="kop">
+  <h1>{{perusahaan}}</h1>
+  <p>{{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP GAJI / UPAH</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upah Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Upah Diterima</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pemilik Warung</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
+
+  // 22. Toko Sembako (Informal)
+  {
+    id: 'slip-sembako',
+    name: 'Toko Sembako',
+    category: 'Informal',
+    description: 'Slip gaji untuk pekerja toko sembako - sederhana, langkap',
+    css: COMMON_CSS,
+    body: `<div class="kop">
+  <h1>TOKO {{perusahaan}}</h1>
+  <p>Sembako & Kelontong | {{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP GAJI</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upah Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Upah Diterima</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pemilik Toko</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
+
+  // 23. Kafe / Restoran Kecil (Informal)
+  {
+    id: 'slip-kafe-kecil',
+    name: 'Kafe / Restoran Kecil',
+    category: 'Informal',
+    description: 'Slip gaji untuk pekerja kafe/restoran kecil - hangat',
+    css: `
+  body { font-family: 'Segoe UI', sans-serif; font-size: 11pt; line-height: 1.5; color: #000; margin: 0; padding: 0; }
+  .slip-page { width: 210mm; min-height: 297mm; padding: 20mm; box-sizing: border-box; page-break-after: always; }
+  .slip-page:last-child { page-break-after: auto; }
+  .kop { text-align: center; padding: 10px; background: #fef3c7; border-radius: 4px; margin-bottom: 20px; }
+  .kop h1 { margin: 0; font-size: 14pt; color: #92400e; }
+  .kop p { margin: 3px 0; font-size: 9pt; color: #666; }
+  .title { text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin: 15px 0 5px; }
+  .subtitle { text-align: center; font-size: 11pt; margin: 5px 0 20px; }
+  .info-table { width: 100%; font-size: 11pt; margin-bottom: 15px; }
+  .info-table td { padding: 4px 8px 4px 0; }
+  .info-table td:first-child { width: 30%; }
+  .info-table td:nth-child(2) { width: 3%; }
+  .finance-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+  .finance-table th { background: #fef3c7; padding: 6px; border: 1px solid #92400e; text-align: left; color: #92400e; }
+  .finance-table td { padding: 4px 6px; border: 1px solid #d6b275; }
+  .finance-table .total { border-top: 2px solid #92400e; font-weight: bold; background: #fef3c7; }
+  .finance-table .grand-total { font-weight: bold; font-size: 12pt; background: #fde68a; }
+  .signature { text-align: right; margin-top: 40px; }
+  .signature p { margin: 3px 0; }
+  .signature .name { margin-top: 60px; font-weight: bold; text-decoration: underline; }
+`,
+    body: `<div class="kop">
+  <h1>☕ {{perusahaan}}</h1>
+  <p>Kafe & Dapur | {{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP GAJI</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upah Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Upah Diterima</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pemilik Kafe</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
+
+  // 24. CV Kecil (Tanpa Struktur) - Informal
+  {
+    id: 'slip-cv-abal',
+    name: 'CV Kecil (Tanpa Struktur)',
+    category: 'Informal',
+    description: 'Slip gaji untuk karyawan CV kecil - formal tapi sederhana',
+    css: COMMON_CSS,
+    body: `<div class="kop">
+  <h1>CV {{perusahaan}}</h1>
+  <p>{{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP GAJI</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Jabatan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Gaji Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Gaji Diterima (Bersih)</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pimpinan CV</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
+
+  // 25. UD (Usaha Dagang) - Informal
+  {
+    id: 'slip-ud',
+    name: 'Usaha Dagang (UD)',
+    category: 'Informal',
+    description: 'Slip gaji untuk karyawan UD - sederhana',
+    css: COMMON_CSS,
+    body: `<div class="kop">
+  <h1>UD {{perusahaan}}</h1>
+  <p>{{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP GAJI / UPAH</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upah Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Upah Diterima</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pemilik UD</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
+
+  // 26. Pekerja Perorangan - Informal (paling sederhana)
+  {
+    id: 'slip-perorangan',
+    name: 'Pekerja Perorangan',
+    category: 'Informal',
+    description: 'Slip gaji untuk pekerja perorangan - paling sederhana',
+    css: COMMON_CSS,
+    body: `<div class="kop">
+  <h1>{{perusahaan}}</h1>
+  <p>{{alamat_perusahaan}}</p>
+</div>
+<div class="title">SLIP UPAH</div>
+<div class="subtitle">Periode: {{periode}}</div>
+<table class="info-table">
+  <tr><td>Nama</td><td>:</td><td><strong>{{nama}}</strong></td></tr>
+  <tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+  <tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+</table>
+<table class="finance-table">
+  <thead>
+    <tr><th>Keterangan</th><th style="text-align:right;">Pendapatan</th><th style="text-align:right;">Potongan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Upah Pokok</td><td style="text-align:right;">{{gaji_pokok}}</td><td></td></tr>
+    {{#tunjangan_tetap}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_tetap}}
+    {{#tunjangan_variabel}}<tr><td>{label}</td><td style="text-align:right;">{amount}</td><td></td></tr>{{/tunjangan_variabel}}
+    {{#potongan}}<tr><td>{label}</td><td></td><td style="text-align:right;">{amount}</td></tr>{{/potongan}}
+    <tr class="total"><td>Total</td><td style="text-align:right;">{{gaji_kotor}}</td><td style="text-align:right;">{{total_potongan}}</td></tr>
+    <tr class="grand-total"><td colspan="2">Upah Diterima</td><td style="text-align:right;">{{gaji_bersih}}</td></tr>
+  </tbody>
+</table>
+<div class="signature">
+  <p>Pangkalpinang, {{tanggal_terima}}</p>
+  <p>Pengusaha</p>
+  <p class="name">( ............................. )</p>
+</div>`
+  },
 ]
 
 export const SLIP_GAJI_CATEGORIES = [...new Set(SLIP_GAJI_TEMPLATES.map(t => t.category))]
