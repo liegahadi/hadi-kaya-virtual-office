@@ -78,16 +78,21 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Ensure customer folder structure exists in Google Drive
     // Structure: Hadi Kaya Docs > [Perumahan] > Berkas Konsumen > [Nama Konsumen - Blok Unit]
-    let customerFolderId: string | undefined = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
+    // For OAuth: ALWAYS auto-create folder structure (ignore GOOGLE_DRIVE_FOLDER_ID which was for Service Account)
+    // For Service Account: use GOOGLE_DRIVE_FOLDER_ID if set (legacy)
+    let customerFolderId: string | undefined = undefined
 
-    if (usingOAuth && !customerFolderId) {
-      // Auto-create folder structure (only for OAuth, not Service Account)
+    if (usingOAuth) {
+      // Auto-create nested folder structure for OAuth (file saved in user's Drive)
       try {
         customerFolderId = await ensureCustomerFolder(state, customerId)
       } catch (folderErr: any) {
         console.error('Folder creation error (non-fatal, will create in root):', folderErr?.message)
         // Continue without folder — file will be created in root Drive
       }
+    } else {
+      // Service Account: use explicit folderId from request or env var
+      customerFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID
     }
 
     // Step 3: Upload to Google Drive and convert to Google Docs format
