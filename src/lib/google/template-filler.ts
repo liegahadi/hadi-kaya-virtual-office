@@ -148,11 +148,11 @@ export async function fillGoogleDocPlaceholders(docId: string, state: any): Prom
   const replacements: any[] = []
 
   // Simple SK placeholders
+  // IMPORTANT: Google Docs API uses "replaceAllText" (not "replaceText")
   for (const [key, value] of Object.entries(skData)) {
     replacements.push({
-      replaceText: {
-        text: String(value),
-        replaceAll: true,
+      replaceAllText: {
+        replaceText: String(value),
         containsText: {
           text: `{${key}}`,
           matchCase: false,
