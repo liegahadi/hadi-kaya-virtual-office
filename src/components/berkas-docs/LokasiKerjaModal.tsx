@@ -23,15 +23,19 @@ function getMapsEmbed(link: string): string {
   // Try coords pattern: @-2.1234,106.4567
   const coordsMatch = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
   if (coordsMatch) {
-    return `https://maps.google.com/maps?q=${coordsMatch[1]},${coordsMatch[2]}&z=16&output=embed`
+    return `https://www.google.com/maps?q=${coordsMatch[1]},${coordsMatch[2]}&z=16&output=embed`
   }
   // Try place pattern: /place/City+Name/
   const placeMatch = link.match(/place\/([^\/]+)/)
   if (placeMatch) {
-    return `https://maps.google.com/maps?q=${decodeURIComponent(placeMatch[1])}&z=16&output=embed`
+    return `https://www.google.com/maps?q=${decodeURIComponent(placeMatch[1])}&z=16&output=embed`
   }
   // Try short link / general URL — use as search query
-  return `https://maps.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
+  // For maps.app.goo.gl short links, just pass the URL as q param
+  if (link.includes('maps.app.goo.gl') || link.includes('maps.google.com')) {
+    return `https://www.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
+  }
+  return `https://www.google.com/maps?q=${encodeURIComponent(link)}&z=16&output=embed`
 }
 
 export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerjaModalProps) {
