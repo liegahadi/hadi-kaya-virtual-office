@@ -139,11 +139,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Fill placeholders with form data
+    let fillError: string | null = null
     try {
       await fillGoogleDocPlaceholders(docId, state)
     } catch (fillErr: any) {
-      console.error('Placeholder fill error (non-fatal):', fillErr?.message)
-      // Continue — user can still edit manually
+      console.error('Placeholder fill error:', fillErr?.message)
+      fillError = fillErr?.message || 'Unknown fill error'
+      // Continue — user can still edit manually, but return the error info
     }
 
     // Step 4: Set permission to "Anyone with link can edit" (only needed for Service Account / shared folders)
@@ -172,6 +174,7 @@ export async function POST(req: NextRequest) {
       embedUrl,
       downloadUrl,
       usingOAuth,
+      fillError, // null if success, error message if placeholder filling failed
     })
   } catch (err: any) {
     console.error('google-docs/create error:', err)
