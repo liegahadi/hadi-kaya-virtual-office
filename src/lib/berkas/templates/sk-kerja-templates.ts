@@ -841,6 +841,236 @@ ${PLACEHOLDER_HINT}
 </div>
 </div>`
   },
+
+  // ===== 21. Warung / Warkop (Informal) =====
+  {
+    id: 'sk-warung',
+    name: 'Warung / Warkop',
+    category: 'Informal',
+    description: 'Untuk pekerja di warung/warkop - sangat sederhana, tanpa kop formal',
+    html: `<div style="font-family:'Arial',sans-serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:15px;">
+<p style="font-size:13pt;font-weight:bold;margin:0;">{{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">{{alamat_perusahaan}}</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">Per {{tanggal}}</p>
+<p>Yang bertanda tangan di bawah ini, pemilik {{perusahaan}}:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>Pemilik Warung</td></tr>
+<tr><td>Alamat</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Penghasilan per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan bekerja di warung kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pemilik Warung</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
+
+  // ===== 22. Toko Sembako (Informal) =====
+  {
+    id: 'sk-sembako',
+    name: 'Toko Sembako',
+    category: 'Informal',
+    description: 'Untuk pekerja di toko sembako kelontong - sederhana, langkap',
+    html: `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:15px;">
+<p style="font-size:12pt;font-weight:bold;margin:0;">TOKO {{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">Sembako & Kelontong | {{alamat_perusahaan}}</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">Per {{tanggal}}</p>
+<p>Yang bertanda tangan di bawah ini, pemilik Toko {{perusahaan}}:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>Pemilik Toko</td></tr>
+<tr><td>Alamat</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Penghasilan per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan bekerja di toko sembako kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pemilik Toko</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
+
+  // ===== 23. Kafe / Restoran Kecil (Informal) =====
+  {
+    id: 'sk-kafe-kecil',
+    name: 'Kafe / Restoran Kecil',
+    category: 'Informal',
+    description: 'Untuk pekerja di kafe/restoran kecil - hangat & sederhana',
+    html: `<div style="font-family:'Segoe UI',sans-serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;padding:10px;background:#fef3c7;border-radius:4px;margin-bottom:15px;">
+<p style="font-size:14pt;font-weight:bold;margin:0;color:#92400e;">☕ {{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">Kafe & Dapur | {{alamat_perusahaan}}</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">Per {{tanggal}}</p>
+<p>Yang bertanda tangan di bawah ini, pemilik {{perusahaan}}:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>Pemilik Kafe</td></tr>
+<tr><td>Alamat</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Penghasilan per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan bekerja di kafe/restoran kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pemilik Kafe</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
+
+  // ===== 24. CV Abal-abal (PT/CV tanpa struktur) =====
+  {
+    id: 'sk-cv-abal',
+    name: 'CV Kecil (Tanpa Struktur)',
+    category: 'Informal',
+    description: 'Untuk CV/PT kecil tanpa HRD formal - tetap formal tapi sederhana',
+    html: `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:15px;">
+<p style="font-size:13pt;font-weight:bold;margin:0;">CV {{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">{{alamat_perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:0;">Telp: (0717) xxxxx</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">No: .../{{bulan}}/{{tahun}}</p>
+<p>Yang bertanda tangan di bawah ini, pimpinan CV {{perusahaan}}:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>Direktur / Pimpinan</td></tr>
+<tr><td>Perusahaan</td><td>:</td><td>CV {{perusahaan}}</td></tr>
+<tr><td>Alamat</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Gaji per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan bekerja di CV kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pimpinan CV</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
+
+  // ===== 25. UD (Usaha Dagang) =====
+  {
+    id: 'sk-ud',
+    name: 'Usaha Dagang (UD)',
+    category: 'Informal',
+    description: 'Untuk karyawan UD (Usaha Dagang) perorangan - sederhana',
+    html: `<div style="font-family:'Arial',sans-serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:15px;">
+<p style="font-size:13pt;font-weight:bold;margin:0;">UD {{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">{{alamat_perusahaan}}</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">Per {{tanggal}}</p>
+<p>Yang bertanda tangan di bawah ini, pemilik UD {{perusahaan}}:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Jabatan</td><td>:</td><td>Pemilik Usaha Dagang</td></tr>
+<tr><td>Alamat</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Penghasilan per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan bekerja di usaha dagang kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pemilik UD</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
+
+  // ===== 26. Pekerja Perorangan / Toko Swasta =====
+  {
+    id: 'sk-perorangan',
+    name: 'Pekerja Perorangan',
+    category: 'Informal',
+    description: 'Untuk pekerja di usaha perorangan (toko pribadi, jasa) - paling sederhana',
+    html: `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;">
+<div style="text-align:center;border-bottom:1px solid #000;padding-bottom:8px;margin-bottom:15px;">
+<p style="font-size:12pt;font-weight:bold;margin:0;">{{perusahaan}}</p>
+<p style="font-size:9pt;color:#666;margin:3px 0;">{{alamat_perusahaan}}</p>
+</div>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:10pt;margin:5px 0 20px;">Per {{tanggal}}</p>
+<p>Yang bertanda tangan di bawah ini:</p>
+<table style="width:100%;font-size:11pt;margin-bottom:15px;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td>{{atasan}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>Pengusaha Perorangan</td></tr>
+<tr><td>Alamat Usaha</td><td>:</td><td>{{alamat_perusahaan}}</td></tr>
+</tbody></table>
+<p>Dengan ini menerangkan bahwa:</p>
+<table style="width:100%;font-size:11pt;margin:15px 0;"><tbody>
+<tr><td style="width:30%;">Nama</td><td style="width:3%;">:</td><td><strong>{{nama}}</strong></td></tr>
+<tr><td>NIK</td><td>:</td><td>{{nik}}</td></tr>
+<tr><td>Tempat/Tgl Lahir</td><td>:</td><td>{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
+<tr><td>Pekerjaan</td><td>:</td><td>{{jabatan}}</td></tr>
+<tr><td>Lama Bekerja</td><td>:</td><td>{{lama_bekerja}} tahun</td></tr>
+<tr><td>Penghasilan per Bulan</td><td>:</td><td>{{gaji}}</td></tr>
+</tbody></table>
+<p style="text-align:justify;margin:15px 0;">Benar bahwa yang bersangkutan adalah pekerja di usaha saya dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan KPR.</p>
+<p>Demikian surat keterangan ini dibuat dengan sebenarnya.</p>
+<div style="text-align:right;margin-top:35px;">
+<p>{{kota}}, {{tanggal}}</p>
+<p>Pengusaha</p>
+<p style="margin-top:60px;font-weight:bold;text-decoration:underline;">( {{atasan}} )</p>
+</div>
+</div>`
+  },
 ]
 
 export const SK_KERJA_CATEGORIES = [...new Set(SK_KERJA_TEMPLATES.map(t => t.category))]
