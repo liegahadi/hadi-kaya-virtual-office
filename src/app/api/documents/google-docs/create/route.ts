@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         body: Readable.from(templateBuffer),
       },
-      fields: 'id, name, webViewLink, embedLink',
+      fields: 'id, name, webViewLink',
     })
 
     const docId = uploadRes.data.id
