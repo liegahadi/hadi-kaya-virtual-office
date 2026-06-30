@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     const stateJson = formData.get('state') as string
 
     if (!templateFile) return NextResponse.json({ error: 'Template file is required' }, { status: 400 })
-    if (!docType || !['sk-kerja', 'slip-gaji'].includes(docType)) {
+    if (!docType || !['sk-kerja', 'slip-gaji', 'combined'].includes(docType)) {
       return NextResponse.json({ error: 'Invalid docType' }, { status: 400 })
     }
     if (!stateJson) return NextResponse.json({ error: 'State data is required' }, { status: 400 })
@@ -102,7 +102,24 @@ export async function POST(req: NextRequest) {
     const state: BerkasState = JSON.parse(stateJson)
     const templateBuffer = Buffer.from(await templateFile.arrayBuffer())
 
-    const data = docType === 'sk-kerja' ? buildSkKerjaData(state) : buildSlipGajiData(state)
+    // Build data based on doc type
+    let data: Record<string, any>
+    if (docType === 'sk-kerja') {
+      data = buildSkKerjaData(state)
+    } else if (docType === 'slip-gaji') {
+      data = buildSlipGajiData(state)
+    } else {
+      // combined: SK fields at top level + slips array (each slip inherits top-level fields for kop surat consistency)
+      const skData = buildSkKerjaData(state)
+      const slipData = buildSlipGajiData(state)
+      const slips = slipData.slips.map((slip: any) => ({
+        ...slip,
+        perusahaan: skData.perusahaan,
+        alamat_perusahaan: skData.alamat_perusahaan,
+        kota: skData.kota,
+      }))
+      data = { ...skData, slips }
+    }
 
     const zip = new PizZip(templateBuffer)
     const doc = new Docxtemplater(zip, {
