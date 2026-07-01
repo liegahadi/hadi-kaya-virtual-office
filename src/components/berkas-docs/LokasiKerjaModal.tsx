@@ -5,7 +5,7 @@
 //   nama atasan, no HP, jam operasional, waktu hubungi
 // - Live Google Maps embed (from full link)
 // - Photo uploads: tampak depan + tampak dalam
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, MapPin, Upload, ImageIcon, Link as LinkIcon, ExternalLink, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { BerkasState, JobType } from '@/lib/berkas/types'
@@ -47,6 +47,16 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
   const mapsEmbed = a.workplaceMapsLink ? getMapsEmbed(a.workplaceMapsLink) : ''
   // Check if the link is a short link (may show warning)
   const isShortLink = a.workplaceMapsLink?.includes('maps.app.goo.gl')
+  // Check if Google Maps API key is configured (for auto-generate static map)
+  const [hasMapsKey, setHasMapsKey] = useState(false)
+  useEffect(() => {
+    if (open) {
+      fetch('/api/documents/google-docs/status')
+        .then(r => r.json())
+        .then(d => setHasMapsKey(!!d.debug?.mapsApiKey || false))
+        .catch(() => {})
+    }
+  }, [open])
 
   async function handlePhotoUpload(field: string, file: File) {
     if (!file.type.startsWith('image/')) {
@@ -266,6 +276,41 @@ export function LokasiKerjaModal({ open, onClose, state, onUpdate }: LokasiKerja
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Screenshot Peta Upload (manual fallback for map image in doc) */}
+            <div className="bg-white rounded-lg p-4 border border-slate-200">
+              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-blue-500" /> Screenshot Peta Google Maps (untuk dokumen)
+              </h3>
+              <p className="text-[10px] text-slate-500 mb-2">
+                Screenshot peta dari Google Maps (PrtSc / Cmd+Shift+4) → upload di sini.
+                Gambar ini akan ditempel di dokumen Lokasi Kerja.
+                {hasMapsKey ? ' (Atau set GOOGLE_MAPS_API_KEY untuk auto-generate)' : ''}
+              </p>
+              <div className="border-2 border-dashed border-slate-300 rounded-lg p-2 text-center hover:border-blue-500 transition-colors">
+                {a.workplaceMapScreenshot ? (
+                  <img src={a.workplaceMapScreenshot} alt="Screenshot Peta" className="w-full h-40 object-cover rounded" />
+                ) : (
+                  <div className="h-40 flex flex-col items-center justify-center text-slate-400">
+                    <Upload className="w-6 h-6 mb-1" />
+                    <p className="text-[10px]">Upload screenshot peta</p>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="workplace-map-screenshot"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload('workplaceMapScreenshot', f); e.target.value = '' }}
+                />
+                <button
+                  onClick={() => document.getElementById('workplace-map-screenshot')?.click()}
+                  className="mt-2 text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                >
+                  {a.workplaceMapScreenshot ? 'Ganti' : 'Upload'}
+                </button>
               </div>
             </div>
           </div>

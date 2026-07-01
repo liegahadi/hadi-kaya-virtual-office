@@ -5,6 +5,7 @@ import {
   isOAuthConfigured, isGoogleConfigured, isGoogleConnected,
   getConnectedAccountInfo, debugCredentials, getRedirectUri
 } from '@/lib/google/auth'
+import { hasMapsApiKey } from '@/lib/google/static-map'
 
 export const runtime = 'nodejs'
 
@@ -12,17 +13,16 @@ export async function GET() {
   const connected = await isGoogleConnected()
   const accountInfo = connected ? await getConnectedAccountInfo() : null
 
+  const debug = debugCredentials()
+  ;(debug as any).mapsApiKey = hasMapsApiKey()
+
   return NextResponse.json({
     success: true,
-    // OAuth config (preferred)
     oauthConfigured: isOAuthConfigured(),
-    // Service Account config (legacy)
     serviceAccountConfigured: isGoogleConfigured(),
-    // Whether owner has logged in (only relevant for OAuth)
     connected,
     account: accountInfo,
-    // What redirect URI the user needs to add to Google Console
     redirectUri: getRedirectUri(),
-    debug: debugCredentials(),
+    debug,
   })
 }
