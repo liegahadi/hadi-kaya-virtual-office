@@ -14,22 +14,31 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
   const { applicant, property, dateOfDocument } = data
 
   return (
-    <DocumentLayout>
-      <div style={{ fontSize: '7.5pt', lineHeight: '1.3', color: '#000' }}>
+    <div style={{
+      width: '210mm',
+      minHeight: '297mm',
+      padding: '0.5in', // 0.5" narrow margins (top, right, bottom, left)
+      backgroundColor: 'white',
+      color: 'black',
+      fontFamily: 'Times New Roman, serif',
+      boxSizing: 'border-box',
+      marginBottom: '20px',
+    }}>
+      <div style={{ fontSize: '9pt', lineHeight: '1.35', color: '#000' }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '5px' }}>
-          <h1 style={{ fontSize: '12pt', fontWeight: 'bold', margin: 0 }}>{property.projectName}</h1>
-          <p style={{ fontSize: '7pt', margin: '1px 0' }}>KANTOR PEMASARAN JL. FATMAWATI (KAMPAK)</p>
-          <h2 style={{ fontSize: '10pt', fontWeight: 'bold', textDecoration: 'underline', margin: '2px 0' }}>FORM PEMESANAN</h2>
-          <p style={{ fontSize: '8pt' }}>
+        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+          <h1 style={{ fontSize: '14pt', fontWeight: 'bold', margin: 0 }}>{property.projectName}</h1>
+          <p style={{ fontSize: '9pt', margin: '2px 0' }}>KANTOR PEMASARAN JL. FATMAWATI (KAMPAK)</p>
+          <h2 style={{ fontSize: '12pt', fontWeight: 'bold', textDecoration: 'underline', margin: '3px 0' }}>FORM PEMESANAN</h2>
+          <p style={{ fontSize: '9pt' }}>
             NO. {property.sprNumber || '………'}/SPR/{getMonthRoman(dateOfDocument)}/SPR-AJR/{getYear(dateOfDocument)}
           </p>
         </div>
 
-        <p style={{ marginBottom: '4px' }}>Saya yang bertanda tangan dibawah ini :</p>
+        <p style={{ marginBottom: '5px' }}>Saya yang bertanda tangan dibawah ini :</p>
 
         {/* Data Pemohon - single column */}
-        <table style={{ width: '100%', marginBottom: '6px', fontSize: '7.5pt' }}>
+        <table style={{ width: '100%', marginBottom: '8px', fontSize: '9pt' }}>
           <tbody>
             <tr><td style={{ width: '25%' }}>Nama</td><td>: <strong>{applicant.fullName || '………………'}</strong></td></tr>
             <tr><td>Nomor KTP</td><td>: {applicant.ktpNumber || '………………'}</td></tr>
@@ -39,10 +48,10 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
           </tbody>
         </table>
 
-        <p style={{ marginBottom: '4px', fontWeight: 'bold' }}>DATA – DATA RUMAH YANG SAYA PESAN :</p>
+        <p style={{ marginBottom: '5px', fontWeight: 'bold' }}>DATA – DATA RUMAH YANG SAYA PESAN :</p>
 
         {/* Data Rumah - single column */}
-        <table style={{ width: '100%', marginBottom: '6px', fontSize: '7.5pt' }}>
+        <table style={{ width: '100%', marginBottom: '8px', fontSize: '9pt' }}>
           <tbody>
             <tr><td style={{ width: '25%' }}>Cara Pembayaran</td><td>: KPR</td></tr>
             <tr><td>Harga Pembelian</td><td>: {formatCurrency(property.price)}</td></tr>
@@ -61,8 +70,8 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
         </table>
 
         {/* Catatan - single column, 13 items */}
-        <p style={{ marginBottom: '3px', fontWeight: 'bold' }}>Catatan :</p>
-        <ol style={{ paddingLeft: '15px', margin: '0 0 6px 0', fontSize: '6.5pt', lineHeight: '1.25' }}>
+        <p style={{ marginBottom: '4px', fontWeight: 'bold' }}>Catatan :</p>
+        <ol style={{ paddingLeft: '18px', margin: '0 0 8px 0', fontSize: '7.5pt', lineHeight: '1.3' }}>
           <li>Apabila hasil BI Cheking saya tidak sesuai dengan pernyataan yang telah saya buat sebelumnya maka saya bersedia menerima semua konsekuensinya.</li>
           <li>Harga tersebut diatas termasuk :<br/>
             - Biaya IMB dari Pemerintah Kota Pangkalpinang.<br/>
@@ -84,21 +93,21 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
         </ol>
 
         {/* Signature - 2 columns */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
           <div style={{ textAlign: 'center', width: '45%' }}>
             <p style={{ margin: 0 }}>Pangkalpinang, {formatLongDate(dateOfDocument)}</p>
-            <p style={{ margin: '2px 0' }}>Pemesan,</p>
-            <div style={{ height: '55px' }}></div>
+            <p style={{ margin: '3px 0' }}>Pemesan,</p>
+            <div style={{ height: '60px' }}></div>
             <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>{applicant.fullName || '(...........................)'}</p>
           </div>
           <div style={{ textAlign: 'center', width: '45%' }}>
             <p style={{ margin: 0 }}>Mengetahui,</p>
-            <p style={{ margin: '2px 0' }}>BAG.PENJUALAN PERUMAHAN ANJAYO 16</p>
-            <div style={{ height: '55px' }}></div>
+            <p style={{ margin: '3px 0' }}>BAG.PENJUALAN PERUMAHAN ANJAYO 16</p>
+            <div style={{ height: '60px' }}></div>
             <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>( ............................. )</p>
           </div>
         </div>
       </div>
-    </DocumentLayout>
+    </div>
   )
 }
