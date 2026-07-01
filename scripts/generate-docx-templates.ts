@@ -347,9 +347,25 @@ function buildKop(template: TemplateDef): Paragraph[] {
 // BUILD SK KERJA SECTION
 // =========================================================
 
-function buildSkKerjaSection(template: TemplateDef): (Paragraph | Table)[] {
+// Helper: create a field line "Label    :    Value" as plain paragraph (NOT table)
+function pField(label: string, value: string, opts: { bold?: boolean } = {}): Paragraph {
+  return new Paragraph({
+    spacing: { after: 80 },
+    tabStops: [
+      { type: 'left', position: 3000 }, // label area (3cm)
+      { type: 'left', position: 3400 }, // colon position
+    ],
+    children: [
+      new TextRun({ text: label, size: 22 }),
+      new TextRun({ text: '\t:\t', size: 22 }),
+      new TextRun({ text: value, bold: opts.bold, size: 22 }),
+    ],
+  })
+}
+
+function buildSkKerjaSection(template: TemplateDef): Paragraph[] {
   const upahLabel = template.useUpah ? 'Upah' : 'Gaji'
-  const elements: (Paragraph | Table)[] = []
+  const elements: Paragraph[] = []
 
   elements.push(...buildKop(template))
 
@@ -358,32 +374,20 @@ function buildSkKerjaSection(template: TemplateDef): (Paragraph | Table)[] {
   }))
   elements.push(p('No: .../SK/{bulan}/{tahun}', { align: 'center', size: 11, spacing: 240 }))
 
-  elements.push(p('Yang bertanda tangan di bawah ini:'))
-  elements.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders,
-    rows: [
-      new TableRow({ children: [tc('Nama', { width: 30 }), tc(':'), tc(template.signerRole)] }),
-      new TableRow({ children: [tc('Jabatan', { width: 30 }), tc(':'), tc('Pimpinan')] }),
-      new TableRow({ children: [tc('Perusahaan', { width: 30 }), tc(':'), tc('{perusahaan}')] }),
-      new TableRow({ children: [tc('Alamat', { width: 30 }), tc(':'), tc('{alamat_perusahaan}')] }),
-    ],
-  }))
+  elements.push(p('Yang bertanda tangan di bawah ini:', { spacing: 120 }))
+  elements.push(pField('Nama', template.signerRole))
+  elements.push(pField('Jabatan', 'Pimpinan'))
+  elements.push(pField('Perusahaan', '{perusahaan}'))
+  elements.push(pField('Alamat', '{alamat_perusahaan}'))
 
   elements.push(p('Dengan ini menerangkan bahwa:', { spacing: 240 }))
 
-  elements.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders,
-    rows: [
-      new TableRow({ children: [tc('Nama', { width: 30 }), tc(':'), tc('{nama}', { bold: true })] }),
-      new TableRow({ children: [tc('NIK', { width: 30 }), tc(':'), tc('{nik}')] }),
-      new TableRow({ children: [tc('Tempat/Tgl Lahir', { width: 30 }), tc(':'), tc('{tempat_lahir}, {tanggal_lahir}')] }),
-      new TableRow({ children: [tc('Jabatan', { width: 30 }), tc(':'), tc('{jabatan}')] }),
-      new TableRow({ children: [tc('Lama Bekerja', { width: 30 }), tc(':'), tc('{lama_bekerja} tahun')] }),
-      new TableRow({ children: [tc(`${upahLabel} per Bulan`, { width: 30 }), tc(':'), tc('{gaji}')] }),
-    ],
-  }))
+  elements.push(pField('Nama', '{nama}', { bold: true }))
+  elements.push(pField('NIK', '{nik}'))
+  elements.push(pField('Tempat/Tgl Lahir', '{tempat_lahir}, {tanggal_lahir}'))
+  elements.push(pField('Jabatan', '{jabatan}'))
+  elements.push(pField('Lama Bekerja', '{lama_bekerja} tahun'))
+  elements.push(pField(`${upahLabel} per Bulan`, '{gaji}'))
 
   elements.push(p(
     `Benar bahwa yang bersangkutan bekerja di tempat kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).`,
@@ -392,29 +396,13 @@ function buildSkKerjaSection(template: TemplateDef): (Paragraph | Table)[] {
 
   elements.push(p('Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.', { spacing: 360 }))
 
-  // Signature
-  elements.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders,
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({ width: { size: 55, type: WidthType.PERCENTAGE }, children: [p('')] }),
-          new TableCell({
-            width: { size: 45, type: WidthType.PERCENTAGE },
-            children: [
-              p('{kota}, {tanggal}'),
-              p(template.signerRole, { spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('( ............................. )', { bold: true, underline: true }),
-            ],
-          }),
-        ],
-      }),
-    ],
-  }))
+  // Signature — right-aligned text (no table)
+  elements.push(p('{kota}, {tanggal}', { align: 'right', spacing: 60 }))
+  elements.push(p(template.signerRole, { align: 'right', spacing: 60 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('( ............................. )', { bold: true, underline: true, align: 'right' }))
 
   return elements
 }
@@ -434,37 +422,14 @@ function buildSlipGajiSection(template: TemplateDef): (Paragraph | Table)[] {
   }))
   elements.push(p('Periode: {periode}', { align: 'center', size: 11, spacing: 240 }))
 
-  // Info row
-  elements.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders,
-    rows: [
-      new TableRow({
-        children: [
-          tc('Nama', { width: 12 }),
-          tc(':'),
-          tc('{nama}', { width: 30, bold: true }),
-          tc('NIK', { width: 8 }),
-          tc(':'),
-          tc('{nik}', { width: 30 }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          tc('Jabatan', { width: 12 }),
-          tc(':'),
-          tc('{jabatan}', { width: 30 }),
-          tc('Periode', { width: 8 }),
-          tc(':'),
-          tc('{periode}', { width: 30 }),
-        ],
-      }),
-    ],
-  }))
+  // Info section — plain text (no table)
+  elements.push(pField('Nama', '{nama}', { bold: true }))
+  elements.push(pField('NIK', '{nik}'))
+  elements.push(pField('Jabatan', '{jabatan}'))
 
   elements.push(p('', { spacing: 60 }))
 
-  // Finance table
+  // Finance table — KEEP this as table (proper columns for Pendapatan/Potongan with borders)
   const headerBg = template.headerBg || 'F0F0F0'
   elements.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -535,29 +500,15 @@ function buildSlipGajiSection(template: TemplateDef): (Paragraph | Table)[] {
 
   elements.push(p('', { spacing: 240 }))
 
-  // Signature
-  elements.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: noBorders,
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: [p('Tanggal Terima: {tanggal_terima}')] }),
-          new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
-            children: [
-              p('{kota}, {tanggal_terima}', { align: 'right' }),
-              p(template.signerRole, { align: 'right', spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('', { spacing: 120 }),
-              p('( ............................. )', { bold: true, underline: true, align: 'right' }),
-            ],
-          }),
-        ],
-      }),
-    ],
-  }))
+  // Signature — plain text right-aligned (no table)
+  elements.push(p('Tanggal Terima: {tanggal_terima}'))
+  elements.push(p('', { spacing: 60 }))
+  elements.push(p('{kota}, {tanggal_terima}', { align: 'right', spacing: 60 }))
+  elements.push(p(template.signerRole, { align: 'right', spacing: 60 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('', { spacing: 120 }))
+  elements.push(p('( ............................. )', { bold: true, underline: true, align: 'right' }))
 
   return elements
 }
