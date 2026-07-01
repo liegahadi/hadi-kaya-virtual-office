@@ -1022,9 +1022,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />
             <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />
             <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />
-            <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />
-            <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />
-            <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />
+            {/* Rekening per bank - hanya tampil yang sesuai bank yang dipilih */}
+            {bank === 'BTN' && <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />}
+            {bank === 'MANDIRI' && <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />}
+            {bank === 'BSB_SYARIAH' && <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />}
           </FormSection>
           <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
             <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />
