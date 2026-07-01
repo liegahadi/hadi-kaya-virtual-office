@@ -6,6 +6,7 @@ import {
   Save, Loader2, Download, X, Building2, FileText, FileDown,
   RefreshCw, Eye, Printer, Upload, Send, MessageSquare,
   LayoutGrid, Files, Calendar, Banknote, CheckCircle2, Circle, MapPin,
+  ExternalLink,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -401,6 +402,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Modal states for combined doc download & Lokasi Kerja
   const [combinedDocModalOpen, setCombinedDocModalOpen] = useState(false)
   const [lokasiModalOpen, setLokasiModalOpen] = useState(false)
+  // Generated Lokasi Kerja Google Doc
+  const [lokasiDoc, setLokasiDoc] = useState<{ docId: string; editUrl: string; embedUrl: string; downloadUrl: string } | null>(null)
+  const [generatingLokasi, setGeneratingLokasi] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
 
   // Fetch notaris list
@@ -758,6 +762,32 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       }
       return updated
     })
+  }
+
+  // Generate Lokasi Kerja Google Doc (with photos + maps link embedded)
+  async function handleGenerateLokasiDoc() {
+    setGeneratingLokasi(true)
+    try {
+      const res = await fetch('/api/documents/google-docs/create-lokasi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, customerId: customer.id }),
+      })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error || d.message || `HTTP ${res.status}`)
+
+      setLokasiDoc({
+        docId: d.docId,
+        editUrl: d.editUrl,
+        embedUrl: d.embedUrl,
+        downloadUrl: d.downloadUrl,
+      })
+      toast.success('Dokumen Lokasi Kerja berhasil dibuat di Google Docs!')
+    } catch (err) {
+      toast.error('Gagal buat dokumen: ' + (err instanceof Error ? err.message : 'unknown'))
+    } finally {
+      setGeneratingLokasi(false)
+    }
   }
 
   useEffect(() => {
@@ -1435,19 +1465,69 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 </div>
               )}
 
-              {/* Lokasi Kerja Preview - Google Maps + Foto + Short Link (separate tab) */}
+              {/* Lokasi Kerja Preview - Google Maps + Foto + Short Link + Generate Doc */}
               {generateDocId === 'lokasi-kerja' && (
                 <div className="space-y-4 text-slate-900" style={{ colorScheme: 'light' }}>
+                  {/* Generate Document section */}
                   <div className="bg-white rounded-lg p-4 border border-slate-200">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-600" /> Lokasi Tempat Kerja</h3>
-                      <button
-                        onClick={() => setLokasiModalOpen(true)}
-                        className="text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-600 hover:bg-blue-50"
-                      >
-                        Edit Lokasi
-                      </button>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-600" /> Dokumen Lokasi Kerja</h3>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setLokasiModalOpen(true)}
+                          className="text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                        >
+                          Edit Data
+                        </button>
+                        <button
+                          onClick={handleGenerateLokasiDoc}
+                          disabled={generatingLokasi}
+                          className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {generatingLokasi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                          {generatingLokasi ? 'Generating...' : lokasiDoc ? 'Regenerate' : 'Generate Dokumen'}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* If doc generated, show embedded Google Docs + download */}
+                    {lokasiDoc ? (
+                      <div className="space-y-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded p-2 flex items-center justify-between">
+                          <p className="text-[11px] text-blue-700">✓ Dokumen dibuat di Google Docs. Edit langsung di bawah atau buka full editor.</p>
+                          <div className="flex gap-1.5">
+                            <a href={lokasiDoc.editUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
+                              <ExternalLink className="w-2.5 h-2.5" /> Full Editor
+                            </a>
+                            <a href={lokasiDoc.downloadUrl} className="text-[10px] px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1">
+                              <Download className="w-2.5 h-2.5" /> .docx
+                            </a>
+                          </div>
+                        </div>
+                        <iframe
+                          src={lokasiDoc.embedUrl}
+                          className="w-full border border-slate-200 rounded"
+                          style={{ height: '500px' }}
+                          title="Lokasi Kerja Doc"
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 rounded p-3 border border-slate-200 text-xs text-slate-600">
+                        <p className="font-bold text-slate-700 mb-1">Klik "Generate Dokumen" untuk membuat Google Doc berisi:</p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          <li>Link Google Maps + short link</li>
+                          <li>Foto Tampak Depan (embedded)</li>
+                          <li>Foto Tampak Dalam (embedded)</li>
+                          <li>Opening Hours, Shift Debitur, No HP Pemilik</li>
+                        </ul>
+                        <p className="text-[10px] text-slate-500 mt-2">Pastikan data lokasi sudah diisi via tombol "Edit Data" sebelum generate.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Data preview (Google Maps + Foto + Info) */}
+                  <div className="bg-white rounded-lg p-4 border border-slate-200">
+                    <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-600" /> Preview Data Lokasi</h3>
                     {/* Google Maps embed */}
                     {(state.applicant as any).workplaceMapsLink && (
                       <div className="mb-3">
@@ -1460,14 +1540,14 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                         />
                       </div>
                     )}
-                    {/* Short link untuk bank */}
+                    {/* Short link */}
                     {(state.applicant as any).workplaceMapsShortLink && (
                       <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-[10px] text-blue-600 font-bold uppercase mb-0.5">Short Link untuk Bank</p>
                         <p className="text-[11px] font-mono text-blue-800 break-all">{(state.applicant as any).workplaceMapsShortLink}</p>
                       </div>
                     )}
-                    {/* Photos grid */}
+                    {/* Photos */}
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { label: 'Tampak Depan', val: (state.applicant as any).workplaceFrontPhoto },
