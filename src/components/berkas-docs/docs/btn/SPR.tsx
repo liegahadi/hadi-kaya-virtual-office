@@ -1,7 +1,7 @@
 // ============================================================
 // SPR - Surat Pemesanan Rumah (BTN)
-// Full replica BTN SPR.pdf - optimized for 1 page (tighter spacing, smaller fonts)
-// All content preserved, only alignment/spacing adjusted
+// REPLICA dari SPR BTN asli (scan Afisa)
+// Layout: 1 halaman A4, font kecil, catatan 1 kolom
 // ============================================================
 
 import React from 'react'
@@ -15,10 +15,10 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
 
   return (
     <DocumentLayout>
-      <div style={{ fontSize: '8pt', lineHeight: '1.25' }}>
-        {/* Header - compact */}
-        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-          <h1 style={{ fontSize: '11pt', fontWeight: 'bold', margin: 0 }}>{property.projectName}</h1>
+      <div style={{ fontSize: '7.5pt', lineHeight: '1.3', color: '#000' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '5px' }}>
+          <h1 style={{ fontSize: '12pt', fontWeight: 'bold', margin: 0 }}>{property.projectName}</h1>
           <p style={{ fontSize: '7pt', margin: '1px 0' }}>KANTOR PEMASARAN JL. FATMAWATI (KAMPAK)</p>
           <h2 style={{ fontSize: '10pt', fontWeight: 'bold', textDecoration: 'underline', margin: '2px 0' }}>FORM PEMESANAN</h2>
           <p style={{ fontSize: '8pt' }}>
@@ -28,98 +28,74 @@ export function SPR_BTN({ data }: { data: BerkasState }) {
 
         <p style={{ marginBottom: '4px' }}>Saya yang bertanda tangan dibawah ini :</p>
 
-        {/* Data pemohon - 2 kolom untuk hemat space */}
-        <table style={{ width: '100%', marginBottom: '6px', fontSize: '8pt' }}>
+        {/* Data Pemohon - single column */}
+        <table style={{ width: '100%', marginBottom: '6px', fontSize: '7.5pt' }}>
           <tbody>
-            <tr>
-              <td style={{ width: '15%' }}>Nama</td><td style={{ width: '35%' }}>: <strong>{applicant.fullName || '………………'}</strong></td>
-              <td style={{ width: '15%' }}>No. Telp/HP</td><td style={{ width: '35%' }}>: {applicant.phone || '………………'}</td>
-            </tr>
-            <tr>
-              <td>Nomor KTP</td><td>: {applicant.ktpNumber || '………………'}</td>
-              <td>Pekerjaan</td><td>: {applicant.jobType || '………………'}</td>
-            </tr>
-            <tr>
-              <td>Alamat</td><td colSpan={3}>: {applicant.address || '………………'}</td>
-            </tr>
+            <tr><td style={{ width: '25%' }}>Nama</td><td>: <strong>{applicant.fullName || '………………'}</strong></td></tr>
+            <tr><td>Nomor KTP</td><td>: {applicant.ktpNumber || '………………'}</td></tr>
+            <tr><td>Pekerjaan</td><td>: {applicant.jobType || '………………'}</td></tr>
+            <tr><td>Alamat</td><td>: {applicant.address || '………………'}</td></tr>
+            <tr><td>No.Telp/HP Pemohon</td><td>: {applicant.phone || '………………'}</td></tr>
           </tbody>
         </table>
 
-        <p style={{ marginBottom: '4px', textAlign: 'justify' }}>
-          Setelah saya mendapatakan penjelasan dan melihat ke lokasi Pembangunan Perumahan "{property.projectName}"
-          di Lokasi {property.houseAddress} dengan ini saya memutuskan untuk melakukan pembelian/pemesanan Rumah sbb :
-        </p>
+        <p style={{ marginBottom: '4px', fontWeight: 'bold' }}>DATA – DATA RUMAH YANG SAYA PESAN :</p>
 
-        {/* Data rumah - 2 kolom untuk hemat space */}
-        <table style={{ width: '100%', marginBottom: '6px', fontSize: '8pt' }}>
+        {/* Data Rumah - single column */}
+        <table style={{ width: '100%', marginBottom: '6px', fontSize: '7.5pt' }}>
           <tbody>
-            <tr>
-              <td style={{ width: '15%' }}>1. Cara Bayar</td><td style={{ width: '35%' }}>: KPR</td>
-              <td style={{ width: '15%' }}>7. No. Kavling</td><td style={{ width: '35%' }}>: {property.kavlingNumber || '……'} (Site Plan terlampir)</td>
-            </tr>
-            <tr>
-              <td>2. Harga Beli</td><td>: {formatCurrency(property.price)}</td>
-              <td>8. Type</td><td>: {property.houseSize} / {property.landSize} M²</td>
-            </tr>
-            <tr>
-              <td>3. Uang Muka</td><td>: {formatCurrency(property.downPayment)}</td>
-              <td>9. No. Sertifikat</td><td>: {property.nibNumber || '………………………'}</td>
-            </tr>
-            <tr>
-              <td>4. SBUM</td><td>: {formatCurrency(property.sbumAmount)}</td>
-              <td>10. No. PBG</td><td>: {property.pbgNumber}</td>
-            </tr>
-            <tr>
-              <td>5. Plafon KPR</td><td>: {formatCurrency(property.kprPlafon)}</td>
-              <td>11. Listrik</td><td>: {property.electricity}</td>
-            </tr>
-            <tr>
-              <td>6. Jangka Waktu</td><td>: {property.kprTerm || '……'} Tahun</td>
-              <td>12. Air</td><td>: {property.water}</td>
-            </tr>
-            <tr>
-              <td></td><td></td>
-              <td style={{ paddingLeft: '15px' }}>Tgl Terbit</td><td>: {formatLongDate(property.pbgDate)}</td>
-            </tr>
+            <tr><td style={{ width: '25%' }}>Cara Pembayaran</td><td>: KPR</td></tr>
+            <tr><td>Harga Pembelian</td><td>: {formatCurrency(property.price)}</td></tr>
+            <tr><td>Uang Muka</td><td>: {formatCurrency(property.downPayment)}</td></tr>
+            <tr><td>SBUM</td><td>: {formatCurrency(property.sbumAmount)}</td></tr>
+            <tr><td>Plafon KPR</td><td>: {formatCurrency(property.kprPlafon)}</td></tr>
+            <tr><td>Jangka Waktu</td><td>: {property.kprTerm || '……'} (Tahun/Bulan)</td></tr>
+            <tr><td>No. Kavling Rumah</td><td>: {property.kavlingNumber || '……'} (Site Plan terlampir)</td></tr>
+            <tr><td>Type</td><td>: {property.houseSize} / {property.landSize} M²</td></tr>
+            <tr><td>No. Sertifikat</td><td>: {property.nibNumber || '………………………'}</td></tr>
+            <tr><td>No. PBG</td><td>: {property.pbgNumber} Tgl Terbit {property.pbgDate ? new Date(property.pbgDate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '……'}</td></tr>
+            <tr><td>Listrik</td><td>: {property.electricity}</td></tr>
+            <tr><td>Air</td><td>: {property.water}</td></tr>
+            <tr><td>Tanah Bangunan</td><td>: {property.buildingYear || new Date().getFullYear().toString()}</td></tr>
           </tbody>
         </table>
 
-        {/* Catatan - compact 2-column layout */}
-        <p style={{ marginBottom: '3px', fontWeight: 'bold', fontSize: '8pt' }}>Catatan :</p>
-        <div style={{ display: 'flex', gap: '15px', marginBottom: '6px' }}>
-          <ol style={{ paddingLeft: '15px', margin: 0, fontSize: '6.5pt', lineHeight: '1.2', flex: 1 }}>
-            <li>Apabila pemohon membatalkan pemesanan, maka uang muka dan SBUM yang telah dibayarkan tidak dapat ditarik kembali.</li>
-            <li>Apabila KPR tidak disetujui oleh pihak Bank, maka uang muka dikembalikan potong administrasi Rp. 500.000</li>
-            <li>Pengajuan KPR maksimal 1 (satu) bulan dari tanggal SPR, jika lebih maka SPR dianggap batal.</li>
-            <li>Apabila terjadi selisih harga, maka akan diselesaikan secara kekeluargaan.</li>
-            <li>Pemohon sudah berkomitmen untuk membeli rumah dan menyerahkan seluruh berkas persyaratan KPR kepada pihak developer untuk diajukan ke Bank.</li>
-            <li>Pihak developer akan membantu pengurusan persyaratan KPR sampai dengan akad.</li>
-            <li>Apabila pemohon menghendaki perubahan atas pesanan rumah, maka harus dengan seizin pihak developer.</li>
-          </ol>
-          <ol start={8} style={{ paddingLeft: '15px', margin: 0, fontSize: '6.5pt', lineHeight: '1.2', flex: 1 }}>
-            <li>Apabila serah terima kunci sudah dilakukan, maka segala kerusakan/sengketa yang terjadi bukan merupakan tanggung jawab pihak developer.</li>
-            <li>Pembayaran cicilan DP dilakukan sebelum pelaksanaan akad.</li>
-            <li>Pemberian dana SBUM dari pemerintah dilakukan setelah akad.</li>
-            <li>Apabila sertifikat belum pecah, maka proses akad menunggu pecah sertifikat.</li>
-            <li>Proses pemindahan hak atas nama pemohon dilakukan setelah seluruh kewajiban pemohon kepada developer diselesaikan.</li>
-            <li>Kontraktor pelaksana pembangunan dianggap sah dan sah secara hukum.</li>
-          </ol>
-        </div>
+        {/* Catatan - single column, 13 items */}
+        <p style={{ marginBottom: '3px', fontWeight: 'bold' }}>Catatan :</p>
+        <ol style={{ paddingLeft: '15px', margin: '0 0 6px 0', fontSize: '6.5pt', lineHeight: '1.25' }}>
+          <li>Apabila hasil BI Cheking saya tidak sesuai dengan pernyataan yang telah saya buat sebelumnya maka saya bersedia menerima semua konsekuensinya.</li>
+          <li>Harga tersebut diatas termasuk :<br/>
+            - Biaya IMB dari Pemerintah Kota Pangkalpinang.<br/>
+            - Biaya Pemecahan Sertifikat Induk (SHGB)<br/>
+            - PLN 1300 Watt dan air bor/PDAM<br/>
+            - PPN 1% dari harga jual<br/>
+            - BPHTB, AJB/balik nama dan biaya KPR</li>
+          <li>DP harus lunas dalam waktu 1 minggu terhitung sejak booking fee</li>
+          <li>Berkas lengkap dalam 7 hari kerja dan wajib membuat buku tabungan KPR BTN</li>
+          <li>Booking Fee/DP tidak bisa di kembalikan dengan alasan apapun termasuk jika calon nasabah memberikan keterangan yang tidak sesuai dalam form wawancara sehingga ditolak oleh pihak bank.</li>
+          <li>SBUM (bantuan uang muka) adalah sebagai pengganti DP atau biaya proses lainnya kepada DEVELOPER dan pencairannya saya setuju dicairkan atau di pindah bukukan ke rekening PT. Marlindo Bangun Persada dengan Rek Bank BTN NO. 00209.01.30.0003316</li>
+          <li>Harga diatas belum termasuk saldo mengendap yang ditentukan oleh pihak BANK.</li>
+          <li>Apabila terjadi penurunan plafond dari pihak BANK, maka calon nasabah di wajibkan membayar kekurangan plafond tersebut.</li>
+          <li>Jika dalam tempo 7 hari DP belum lunas atau berkas tidak dilengkapi terhitung sejak tgl booking fee maka, harga promo tidak berlaku lagi dan akan dikembalikan ke harga normal.</li>
+          <li>Form wawancara wajib di isi sesuai dengan data yang sebenar benar nya.</li>
+          <li>Jika berkas tidak lengkap dalam jangka waktu 14 hari kerja, maka saya dianggap mengundurkan diri dan menerima semua konsekuensinya.</li>
+          <li>Informasi & berkas yang diserahkan kepada pihak PT.MARLINDO BANGUN PERSADA kebenarannya, sepenuhnya merupakan tanggung jawab Pemesan/Debitor</li>
+          <li>Harga sewaktu-waktu bisa berubah sesuai dengan pemberitahuan dari Bank.</li>
+        </ol>
 
-        {/* Signature - compact */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+        {/* Signature - 2 columns */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
           <div style={{ textAlign: 'center', width: '45%' }}>
             <p style={{ margin: 0 }}>Pangkalpinang, {formatLongDate(dateOfDocument)}</p>
             <p style={{ margin: '2px 0' }}>Pemesan,</p>
-            <div style={{ height: '50px' }}></div>
+            <div style={{ height: '55px' }}></div>
             <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>{applicant.fullName || '(...........................)'}</p>
           </div>
           <div style={{ textAlign: 'center', width: '45%' }}>
             <p style={{ margin: 0 }}>Mengetahui,</p>
-            <p style={{ margin: '2px 0' }}>{COMPANY_INFO.name}</p>
-            <div style={{ height: '50px' }}></div>
-            <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>{COMPANY_INFO.director}</p>
-            <p style={{ fontSize: '7pt', margin: 0 }}>Direktur</p>
+            <p style={{ margin: '2px 0' }}>BAG.PENJUALAN PERUMAHAN ANJAYO 16</p>
+            <div style={{ height: '55px' }}></div>
+            <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>( ............................. )</p>
           </div>
         </div>
       </div>
