@@ -405,6 +405,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Generated Lokasi Kerja Google Doc
   const [lokasiDoc, setLokasiDoc] = useState<{ docId: string; editUrl: string; embedUrl: string; downloadUrl: string } | null>(null)
   const [generatingLokasi, setGeneratingLokasi] = useState(false)
+  // Global company settings (director info + per-bank accounts, shared across all customers)
+  const [companySettings, setCompanySettings] = useState<{
+    companyName?: string; directorName?: string; directorNik?: string; city?: string
+    btnAccount?: string; mandiriAccount?: string; bsbAccount?: string
+    btnBranch?: string; mandiriBranch?: string; bsbBranch?: string
+  }>({})
   const previewRef = useRef<HTMLDivElement>(null)
 
   // Fetch notaris list
@@ -413,6 +419,34 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       if (d.success) setNotarisList(d.data)
     }).catch(() => {})
   }, [])
+
+  // Fetch global company settings (director info + bank accounts)
+  useEffect(() => {
+    fetch('/api/company-settings').then(r => r.json()).then(d => {
+      if (d.success && d.data) setCompanySettings(d.data)
+    }).catch(() => {})
+  }, [])
+
+  // Update company setting (debounced save ke DB)
+  const companySettingsSaveTimer = useRef<NodeJS.Timeout | null>(null)
+  function updateCompanySetting(field: string, val: string) {
+    setCompanySettings(prev => ({ ...prev, [field]: val }))
+    // Debounced save
+    if (companySettingsSaveTimer.current) clearTimeout(companySettingsSaveTimer.current)
+    companySettingsSaveTimer.current = setTimeout(async () => {
+      try {
+        const updated = { ...companySettings, [field]: val }
+        await fetch('/api/company-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        })
+        toast.success('Data perusahaan tersimpan (global)')
+      } catch {
+        toast.error('Gagal simpan data perusahaan')
+      }
+    }, 1500)
+  }
 
   function updateApplicant(field: keyof ApplicantData, val: any) { setState(s => ({ ...s, applicant: { ...s.applicant, [field]: val } })) }
   function updateProperty(field: keyof PropertyData, val: any) { setState(s => ({ ...s, property: { ...s.property, [field]: val } })) }
@@ -982,15 +1016,16 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       <div className="grid grid-cols-1 lg:grid-cols-5">
         {/* LEFT: Form */}
         <div className="lg:col-span-2 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
-          {/* Data Perusahaan - ONLY in bank mode */}
-          {formMode === 'bank' && (
-          <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan">
-            <FormField label="Nama PT" value={COMPANY_INFO.name} onChange={() => {}} disabled />
-            <FormField label="Direktur" value={COMPANY_INFO.director} onChange={() => {}} disabled />
-            <FormField label="Kota" value={COMPANY_INFO.city} onChange={() => {}} disabled />
-            <FormField label="Rekening BTN" value={COMPANY_INFO.btnAccount} onChange={() => {}} disabled />
+          {/* Data Perusahaan - SELALU TAMPIL (default untuk Anjayo 16), editable, disimpan global */}
+          <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan (Global)">
+            <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />
+            <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />
+            <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />
+            <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />
+            <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />
+            <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />
+            <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />
           </FormSection>
-          )}
           <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
             <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />
             <FormField label="NIK / No. KTP" value={state.applicant.ktpNumber} onChange={v => updateApplicant('ktpNumber', v)} />
