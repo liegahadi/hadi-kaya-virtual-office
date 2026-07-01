@@ -15,6 +15,7 @@ import {
 } from 'docx'
 import { getDriveClientOAuth, isOAuthConfigured, isGoogleConnected, getDriveClient, isGoogleConfigured } from '@/lib/google/auth'
 import { ensureCustomerFolder } from '@/lib/google/folders'
+import { fetchStaticMap, hasMapsApiKey } from '@/lib/google/static-map'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
@@ -103,6 +104,63 @@ export async function POST(req: NextRequest) {
       children.push(new Paragraph({
         spacing: { after: 240 },
         children: [new TextRun({ text: `(atau Ketik "${a.companyName}")`, size: 20, italics: true, color: '666666' })],
+      }))
+    }
+
+    // === GAMBAR PETA DARI GOOGLE MAPS (Static Maps API) ===
+    // Auto-fetch static map image if GOOGLE_MAPS_API_KEY is set
+    // Otherwise, check for manual screenshot upload (workplaceMapScreenshot)
+    let mapImageBuf: Buffer | null = null
+    let mapSource: string = ''
+
+    // Try auto-fetch from Google Static Maps API
+    if (hasMapsApiKey() && (a.workplaceMapsLink || a.workplaceMapsShortLink)) {
+      try {
+        mapImageBuf = await fetchStaticMap(a.workplaceMapsLink || a.workplaceMapsShortLink, { width: 600, height: 400, zoom: 16 })
+        if (mapImageBuf) mapSource = 'google-static-maps'
+      } catch (e) {
+        console.error('Static map fetch error:', e)
+      }
+    }
+
+    // Fallback: use manual screenshot upload (workplaceMapScreenshot field)
+    if (!mapImageBuf && a.workplaceMapScreenshot) {
+      const screenshotBuf = dataUrlToBuffer(a.workplaceMapScreenshot)
+      if (screenshotBuf) {
+        mapImageBuf = screenshotBuf
+        mapSource = 'manual-screenshot'
+      }
+    }
+
+    // Embed map image in document
+    if (mapImageBuf) {
+      children.push(new Paragraph({
+        spacing: { before: 120, after: 60 },
+        children: [new TextRun({ text: 'Denah / Lokasi Google Maps', bold: true, size: 22 })],
+      }))
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 240 },
+        children: [new ImageRun({
+          data: new Uint8Array(mapImageBuf),
+          transformation: { width: 500, height: 350 },
+        } as any)],
+      }))
+    } else if (a.workplaceMapsLink || a.workplaceMapsShortLink) {
+      // No image available, show note
+      children.push(new Paragraph({
+        spacing: { before: 120, after: 60 },
+        children: [new TextRun({ text: 'Denah / Lokasi Google Maps', bold: true, size: 22 })],
+      }))
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 240 },
+        children: [new TextRun({
+          text: hasMapsApiKey()
+            ? '[Gagal fetch gambar peta. Buka link di atas untuk lihat peta]'
+            : '[Set GOOGLE_MAPS_API_KEY untuk auto-generate gambar peta, atau upload screenshot manual]',
+          size: 20, italics: true, color: '999999',
+        })],
       }))
     }
 

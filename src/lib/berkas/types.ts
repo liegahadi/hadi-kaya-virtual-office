@@ -39,6 +39,7 @@ export interface ApplicantData {
   workplaceInsidePhoto?: string;
   workplaceMapsLink?: string;          // full Google Maps link (untuk embed peta)
   workplaceMapsShortLink?: string;     // short link maps.app.goo.gl/... (string only, untuk bank)
+  workplaceMapScreenshot?: string;     // manual screenshot peta dari Google Maps (base64 data URL, untuk embed di dokumen)
   workplaceJamOperasional?: string;
   workplaceWaktuHubungi?: string;
   // Slip gaji components
