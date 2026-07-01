@@ -99,13 +99,7 @@ export async function POST(req: NextRequest) {
       }))
     }
 
-    // Search keyword hint (if company name exists, suggest searching for it)
-    if (a.companyName) {
-      children.push(new Paragraph({
-        spacing: { after: 240 },
-        children: [new TextRun({ text: `(atau Ketik "${a.companyName}")`, size: 20, italics: true, color: '666666' })],
-      }))
-    }
+    // Search keyword hint removed per user request
 
     // === GAMBAR PETA DARI GOOGLE MAPS (Static Maps API) ===
     // Auto-fetch static map image if GOOGLE_MAPS_API_KEY is set
