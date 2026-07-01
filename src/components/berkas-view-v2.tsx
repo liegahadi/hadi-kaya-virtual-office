@@ -22,7 +22,6 @@ import { COMPANY_INFO, DEFAULT_PROPERTY, INITIAL_STATE } from '@/lib/berkas/cons
 import { formatCurrency, formatLongDate } from '@/lib/berkas/formatters'
 import { DocumentLayout } from '@/components/berkas-docs/DocumentLayout'
 import { SPR_BTN } from '@/components/berkas-docs/docs/btn/SPR'
-import { SPR_MANDIRI } from '@/components/berkas-docs/docs/mandiri/SPR_MANDIRI'
 import { SuratPernyataanTidakMemilikiRumah } from '@/components/berkas-docs/docs/common/SuratPernyataanTidakMemilikiRumah'
 import { SuratPernyataanPenghasilan } from '@/components/berkas-docs/docs/common/SuratPernyataanPenghasilan'
 import { SuratPernyataanBPHTB } from '@/components/berkas-docs/docs/bphtb/SuratPernyataanBPHTB'
@@ -621,8 +620,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Download single React component PDF (for preview tabs)
   // NOTE: slip-gaji & sk-kerja are now edited via DocumentEditorModal (separate modal, not in preview tabs)
   async function handleDownloadSingleReact() {
-    const reactDocs: Record<string, { component: any; name: string; extraProps?: any }> = {
-      'spr': { component: bank === 'MANDIRI' ? SPR_MANDIRI : SPR_BTN, name: 'SPR' },
+    const reactDocs: Record<string, { component: any; name: string; extraProps?: any; isPdfOverlay?: boolean; pdfEndpoint?: string }> = {
+      'spr': { component: bank === 'MANDIRI' ? null : SPR_BTN, name: 'SPR', isPdfOverlay: bank === 'MANDIRI', pdfEndpoint: '/api/documents/generate-spr-mandiri' },
       'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
       'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
       'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
@@ -634,7 +633,35 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     }
 
     if (!reactDocs[generateDocId]) return false
-    const { component: DocComponent, name, extraProps } = reactDocs[generateDocId]
+    const { component: DocComponent, name, extraProps, isPdfOverlay, pdfEndpoint } = reactDocs[generateDocId] as any
+
+    // If PDF overlay (SPR Mandiri), fetch from API instead of React
+    if (isPdfOverlay && pdfEndpoint) {
+      setFlppGenerating(true)
+      try {
+        const res = await fetch(pdfEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${name}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        toast.success(`${name} PDF berhasil di-download!`)
+        return true
+      } catch (err) {
+        toast.error(`Gagal download ${name}: ` + (err instanceof Error ? err.message : 'unknown'))
+        return false
+      } finally {
+        setFlppGenerating(false)
+      }
+    }
+
     setFlppGenerating(true)
     let printArea: HTMLDivElement | null = null
     let root: any = null
@@ -668,10 +695,16 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     flppLoadingRef.current = true
     setFlppLoading(true)
     try {
+      // SPR Mandiri uses its own overlay endpoint
+      const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
       const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
       const isMandiri = generateDocId.startsWith('mandiri-')
       const isBsb = generateDocId.startsWith('bsb-')
-      const endpoint = isBsb ? '/api/documents/preview-bsb' : isMandiri ? '/api/documents/preview-mandiri' : isAjb ? '/api/documents/preview-ajb' : '/api/documents/preview-flpp'
+      const endpoint = isSprMandiri ? '/api/documents/preview-spr-mandiri'
+        : isBsb ? '/api/documents/preview-bsb'
+        : isMandiri ? '/api/documents/preview-mandiri'
+        : isAjb ? '/api/documents/preview-ajb'
+        : '/api/documents/preview-flpp'
       const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
       const body = (isAjb || isMandiri || isBsb) ? { state, docId: realDocId } : { state }
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -825,13 +858,21 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
 
   useEffect(() => {
-    if (!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja'].includes(generateDocId) && !flppLoading) loadFlppPreview()
+    // SPR Mandiri uses PDF overlay, so include 'spr' in the list for Mandiri
+    const skipPdfIds = bank === 'MANDIRI'
+      ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+      : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+    if (!skipPdfIds.includes(generateDocId) && !flppLoading) loadFlppPreview()
   }, [previewMode, generateDocId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
     // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
-    if (['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja'].includes(generateDocId)) return
+    // SPR Mandiri uses PDF overlay (not React), so don't skip it
+    const reactDocIds = bank === 'MANDIRI'
+      ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+      : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+    if (reactDocIds.includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
   }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
@@ -1412,14 +1453,20 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('bphtb-kuasa')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bphtb-kuasa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Kuasa</button>
                   </>
                 )}
-                {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa'].includes(generateDocId) && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>}
+                {/* Show Refresh button for PDF overlay docs (including SPR Mandiri) */}
+                {(() => {
+                  const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
+                  const reactSkipList = ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa']
+                  const showRefresh = isSprMandiri || !reactSkipList.includes(generateDocId)
+                  return showRefresh && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>
+                })()}
               </div>
 
-              {/* SPR Preview (React component) - BTN or Mandiri */}
-              {generateDocId === 'spr' && (
+              {/* SPR Preview - BTN uses React component, Mandiri uses PDF overlay */}
+              {generateDocId === 'spr' && bank !== 'MANDIRI' && (
                 <div ref={previewRef} className="flex justify-center">
                   <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}>
-                    {bank === 'MANDIRI' ? <SPR_MANDIRI data={state} /> : <SPR_BTN data={state} />}
+                    <SPR_BTN data={state} />
                   </div>
                 </div>
               )}
@@ -1612,14 +1659,20 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
               {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (CombinedDocumentEditorModal). */}
 
-              {/* PDF Preview (iframe) - for FLPP + AJB docs only */}
-              {!['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja'].includes(generateDocId) && (
-                <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
-                  {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
-                  {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
-                  {!flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full flex-col gap-2"><FileText className="w-10 h-10 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">Klik Refresh untuk load preview</p></div>}
-                </div>
-              )}
+              {/* PDF Preview (iframe) - for FLPP + AJB + SPR Mandiri docs */}
+              {(() => {
+                const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
+                const skipList = bank === 'MANDIRI'
+                  ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+                  : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+                return (isSprMandiri || !skipList.includes(generateDocId)) && (
+                  <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
+                    {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
+                    {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
+                    {!flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full flex-col gap-2"><FileText className="w-10 h-10 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">Klik Refresh untuk load preview</p></div>}
+                  </div>
+                )
+              })()}
             </>
           )}
 
