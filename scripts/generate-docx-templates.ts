@@ -420,20 +420,41 @@ function buildSlipGajiSection(template: TemplateDef): (Paragraph | Table)[] {
   elements.push(p(`SLIP ${upahLabel.toUpperCase()}`, {
     bold: true, align: 'center', size: 13, color: template.titleColor, underline: true, spacing: 60,
   }))
-  elements.push(p('Periode: {periode}', { align: 'center', size: 11, spacing: 240 }))
+  elements.push(p('Periode: {periode}', { align: 'center', size: 11, spacing: 180 }))
 
-  // Info section — plain text (no table)
-  elements.push(pField('Nama', '{nama}', { bold: true }))
-  elements.push(pField('NIK', '{nik}'))
-  elements.push(pField('Jabatan', '{jabatan}'))
+  // Info section — borderless 2-column table (more reliable in Google Docs than tab stops)
+  elements.push(new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders,
+    rows: [
+      new TableRow({ children: [
+        tc('Nama', { width: 15 }),
+        tc(':'),
+        tc('{nama}', { width: 35, bold: true }),
+        tc('Periode', { width: 12 }),
+        tc(':'),
+        tc('{periode}', { width: 23 }),
+      ]}),
+      new TableRow({ children: [
+        tc('NIK', { width: 15 }),
+        tc(':'),
+        tc('{nik}', { width: 35 }),
+        tc('Jabatan', { width: 12 }),
+        tc(':'),
+        tc('{jabatan}', { width: 23 }),
+      ]}),
+    ],
+  }))
 
-  elements.push(p('', { spacing: 60 }))
+  elements.push(p('', { spacing: 100 }))
 
-  // Finance table — KEEP this as table (proper columns for Pendapatan/Potongan with borders)
+  // Finance table — proper bordered table with Pendapatan/Potongan columns
   const headerBg = template.headerBg || 'F0F0F0'
   elements.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [5500, 2200, 2300],
     rows: [
+      // Header row
       new TableRow({
         tableHeader: true,
         children: [
@@ -442,73 +463,73 @@ function buildSlipGajiSection(template: TemplateDef): (Paragraph | Table)[] {
           tc('Potongan', { bold: true, width: 23, shading: headerBg, align: 'right' }),
         ],
       }),
-      new TableRow({
-        children: [
-          tc(`${upahLabel} Pokok`),
-          tc('{gaji_pokok}', { align: 'right' }),
-          tc(''),
-        ],
-      }),
+      // Gaji/Upah Pokok
+      new TableRow({ children: [
+        tc(`${upahLabel} Pokok`),
+        tc('{gaji_pokok}', { align: 'right' }),
+        tc(''),
+      ]}),
       // Loop: tunjangan tetap
-      new TableRow({
-        children: [
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#tunjangan_tetap}{label}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/tunjangan_tetap}', size: 22 })] })] }),
-        ],
-      }),
+      new TableRow({ children: [
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#tunjangan_tetap}{label}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/tunjangan_tetap}', size: 22 })] })] }),
+      ]}),
       // Loop: tunjangan variabel
-      new TableRow({
-        children: [
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#tunjangan_variabel}{label}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/tunjangan_variabel}', size: 22 })] })] }),
-        ],
-      }),
+      new TableRow({ children: [
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#tunjangan_variabel}{label}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/tunjangan_variabel}', size: 22 })] })] }),
+      ]}),
       // Loop: potongan
-      new TableRow({
-        children: [
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#potongan}{label}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/potongan}', size: 22 })] })] }),
-          new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
-        ],
-      }),
-      // Total
-      new TableRow({
-        children: [
-          tc('Total', { bold: true, shading: 'F9F9F9' }),
-          tc('{gaji_kotor}', { bold: true, align: 'right', shading: 'F9F9F9' }),
-          tc('{total_potongan}', { bold: true, align: 'right', shading: 'F9F9F9' }),
-        ],
-      }),
-      // Grand total
-      new TableRow({
-        children: [
-          new TableCell({
-            shading: { type: ShadingType.CLEAR, fill: 'E6F3FF' },
-            children: [new Paragraph({ children: [new TextRun({ text: `${upahLabel} Diterima (Bersih)`, bold: true, size: 24 })] })],
-            columnSpan: 2,
-          }),
-          new TableCell({
-            shading: { type: ShadingType.CLEAR, fill: 'E6F3FF' },
-            children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{gaji_bersih}', bold: true, size: 24 })] })],
-          }),
-        ],
-      }),
+      new TableRow({ children: [
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{#potongan}{label}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '{/potongan}', size: 22 })] })] }),
+        new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{amount}', size: 22 })] })] }),
+      ]}),
+      // Total row
+      new TableRow({ children: [
+        tc('Total', { bold: true, shading: 'F9F9F9' }),
+        tc('{gaji_kotor}', { bold: true, align: 'right', shading: 'F9F9F9' }),
+        tc('{total_potongan}', { bold: true, align: 'right', shading: 'F9F9F9' }),
+      ]}),
+      // Grand total — Gaji Diterima (Bersih)
+      new TableRow({ children: [
+        new TableCell({
+          shading: { type: ShadingType.CLEAR, fill: 'E6F3FF' },
+          children: [new Paragraph({ children: [new TextRun({ text: `${upahLabel} Diterima (Bersih)`, bold: true, size: 24 })] })],
+          columnSpan: 2,
+        }),
+        new TableCell({
+          shading: { type: ShadingType.CLEAR, fill: 'E6F3FF' },
+          children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{gaji_bersih}', bold: true, size: 24 })] })],
+        }),
+      ]}),
     ],
   }))
 
-  elements.push(p('', { spacing: 240 }))
+  elements.push(p('', { spacing: 200 }))
 
-  // Signature — plain text right-aligned (no table)
-  elements.push(p('Tanggal Terima: {tanggal_terima}'))
-  elements.push(p('', { spacing: 60 }))
-  elements.push(p('{kota}, {tanggal_terima}', { align: 'right', spacing: 60 }))
-  elements.push(p(template.signerRole, { align: 'right', spacing: 60 }))
-  elements.push(p('', { spacing: 120 }))
-  elements.push(p('', { spacing: 120 }))
-  elements.push(p('', { spacing: 120 }))
-  elements.push(p('( ............................. )', { bold: true, underline: true, align: 'right' }))
+  // Footer info + signature — borderless table
+  elements.push(new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders,
+    rows: [
+      new TableRow({ children: [
+        new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: [
+          p('Tanggal Terima: {tanggal_terima}'),
+        ]}),
+        new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: [
+          p('{kota}, {tanggal_terima}', { align: 'right', spacing: 40 }),
+          p(template.signerRole, { align: 'right', spacing: 40 }),
+          p('', { spacing: 80 }),
+          p('', { spacing: 80 }),
+          p('', { spacing: 80 }),
+          p('( ............................. )', { bold: true, underline: true, align: 'right' }),
+        ]}),
+      ]}),
+    ],
+  }))
 
   return elements
 }
