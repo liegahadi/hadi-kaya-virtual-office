@@ -96,9 +96,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Upload to Google Drive and convert to Google Docs format
-    const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}`
+    // OVERWRITE: Delete existing SK_Slip_Gaji file for this customer before creating new one
+    const fileName = `SK_Slip_Gaji_${state.applicant?.fullName || 'Konsumen'}`
     const targetFolderId = customerFolderId
     let docId: string | undefined
+
+    // Delete existing file(s) with same prefix in customer folder (overwrite system)
+    if (targetFolderId) {
+      try {
+        const existing = await drive.files.list({
+          q: `name contains 'SK_Slip_Gaji_' and '${targetFolderId}' in parents and trashed=false`,
+          fields: 'files(id, name)',
+          spaces: 'drive',
+          pageSize: 10,
+        })
+        if (existing.data.files) {
+          for (const f of existing.data.files) {
+            await drive.files.delete({ fileId: f.id! })
+          }
+        }
+      } catch (e) {
+        console.error('Delete existing (non-fatal):', e)
+      }
+    }
 
     if (usingOAuth) {
       // OAUTH: Direct create with conversion - file saved in user's Drive (has storage quota)
@@ -187,8 +207,12 @@ export async function POST(req: NextRequest) {
     const embedUrl = `https://docs.google.com/document/d/${docId}/edit?rm=minimal&ui=2`
     const downloadUrl = `/api/documents/google-docs/${docId}/download`
 
-    // Step 6: Save doc metadata to database (so we can list docs per customer later)
+    // Step 6: Save doc metadata to database (overwrite existing record for same customer + docType)
     try {
+      // Delete existing GoogleDoc record for this customer + docType
+      if (customerId) {
+        await db.googleDoc.deleteMany({ where: { customerId, docType: 'sk-slip-gaji' } })
+      }
       await db.googleDoc.create({
         data: {
           docId,

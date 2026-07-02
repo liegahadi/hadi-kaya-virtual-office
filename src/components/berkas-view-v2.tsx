@@ -607,33 +607,41 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     }
   }
 
-  // Download single React component PDF (for preview tabs)
-  // NOTE: slip-gaji & sk-kerja are now edited via DocumentEditorModal (separate modal, not in preview tabs)
+  // Download single doc PDF — handles ALL doc types:
+  // - React components (SPR BTN, Surat Pernyataan, BPHTB, Notaris) → html2canvas → jsPDF
+  // - PDF overlay (FLPP BTN, AJB, Mandiri Pernyataan, BSB, SPR Mandiri) → fetch from API
+  // - dok-kerja → buka CombinedDocEditorModal (Google Docs)
+  // - lokasi-kerja → generate via create-lokasi API
   async function handleDownloadSingleReact() {
-    const reactDocs: Record<string, { component: any; name: string; extraProps?: any; isPdfOverlay?: boolean; pdfEndpoint?: string }> = {
-      'spr': { component: bank === 'MANDIRI' ? null : SPR_BTN, name: 'SPR', isPdfOverlay: bank === 'MANDIRI', pdfEndpoint: '/api/documents/generate-spr-mandiri' },
-      'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
-      'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
-      'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
-      'bphtb-kuasa': { component: SuratKuasaBPHTB, name: 'Surat_Kuasa_BPHTB' },
-      'notaris-bast': { component: BastNotaris, name: 'BAST_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
-      'notaris-tanda-terima': { component: TandaTerimaNotaris, name: 'Tanda_Terima_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
-      'notaris-pernyataan': { component: PernyataanPengecekanSHGB, name: 'Pernyataan_Pengecekan_SHGB' },
-      'notaris-kuasa': { component: SuratKuasaNotaris, name: 'Surat_Kuasa_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name, notarisAddress: notarisList.find(n => n.id === selectedNotaris)?.address } },
+    // === PDF Overlay docs (fetch from API) ===
+    const pdfOverlayDocs: Record<string, { endpoint: string; name: string; method?: string }> = {
+      'flpp': { endpoint: '/api/documents/generate-flpp', name: 'Form_FLPP_BTN' },
+      'ajb-bank': { endpoint: '/api/documents/generate-ajb', name: 'AJB_Bank' },
+      'surat-lpa-akad': { endpoint: '/api/documents/generate-ajb', name: 'Surat_LPA_Akad' },
+      'mandiri-pernyataan-pemohon': { endpoint: '/api/documents/generate-mandiri', name: 'Surat_Pernyataan_Pemohon_Mandiri' },
+      'bsb-flpp': { endpoint: '/api/documents/generate-bsb', name: 'FLPP_BSB' },
+      'bsb-spr': { endpoint: '/api/documents/generate-bsb', name: 'SPR_BSB' },
+      'bsb-permohonan': { endpoint: '/api/documents/generate-bsb', name: 'Permohonan_BSB' },
+      'bsb-kuasa-bendaharawan': { endpoint: '/api/documents/generate-bsb', name: 'Kuasa_Bendaharawan_BSB' },
+      'bsb-pernyataan': { endpoint: '/api/documents/generate-bsb', name: 'Pernyataan_BSB' },
+      'bsb-sbum': { endpoint: '/api/documents/generate-bsb', name: 'SBUM_BSB' },
     }
 
-    if (!reactDocs[generateDocId]) return false
-    const { component: DocComponent, name, extraProps, isPdfOverlay, pdfEndpoint } = reactDocs[generateDocId] as any
+    // SPR Mandiri special case
+    if (generateDocId === 'spr' && bank === 'MANDIRI') {
+      pdfOverlayDocs['spr'] = { endpoint: '/api/documents/generate-spr-mandiri', name: 'SPR_Mandiri' }
+    }
 
-    // If PDF overlay (SPR Mandiri), fetch from API instead of React
-    if (isPdfOverlay && pdfEndpoint) {
+    if (pdfOverlayDocs[generateDocId]) {
+      const { endpoint, name } = pdfOverlayDocs[generateDocId]
       setFlppGenerating(true)
       try {
-        const res = await fetch(pdfEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state }),
-        })
+        const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
+        const isBsb = generateDocId.startsWith('bsb-')
+        const isMandiri = generateDocId.startsWith('mandiri-')
+        const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
+        const body = (isAjb || isMandiri || isBsb) ? { state, docId: realDocId } : { state }
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
@@ -647,11 +655,65 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       } catch (err) {
         toast.error(`Gagal download ${name}: ` + (err instanceof Error ? err.message : 'unknown'))
         return false
-      } finally {
-        setFlppGenerating(false)
-      }
+      } finally { setFlppGenerating(false) }
     }
 
+    // === dok-kerja → buka Google Docs modal (tidak download langsung) ===
+    if (generateDocId === 'dok-kerja') {
+      setCombinedDocModalOpen(true)
+      return true
+    }
+
+    // === lokasi-kerja → generate Lokasi Kerja doc via API ===
+    if (generateDocId === 'lokasi-kerja') {
+      setFlppGenerating(true)
+      try {
+        const res = await fetch('/api/documents/google-docs/create-lokasi', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, customerId: customer.id }),
+        })
+        const d = await res.json()
+        if (d.success) {
+          // Download the generated doc
+          const dlRes = await fetch(d.downloadUrl)
+          if (dlRes.ok) {
+            const blob = await dlRes.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${d.fileName}.docx`
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+          }
+          toast.success('Lokasi Kerja doc berhasil dibuat & didownload!')
+          setLokasiDoc({ docId: d.docId, editUrl: d.editUrl, embedUrl: d.embedUrl, downloadUrl: d.downloadUrl })
+          return true
+        } else throw new Error(d.error || d.message || 'Failed')
+      } catch (err) {
+        toast.error('Gagal: ' + (err instanceof Error ? err.message : 'unknown'))
+        return false
+      } finally { setFlppGenerating(false) }
+    }
+
+    // === React component docs (html2canvas → jsPDF) ===
+    const reactDocs: Record<string, { component: any; name: string; extraProps?: any }> = {
+      'spr': { component: SPR_BTN, name: 'SPR' },
+      'pernyataan-rumah': { component: SuratPernyataanTidakMemilikiRumah, name: 'Surat_Pernyataan_Tidak_Memiliki_Rumah' },
+      'pernyataan-penghasilan': { component: SuratPernyataanPenghasilan, name: 'Surat_Pernyataan_Penghasilan' },
+      'bphtb-pernyataan': { component: SuratPernyataanBPHTB, name: 'Surat_Pernyataan_BPHTB' },
+      'bphtb-kuasa': { component: SuratKuasaBPHTB, name: 'Surat_Kuasa_BPHTB' },
+      'notaris-bast': { component: BastNotaris, name: 'BAST_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
+      'notaris-tanda-terima': { component: TandaTerimaNotaris, name: 'Tanda_Terima_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name } },
+      'notaris-pernyataan': { component: PernyataanPengecekanSHGB, name: 'Pernyataan_Pengecekan_SHGB' },
+      'notaris-kuasa': { component: SuratKuasaNotaris, name: 'Surat_Kuasa_Notaris', extraProps: { notarisName: notarisList.find(n => n.id === selectedNotaris)?.name, notarisAddress: notarisList.find(n => n.id === selectedNotaris)?.address } },
+    }
+
+    if (!reactDocs[generateDocId]) {
+      toast.info('Dokumen ini tidak memiliki tombol download individual. Gunakan Download All untuk merge semua berkas.')
+      return false
+    }
+
+    const { component: DocComponent, name, extraProps } = reactDocs[generateDocId]
     setFlppGenerating(true)
     let printArea: HTMLDivElement | null = null
     let root: any = null
