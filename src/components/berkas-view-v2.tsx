@@ -515,100 +515,90 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     try {
       // Collect files to merge based on current mode/bank/stage
       const filesToMerge: Array<{ docId: string; dataUrl: string; label: string }> = []
-      const templateDocsToMerge: Array<{ templatePath: string }> = []
 
       if (formMode === 'bank') {
-        // === BANK MODE ===
         if (docStage === 'entry') {
-          // Entry (Pre-Bank): merge all required uploads + signed docs + generated docs
-          // 1. Required uploads (KTP, KK, NPWP, etc.)
           const requiredDocIds = ['ktp', 'kk', 'npwp', 'status-nikah', 'slip-gaji', 'sk-kerja', 'surat-rumah', 'sertifikat', 'pbb']
-          requiredDocIds.forEach(id => {
-            if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-          })
-          // Spouse docs if married
+          requiredDocIds.forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
           if (state.maritalStatus === MaritalStatus.MARRIED) {
             ['spouse-tidak-bekerja', 'spouse-slip-gaji', 'spouse-sk-kerja', 'spouse-nib', 'spouse-laporan-keuangan'].forEach(id => {
               if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
             })
           }
-          // 2. Signed docs (FLPP, SPR, aplikasi, pernyataan penghasilan, rekening koran, SP3K)
           const signedDocIds = ['flpp-signed', 'spr-signed', 'aplikasi-signed', 'pernyataan-penghasilan-signed', 'rekening-koran-signed', 'sp3k-btn', 'sppk-mandiri', 'sp4-bsb']
-          signedDocIds.forEach(id => {
-            if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-          })
-          // 3. Template overlay docs (FLPP BTN / Mandiri Pernyataan)
-          if (bank === 'BTN') {
-            templateDocsToMerge.push({ templatePath: '/public/templates/btn-flpp-template.pdf' })
-          } else if (bank === 'MANDIRI') {
-            templateDocsToMerge.push({ templatePath: '/public/templates/mandiri-pernyataan-pemohon.pdf' })
-          } else if (bank === 'BSB_SYARIAH') {
-            ['bsb-flpp', 'bsb-spr', 'bsb-permohonan', 'bsb-kuasa-bendaharawan', 'bsb-pernyataan', 'bsb-sbum'].forEach(id => {
-              templateDocsToMerge.push({ templatePath: `/public/templates/${id.replace('bsb-', 'bsb-')}.pdf` })
-            })
-          }
+          signedDocIds.forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
         } else if (docStage === 'ajb' && bank === 'BTN') {
-          // AJB (Post-SP3K): merge all post-SP3K uploads
           for (let i = 0; i < 15; i++) {
             const id = `post-sp3k-${i}`
             if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
           }
-          // Also include AJB Bank + LPA overlay PDFs
-          templateDocsToMerge.push({ templatePath: '/public/templates/btn-ajb-bank.pdf' })
-          templateDocsToMerge.push({ templatePath: '/public/templates/btn-surat-lpa-akad.pdf' })
         }
       } else if (formMode === 'bphtb') {
-        // === BPHTB MODE ===
-        // All BPHTB uploads + surat pernyataan + surat kuasa (React → need client-side render)
-        ['bphtb-bukti-bayar-pbb', 'bphtb-kwitansi', 'bphtb-sppk'].forEach(id => {
-          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-        })
-        // Also pull from bank uploads
-        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => {
-          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-        })
-        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) {
-          filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
-        }
+        ['bphtb-bukti-bayar-pbb', 'bphtb-kwitansi', 'bphtb-sppk'].forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
+        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
+        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
       } else if (formMode === 'notaris') {
-        // === NOTARIS MODE ===
-        // All notaris uploads
-        ['pph-bukti', 'akta-pendirian', 'akta-perubahan', 'kwitansi-rumah-notaris', 'ktp-direktur', 'npwp-pt'].forEach(id => {
-          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-        })
-        // Pull from bank uploads
-        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => {
-          if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id })
-        })
-        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) {
-          filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
-        }
+        ['pph-bukti', 'akta-pendirian', 'akta-perubahan', 'kwitansi-rumah-notaris', 'ktp-direktur', 'npwp-pt'].forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
+        ['ktp', 'kk', 'npwp', 'status-nikah', 'sertifikat', 'pbb'].forEach(id => { if (uploadedFiles[id]) filesToMerge.push({ docId: id, dataUrl: uploadedFiles[id], label: id }) })
+        if (state.maritalStatus === MaritalStatus.MARRIED && uploadedFiles['spouse-ktp']) filesToMerge.push({ docId: 'spouse-ktp', dataUrl: uploadedFiles['spouse-ktp'], label: 'spouse-ktp' })
         const sp3kId = bank === 'BTN' ? 'sp3k-btn' : bank === 'MANDIRI' ? 'sppk-mandiri' : 'sp4-bsb'
         if (uploadedFiles[sp3kId]) filesToMerge.push({ docId: sp3kId, dataUrl: uploadedFiles[sp3kId], label: sp3kId })
       }
 
-      // If no files to merge, fall back to single doc download
-      if (filesToMerge.length === 0 && templateDocsToMerge.length === 0) {
+      if (filesToMerge.length === 0) {
         toast.info('Tidak ada berkas untuk di-download. Upload dokumen dulu.')
         setFlppGenerating(false)
         return
       }
 
-      // Call merge API
-      const res = await fetch('/api/documents/merge-download', {
+      // Build merge label: [Jenis Dokumen] - based on mode/bank/stage
+      let mergeLabel = 'Data Entry'
+      if (formMode === 'bank') {
+        if (docStage === 'entry') mergeLabel = `Data Entry ${bank === 'BTN' ? 'BTN' : bank === 'MANDIRI' ? 'Mandiri' : 'BSB'}`
+        else if (docStage === 'ajb') mergeLabel = `Post SP3K ${bank === 'BTN' ? 'BTN' : bank === 'MANDIRI' ? 'Mandiri' : 'BSB'}`
+      } else if (formMode === 'bphtb') {
+        mergeLabel = 'BPHTB'
+      } else if (formMode === 'notaris') {
+        mergeLabel = 'Notaris'
+      }
+
+      // Call merge-to-drive API (merges all files + saves to Drive + returns download URL)
+      const res = await fetch('/api/documents/google-docs/merge-to-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: filesToMerge, templateDocs: templateDocsToMerge }),
+        body: JSON.stringify({
+          files: filesToMerge,
+          mergeLabel,
+          state,
+          customerId: customer.id,
+        }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const modeLabel = formMode === 'bank' ? `${bank}_${docStage}` : formMode
-      a.href = url
-      a.download = `Berkas_${modeLabel}_${state.applicant.fullName || 'Konsumen'}_${new Date().toISOString().split('T')[0]}.pdf`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
-      toast.success(`Berhasil download ${filesToMerge.length} berkas dalam 1 PDF!`)
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+
+      const d = await res.json()
+
+      if (d.success) {
+        // Download the merged PDF
+        const dlRes = await fetch(d.downloadUrl)
+        if (dlRes.ok) {
+          const blob = await dlRes.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          const customerName = state.applicant.fullName || 'Konsumen'
+          const blockUnit = state.property.blockLetter || state.property.houseNumber ? ` - ${state.property.blockLetter}${state.property.houseNumber}` : ''
+          a.download = `${mergeLabel} - ${customerName}${blockUnit}.pdf`
+          document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }
+        toast.success(`Berhasil! ${d.pageCount} halaman digabung → tersimpan di Google Drive + didownload!`)
+      } else {
+        throw new Error(d.error || 'Merge failed')
+      }
     } catch (err) {
       console.error('Download error:', err)
       toast.error('Gagal download: ' + (err instanceof Error ? err.message : 'unknown'))
@@ -890,6 +880,17 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       setUploadedFiles(prev => ({ ...prev, [docId]: dataUrl }))
       const label = [...requiredUploads, ...SIGNED_DOCS].find(u => u.id === docId)?.label || docId
       toast.success(`${label} berhasil diupload!`)
+
+      // === AUTO UPLOAD TO GOOGLE DRIVE ===
+      // Save file to customer's Drive folder with naming: [Dokumen] - [Nama] - Blok
+      fetch('/api/documents/google-docs/upload-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl, docLabel: label, state, customerId: customer.id, overwrite: true }),
+      }).then(r => r.json()).then(d => {
+        if (d.success) toast.success(`📁 ${label} tersimpan di Google Drive`)
+        else console.error('Drive upload failed:', d.error)
+      }).catch(() => {}) // Silent fail - don't block upload flow
 
       // === AUTO OCR: KTP Debitur ===
       if (docId === 'ktp') {
