@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     } else {
       // General chat (no customer) — find conversation with channel DASHBOARD but no customerId
       conversation = await db.conversation.findFirst({
-        where: { channel: 'DASHBOARD', NOT: { customerId: { not: null } } },
+        where: { channel: 'DASHBOARD' },
         orderBy: { updatedAt: 'desc' },
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 100 } },
       })
