@@ -71,7 +71,43 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       const errText = await response.text()
       console.error('Gemini API error:', response.status, errText)
-      return NextResponse.json({ success: false, error: `Gemini error: ${response.status}` }, { status: 500 })
+
+      // Fallback to ZAI SDK (GLM-4.6, always free, no rate limit)
+      console.log('Falling back to ZAI GLM-4.6...')
+      try {
+        const ZAI = (await import('z-ai-web-dev-sdk')).default
+        const zai = await ZAI.create()
+        const chatMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+          ...history.map(h => ({ role: (h.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant', content: h.content })),
+          { role: 'user', content: message },
+        ]
+        const zaiResponse = await zai.chat.completions.create({
+          messages: chatMessages,
+          system: systemPrompt,
+          temperature: 0.7,
+          max_tokens: 1500,
+        })
+        const fallbackResponse = zaiResponse.choices[0]?.message?.content || 'Maaf, saya tidak bisa merespons saat ini.'
+
+        // Save to DB
+        try {
+          if (customerId) {
+            let conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
+            if (!conversation) {
+              conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+            }
+            await db.message.createMany({ data: [
+              { conversationId: conversation.id, role: 'user', content: message },
+              { conversationId: conversation.id, role: 'assistant', content: fallbackResponse },
+            ]})
+          }
+        } catch {}
+
+        return NextResponse.json({ success: true, response: fallbackResponse, model: 'glm-4.6-fallback' })
+      } catch (fallbackErr) {
+        console.error('ZAI fallback also failed:', fallbackErr)
+        return NextResponse.json({ success: false, error: 'Both Gemini and ZAI failed' }, { status: 500 })
+      }
     }
 
     const data = await response.json()
