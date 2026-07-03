@@ -72,22 +72,40 @@ export async function POST(req: NextRequest) {
       const errText = await response.text()
       console.error('Gemini API error:', response.status, errText)
 
-      // Fallback to ZAI SDK (GLM-4.6, always free, no rate limit)
-      console.log('Falling back to ZAI GLM-4.6...')
+      // Fallback to OpenRouter (already has API key configured)
+      console.log('Falling back to OpenRouter...')
       try {
-        const ZAI = (await import('z-ai-web-dev-sdk')).default
-        const zai = await ZAI.create()
-        const chatMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-          ...history.map(h => ({ role: (h.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant', content: h.content })),
+        const openrouterKey = process.env.OPENROUTER_API_KEY
+        if (!openrouterKey) throw new Error('No OpenRouter key')
+
+        const chatMessages = [
+          ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
           { role: 'user', content: message },
         ]
-        const zaiResponse = await zai.chat.completions.create({
-          messages: chatMessages,
-          system: systemPrompt,
-          temperature: 0.7,
-          max_tokens: 1500,
+
+        const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openrouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://hadi-kaya-virtual-office.vercel.app',
+            'X-Title': 'Hadi Kaya DINA',
+          },
+          body: JSON.stringify({
+            model: 'meta-llama/llama-3.3-70b-instruct:free',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...chatMessages,
+            ],
+            temperature: 0.7,
+            max_tokens: 1500,
+          }),
         })
-        const fallbackResponse = zaiResponse.choices[0]?.message?.content || 'Maaf, saya tidak bisa merespons saat ini.'
+
+        if (!orResponse.ok) throw new Error(`OpenRouter ${orResponse.status}`)
+
+        const orData = await orResponse.json()
+        const fallbackResponse = orData.choices[0]?.message?.content || 'Maaf, saya tidak bisa merespons saat ini.'
 
         // Save to DB
         try {
@@ -103,10 +121,10 @@ export async function POST(req: NextRequest) {
           }
         } catch {}
 
-        return NextResponse.json({ success: true, response: fallbackResponse, model: 'glm-4.6-fallback' })
+        return NextResponse.json({ success: true, response: fallbackResponse, model: 'llama-3.3-70b-fallback' })
       } catch (fallbackErr) {
-        console.error('ZAI fallback also failed:', fallbackErr)
-        return NextResponse.json({ success: false, error: 'Both Gemini and ZAI failed' }, { status: 500 })
+        console.error('OpenRouter fallback also failed:', fallbackErr)
+        return NextResponse.json({ success: false, error: 'Both Gemini and OpenRouter failed' }, { status: 500 })
       }
     }
 
