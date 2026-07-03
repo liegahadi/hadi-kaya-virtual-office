@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         }
       } else {
         // General chat (no customer)
-        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD', customerId: null } as any })
+        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD', NOT: { customerId: { not: null } } } })
         if (!conversation) {
           conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
         }
