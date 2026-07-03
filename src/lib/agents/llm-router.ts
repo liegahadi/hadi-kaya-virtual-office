@@ -153,6 +153,9 @@ export async function callLLM(
       case 'groq':
         response = await callGroq(finalConfig, messages)
         break
+      case 'google':
+        response = await callGemini(finalConfig, messages)
+        break
       default:
         // Fallback to ZAI
         console.warn(`Provider ${provider} not yet implemented, falling back to ZAI`)
@@ -322,6 +325,69 @@ async function callGroq(config: LLMConfig, messages: LLMMessage[]): Promise<LLMR
 }
 
 // ============================================================
+// Google Gemini (free tier via Google AI Studio)
+// ============================================================
+
+async function callGemini(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResponse> {
+  const apiKey = config.apiKey || process.env.GEMINI_API_KEY
+
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured')
+  }
+
+  const model = config.model || 'gemini-2.0-flash'
+  const systemMessage = messages.find(m => m.role === 'system')
+  const chatMessages = messages.filter(m => m.role !== 'system')
+
+  // Gemini API format
+  const body: any = {
+    contents: chatMessages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+    generationConfig: {
+      temperature: config.temperature ?? 0.7,
+      maxOutputTokens: config.maxTokens ?? 2000,
+    },
+  }
+
+  if (systemMessage) {
+    body.systemInstruction = { parts: [{ text: systemMessage.content }] }
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Gemini API error ${response.status}: ${errorText}`)
+  }
+
+  const data = await response.json()
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+  return {
+    content,
+    model,
+    provider: 'google',
+    taskType: config.taskType || 'heavy',
+    latencyMs: 0,
+    usage: data.usageMetadata ? {
+      promptTokens: data.usageMetadata.promptTokenCount,
+      completionTokens: data.usageMetadata.candidatesTokenCount,
+      totalTokens: data.usageMetadata.totalTokenCount,
+      cost: 0, // Gemini free tier
+    } : undefined,
+  }
+}
+
+// ============================================================
 // AVAILABLE MODELS — for dashboard dropdown
 // ============================================================
 
@@ -332,6 +398,21 @@ export const AVAILABLE_MODELS = [
     id: 'glm-4.6',
     label: 'GLM-4.6 (ZAI - free, built-in)',
     provider: 'zai' as LLMProvider,
+    cost: 'Rp 0',
+    bestFor: 'heavy' as TaskComplexity,
+  },
+  // Google Gemini (free tier, smart + fast)
+  {
+    id: 'gemini-2.0-flash',
+    label: 'Gemini 2.0 Flash (Google - free, RECOMMENDED)',
+    provider: 'google' as LLMProvider,
+    cost: 'Rp 0',
+    bestFor: 'heavy' as TaskComplexity,
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash (Google - free)',
+    provider: 'google' as LLMProvider,
     cost: 'Rp 0',
     bestFor: 'heavy' as TaskComplexity,
   },
