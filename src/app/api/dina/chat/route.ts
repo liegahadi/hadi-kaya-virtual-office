@@ -1,8 +1,15 @@
 // POST /api/dina/chat
-// DINA AI Assistant — powered by Gemini 2.0 Flash with full knowledge base + customer context
+// DINA AI Assistant — with DB tools + memory + Gemini/OpenRouter
+// Flow:
+// 1. Detect intent from user message
+// 2. Execute relevant DB tools (get customer stats, list, doc status, etc)
+// 3. Include tool results in context
+// 4. Send to Gemini (or fallback OpenRouter)
+// 5. Save conversation + extract learning to memory
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DINA_SYSTEM_PROMPT, buildCustomerContext } from '@/lib/agents/dina-knowledge'
+import { detectIntent, executeTools, saveMemory, extractLearning } from '@/lib/agents/dina-tools'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -15,7 +22,7 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not configured' }, { status: 500 })
 
-    // Get customer data for context injection
+    // Step 1: Get customer data for context
     let customer: any = null
     if (customerId) {
       customer = await db.customer.findUnique({
@@ -24,14 +31,21 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Build system prompt with customer context
-    const customerContext = buildCustomerContext(customer)
-    const systemPrompt = DINA_SYSTEM_PROMPT.replace('{customerContext}', customerContext)
+    // Step 2: Detect intent from user message
+    const intent = detectIntent(message)
 
-    // Get last 15 messages for conversation history (from DB if available, otherwise just current message)
+    // Step 3: Execute DB tools based on intent
+    const toolResults = await executeTools(intent, customerId)
+
+    // Step 4: Build system prompt with customer context + tool results
+    const customerContext = buildCustomerContext(customer)
+    const systemPrompt = DINA_SYSTEM_PROMPT
+      .replace('{customerContext}', customerContext)
+      + (toolResults ? `\n\n## HASIL QUERY DATABASE (gunakan data ini untuk menjawab)\n${toolResults}` : '')
+
+    // Step 5: Get conversation history
     let history: Array<{ role: string; content: string }> = []
     if (customerId) {
-      // Try to find existing conversation
       const conversation = await db.conversation.findFirst({
         where: { customerId, channel: 'DASHBOARD' },
         orderBy: { updatedAt: 'desc' },
@@ -45,7 +59,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build Gemini API request
+    // Step 6: Call Gemini API
     const body = {
       contents: [
         ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
@@ -54,108 +68,86 @@ export async function POST(req: NextRequest) {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 2000,
         topP: 0.9,
       },
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    )
+    let aiResponse = ''
+    let modelUsed = 'gemini-2.0-flash'
 
-    if (!response.ok) {
-      const errText = await response.text()
-      console.error('Gemini API error:', response.status, errText)
-
-      // Fallback to OpenRouter (already has API key configured)
-      console.log('Falling back to OpenRouter...')
-      try {
-        const openrouterKey = process.env.OPENROUTER_API_KEY
-        if (!openrouterKey) throw new Error('No OpenRouter key')
-
-        const chatMessages = [
-          ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
-          { role: 'user', content: message },
-        ]
-
-        const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openrouterKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://hadi-kaya-virtual-office.vercel.app',
-            'X-Title': 'Hadi Kaya DINA',
-          },
-          body: JSON.stringify({
-            model: 'nvidia/nemotron-3-nano-30b-a3b:free',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...chatMessages,
-            ],
-            temperature: 0.7,
-            max_tokens: 1500,
-          }),
-        })
-
-        if (!orResponse.ok) throw new Error(`OpenRouter ${orResponse.status}`)
-
-        const orData = await orResponse.json()
-        const fallbackResponse = orData.choices[0]?.message?.content || 'Maaf, saya tidak bisa merespons saat ini.'
-
-        // Save to DB
-        try {
-          if (customerId) {
-            let conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
-            if (!conversation) {
-              conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
-            }
-            await db.message.createMany({ data: [
-              { conversationId: conversation.id, role: 'user', content: message },
-              { conversationId: conversation.id, role: 'assistant', content: fallbackResponse },
-            ]})
-          }
-        } catch {}
-
-        return NextResponse.json({ success: true, response: fallbackResponse, model: 'llama-3.3-70b-fallback' })
-      } catch (fallbackErr) {
-        console.error('OpenRouter fallback also failed:', fallbackErr)
-        return NextResponse.json({ success: false, error: 'Both Gemini and OpenRouter failed' }, { status: 500 })
-      }
-    }
-
-    const data = await response.json()
-    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Maaf, saya tidak bisa merespons saat ini.'
-
-    // Save conversation to DB (optional, non-blocking)
     try {
-      if (customerId) {
-        // Find or create conversation
-        let conversation = await db.conversation.findFirst({
-          where: { customerId, channel: 'DASHBOARD' },
-        })
-        if (!conversation) {
-          conversation = await db.conversation.create({
-            data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any,
-          })
-        }
-        // Save messages
-        await db.message.createMany({
-          data: [
-            { conversationId: conversation.id, role: 'user', content: message },
-            { conversationId: conversation.id, role: 'assistant', content: aiResponse },
-          ],
-        })
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      } else {
+        throw new Error(`Gemini ${response.status}`)
       }
-    } catch (dbErr) {
-      console.error('DB save (non-fatal):', dbErr)
+    } catch (geminiErr) {
+      // Fallback to OpenRouter Nemotron
+      console.log('Gemini failed, falling back to OpenRouter...')
+      const openrouterKey = process.env.OPENROUTER_API_KEY
+      if (!openrouterKey) throw new Error('No fallback available')
+
+      const chatMessages = [
+        ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
+        { role: 'user', content: message },
+      ]
+
+      const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://hadi-kaya-virtual-office.vercel.app',
+          'X-Title': 'Hadi Kaya DINA',
+        },
+        body: JSON.stringify({
+          model: 'nvidia/nemotron-3-nano-30b-a3b:free',
+          messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      })
+
+      if (!orResponse.ok) throw new Error(`OpenRouter ${orResponse.status}`)
+      const orData = await orResponse.json()
+      aiResponse = orData.choices[0]?.message?.content || ''
+      modelUsed = 'nemotron-fallback'
     }
 
-    return NextResponse.json({ success: true, response: aiResponse })
+    if (!aiResponse) aiResponse = 'Maaf, saya tidak bisa merespons saat ini.'
+
+    // Step 7: Save conversation + messages to DB
+    try {
+      let conversationId: string | undefined
+      if (customerId) {
+        let conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
+        if (!conversation) {
+          conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+        }
+        conversationId = conversation.id
+        await db.message.createMany({ data: [
+          { conversationId, role: 'user', content: message },
+          { conversationId, role: 'assistant', content: aiResponse },
+        ]})
+      }
+    } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
+
+    // Step 8: Extract learning and save to memory
+    try {
+      const learning = extractLearning(message, aiResponse)
+      if (learning) {
+        await saveMemory(learning.content, learning.category, customerId, learning.importance)
+      }
+    } catch (memErr) { console.error('Memory save (non-fatal):', memErr) }
+
+    return NextResponse.json({ success: true, response: aiResponse, model: modelUsed, toolsExecuted: intent.tools })
   } catch (err: any) {
     console.error('DINA chat error:', err)
     return NextResponse.json({ success: false, error: err?.message || 'Failed' }, { status: 500 })
