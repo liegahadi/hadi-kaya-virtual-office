@@ -213,11 +213,10 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
 }
 
 // ============================================================
-// DINA SIDEBAR
-// ============================================================
+// DINA SIDEBAR — Powered by Gemini 2.0 Flash with full knowledge base + customer context
 function DinaSidebar({ customer }: { customer: any }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'agent'; content: string; ts: number }>>([
-    { role: 'agent', content: 'Halo! Saya DINA, Document AI Assistant. Bisa bantu koordinasi berkas konsumen kapan aja. 😊', ts: Date.now() }
+    { role: 'agent', content: 'Halo! Saya DINA, Document AI Assistant untuk PT. Marlindo Bangun Persada. Saya bisa bantu soal berkas KPR, proses bank, dokumen yang dibutuhkan, dan status konsumen. Apa yang bisa saya bantu? 😊', ts: Date.now() }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -232,21 +231,21 @@ function DinaSidebar({ customer }: { customer: any }) {
     setInput('')
     setLoading(true)
     try {
-      const res = await fetch('/api/agents/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, channel: 'DASHBOARD', customerId: customer?.id }) })
-      if (!res.ok) {
-        const agentsRes = await fetch('/api/agents')
-        const agentsData = await agentsRes.json()
-        const dina = agentsData.data?.find((a: any) => a.name === 'Dina')
-        if (dina) {
-          const res2 = await fetch(`/api/agents/${dina.id}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, channel: 'DASHBOARD' }) })
-          const d2 = await res2.json()
-          setMessages(prev => [...prev, { role: 'agent', content: d2.data?.response || 'Maaf, saya belum bisa merespons.', ts: Date.now() }])
-        } else { setMessages(prev => [...prev, { role: 'agent', content: 'Saya DINA, tapi lagi ada gangguan.', ts: Date.now() }]) }
+      // Call DINA directly via Gemini API with full system prompt + customer context
+      const res = await fetch('/api/dina/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, customerId: customer?.id }),
+      })
+      const d = await res.json()
+      if (d.success) {
+        setMessages(prev => [...prev, { role: 'agent', content: d.response, ts: Date.now() }])
       } else {
-        const d = await res.json()
-        setMessages(prev => [...prev, { role: 'agent', content: d.data?.response || 'Maaf, belum bisa merespons.', ts: Date.now() }])
+        setMessages(prev => [...prev, { role: 'agent', content: 'Maaf, saya lagi ada gangguan teknis. Coba lagi ya. 😅', ts: Date.now() }])
       }
-    } catch { setMessages(prev => [...prev, { role: 'agent', content: 'Network error.', ts: Date.now() }]) }
+    } catch {
+      setMessages(prev => [...prev, { role: 'agent', content: 'Koneksi bermasalah. Coba lagi ya. 😅', ts: Date.now() }])
+    }
     finally { setLoading(false) }
   }
 
@@ -255,26 +254,31 @@ function DinaSidebar({ customer }: { customer: any }) {
       style={{ background: 'linear-gradient(180deg, #1e1b2e 0%, #14121f 100%)', maxHeight: 'calc(100vh - 100px)' }}>
       <div className="px-3 py-2.5 border-b border-violet-900/40 flex items-center gap-2 bg-violet-950/60">
         <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">DI</div>
-        <div className="flex-1 min-w-0"><div className="text-sm font-bold text-violet-100">DINA</div><div className="text-[9px] text-violet-300/70">Document AI Assistant</div></div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-violet-100">DINA</div>
+          <div className="text-[9px] text-violet-300/70 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-emerald-400" /> Gemini 2.0 Flash
+          </div>
+        </div>
         <span className="flex items-center gap-1 text-[9px] text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />online</span>
       </div>
       {customer && (
         <div className="px-3 py-1.5 bg-violet-900/30 border-b border-violet-900/40">
           <div className="text-[9px] text-violet-300/70 uppercase tracking-wider">Konteks Aktif</div>
-          <div className="text-[11px] font-semibold text-violet-100 truncate">{customer.name} · Blok {customer.units?.[0]?.blockNumber || '—'}</div>
+          <div className="text-[11px] font-semibold text-violet-100 truncate">{customer.name} · Blok {customer.units?.[0]?.blockNumber || customer.blockLetter || '—'}</div>
         </div>
       )}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5" style={{ background: '#0f0d1a' }}>
         {messages.map((msg, i) => (
           <div key={i} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-            <div className={cn('max-w-[88%] rounded-lg px-3 py-2 text-[11px] leading-relaxed', msg.role === 'user' ? 'bg-violet-700 text-white rounded-br-sm' : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-sm')}>{msg.content}</div>
+            <div className={cn('max-w-[88%] rounded-lg px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap', msg.role === 'user' ? 'bg-violet-700 text-white rounded-br-sm' : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-sm')}>{msg.content}</div>
           </div>
         ))}
         {loading && <div className="flex justify-start"><div className="bg-slate-800 border border-slate-700 rounded-lg rounded-bl-sm px-3 py-2"><Loader2 className="w-3 h-3 animate-spin text-violet-400" /></div></div>}
       </div>
       <div className="p-2 border-t border-slate-800 bg-slate-900">
         <div className="flex gap-1">
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} placeholder="Tulis pesan untuk DINA..." disabled={loading}
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} placeholder="Tanya DINA soal berkas, KPR, bank..." disabled={loading}
             className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-violet-600" />
           <button onClick={send} disabled={loading || !input.trim()} className="p-1.5 rounded bg-violet-600 text-white disabled:opacity-40 hover:bg-violet-500"><Send className="w-3 h-3" /></button>
         </div>
