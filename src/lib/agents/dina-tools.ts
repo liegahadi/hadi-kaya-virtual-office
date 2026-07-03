@@ -21,8 +21,26 @@ export interface IntentResult {
 }
 
 // ============================================================
-// INTENT DETECTION — much more comprehensive
+// Memory Categories — each agent has its own memory domain
 // ============================================================
+
+export const MEMORY_CATEGORIES = {
+  UTAMA: 'UTAMA',         // General knowledge, decisions (DINA)
+  BERKAS: 'BERKAS',       // Documents, KPR, bank process (DINA)
+  FINANCE: 'FINANCE',     // Budget, payments, invoices (RINA)
+  MATERIAL: 'MATERIAL',   // Stock, suppliers, PO (MITRA)
+  MARKETING: 'MARKETING', // Leads, prospects, campaigns (10 Marketing AI)
+} as const
+
+// Map topic keywords to memory category
+export function detectMemoryCategory(message: string): string {
+  const msg = message.toLowerCase()
+  if (msg.includes('berkas') || msg.includes('dokumen') || msg.includes('kpr') || msg.includes('bank') || msg.includes('ktp') || msg.includes('kk') || msg.includes('npwp') || msg.includes('slip') || msg.includes('sk kerja') || msg.includes('spr') || msg.includes('flpp') || msg.includes('bphtb') || msg.includes('notaris') || msg.includes('konsumen') || msg.includes('debitur')) return MEMORY_CATEGORIES.BERKAS
+  if (msg.includes('budget') || msg.includes('anggaran') || msg.includes('pembayaran') || msg.includes('invoice') || msg.includes('rab') || msg.includes('laba') || msg.includes('rugi') || msg.includes('pajak') || msg.includes('dana') || msg.includes('kas')) return MEMORY_CATEGORIES.FINANCE
+  if (msg.includes('material') || msg.includes('bahan') || msg.includes('stok') || msg.includes('supplier') || msg.includes('po') || msg.includes('semen') || msg.includes('batu') || msg.includes('pasir')) return MEMORY_CATEGORIES.MATERIAL
+  if (msg.includes('marketing') || msg.includes('prospek') || msg.includes('lead') || msg.includes('iklan') || msg.includes('kampanye')) return MEMORY_CATEGORIES.MARKETING
+  return MEMORY_CATEGORIES.UTAMA
+}
 
 export function detectIntent(message: string): IntentResult {
   const msg = message.toLowerCase()
@@ -305,18 +323,25 @@ Atasan: ${customer.atasanName || 'belum ada'} (${customer.atasanNip || 'belum ad
 }
 
 // ============================================================
-// TOOL: Get Relevant Memories
+// TOOL: Get Relevant Memories (filtered by category)
 // ============================================================
 
-async function getRelevantMemories(): Promise<ToolResult> {
-  const memories = await db.memory.findMany({ orderBy: { importance: 'desc' }, take: 15 })
+async function getRelevantMemories(message: string): Promise<ToolResult> {
+  const category = detectMemoryCategory(message)
+  // Query memories for this category + UTAMA (always include general)
+  const memories = await db.memory.findMany({
+    where: { OR: [{ category }, { category: 'UTAMA' }, { category: 'DECISION' }] },
+    orderBy: { importance: 'desc' },
+    take: 15,
+  })
+
   return {
     toolName: 'getRelevantMemories',
     success: true,
-    data: memories,
+    data: { category, memories },
     summary: memories.length > 0
-      ? `Memory sistem (${memories.length} items):\n${memories.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
-      : 'Belum ada memory tersimpan.',
+      ? `Memory kategori ${category} + UTAMA (${memories.length} items):\n${memories.map(m => `- [${m.category}] (importance: ${m.importance}) ${m.content}`).join('\n')}`
+      : `Belum ada memory untuk kategori ${category}.`,
   }
 }
 
@@ -362,7 +387,7 @@ async function updateCustomerStage(customerId: string, newStage: string): Promis
 // MAIN: Execute tools based on intent
 // ============================================================
 
-export async function executeTools(intent: IntentResult, customerId?: string): Promise<string> {
+export async function executeTools(intent: IntentResult, customerId?: string, userMessage?: string): Promise<string> {
   const results: string[] = []
 
   for (const toolName of intent.tools) {
@@ -386,7 +411,7 @@ export async function executeTools(intent: IntentResult, customerId?: string): P
           result = await getCustomerDocStatus(customerId, intent.customerName)
           break
         case 'getRelevantMemories':
-          result = await getRelevantMemories()
+          result = await getRelevantMemories(userMessage || '')
           break
         default:
           continue
@@ -447,15 +472,19 @@ export async function saveMemory(content: string, category: string, customerId?:
 
 export function extractLearning(userMessage: string, aiResponse: string): { content: string; category: string; importance: number } | null {
   const msg = userMessage.toLowerCase()
+  const category = detectMemoryCategory(userMessage)
 
-  if (msg.includes('update') || msg.includes('ubah') || msg.includes('ganti')) {
+  if (msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah')) {
     return { content: `User melakukan UPDATE: "${userMessage.substring(0, 200)}". DINA executed action.`, category: 'DECISION', importance: 0.8 }
   }
   if (msg.includes('syarat') || msg.includes('requirement') || msg.includes('proses') || msg.includes('tahap')) {
-    return { content: `User bertanya: "${userMessage.substring(0, 200)}". Jawaban: ${aiResponse.substring(0, 300)}`, category: 'FACT', importance: 0.7 }
+    return { content: `User bertanya: "${userMessage.substring(0, 200)}". Jawaban: ${aiResponse.substring(0, 300)}`, category, importance: 0.7 }
   }
-  if (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('berkas') || msg.includes('bank')) {
-    return { content: `User bertanya: "${userMessage.substring(0, 200)}"`, category: 'INTERACTION', importance: 0.4 }
+  if (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('berkas') || msg.includes('bank') || msg.includes('kpr')) {
+    return { content: `User bertanya: "${userMessage.substring(0, 200)}"`, category, importance: 0.4 }
+  }
+  if (category !== MEMORY_CATEGORIES.UTAMA) {
+    return { content: `User bertanya soal ${category}: "${userMessage.substring(0, 200)}"`, category, importance: 0.4 }
   }
 
   return null

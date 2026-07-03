@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const intent = detectIntent(message)
 
     // Step 3: Execute DB tools based on intent
-    const toolResults = await executeTools(intent, customerId)
+    const toolResults = await executeTools(intent, customerId, message)
 
     // Step 4: Build system prompt with customer context + tool results
     const customerContext = buildCustomerContext(customer)
@@ -123,20 +123,30 @@ export async function POST(req: NextRequest) {
 
     if (!aiResponse) aiResponse = 'Maaf, saya tidak bisa merespons saat ini.'
 
-    // Step 7: Save conversation + messages to DB
+    // Step 7: Save conversation + messages to DB (ALWAYS save, even without customerId)
     try {
       let conversationId: string | undefined
+
+      // Find or create conversation
+      let conversation: any
       if (customerId) {
-        let conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
+        conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
         if (!conversation) {
           conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
         }
-        conversationId = conversation.id
-        await db.message.createMany({ data: [
-          { conversationId, role: 'user', content: message },
-          { conversationId, role: 'assistant', content: aiResponse },
-        ]})
+      } else {
+        // General chat (no customer)
+        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD', customerId: null } as any })
+        if (!conversation) {
+          conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+        }
       }
+      const convId: string = conversation.id
+
+      await db.message.createMany({ data: [
+        { conversationId: convId, role: 'user', content: message },
+        { conversationId: convId, role: 'assistant', content: aiResponse },
+      ]})
     } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
 
     // Step 8: Extract learning and save to memory

@@ -214,15 +214,31 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
 
 // ============================================================
 // DINA SIDEBAR — Powered by Gemini 2.0 Flash with full knowledge base + customer context
+// Chat persists across page reloads (loaded from DB)
 function DinaSidebar({ customer }: { customer: any }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'agent'; content: string; ts: number }>>([
-    { role: 'agent', content: 'Halo! Saya DINA, Document AI Assistant untuk PT. Marlindo Bangun Persada. Saya bisa bantu soal berkas KPR, proses bank, dokumen yang dibutuhkan, dan status konsumen. Apa yang bisa saya bantu? 😊', ts: Date.now() }
+    { role: 'agent', content: 'Halo! Saya DINA, Document AI Assistant untuk PT. Marlindo Bangun Persada. Saya bisa bantu soal berkas KPR, proses bank, dokumen yang dibutuhkan, status konsumen, dan update data langsung dari database. Apa yang bisa saya bantu? 😊', ts: Date.now() }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages, loading])
+
+  // Load chat history from DB on mount (persists across reloads)
+  useEffect(() => {
+    const url = customer?.id ? `/api/dina/history?customerId=${customer.id}` : '/api/dina/history'
+    fetch(url)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.messages && d.messages.length > 0) {
+          setMessages(d.messages)
+        }
+        setHistoryLoaded(true)
+      })
+      .catch(() => setHistoryLoaded(true))
+  }, [customer?.id])
 
   async function send() {
     if (!input.trim() || loading) return
@@ -231,7 +247,6 @@ function DinaSidebar({ customer }: { customer: any }) {
     setInput('')
     setLoading(true)
     try {
-      // Call DINA directly via Gemini API with full system prompt + customer context
       const res = await fetch('/api/dina/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
