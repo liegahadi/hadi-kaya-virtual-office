@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
             'X-Title': 'Hadi Kaya DINA',
           },
           body: JSON.stringify({
-            model: 'meta-llama/llama-3.3-70b-instruct:free',
+            model: 'nvidia/nemotron-3-nano-30b-a3b:free',
             messages: [
               { role: 'system', content: systemPrompt },
               ...chatMessages,
