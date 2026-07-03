@@ -1,6 +1,6 @@
-// DINA Tools System — Database queries & system actions that DINA can use
-// DINA detects intent from user message → queries relevant DB data → includes in context
-// This makes DINA a true AI agent, not just a chatbot
+// DINA Tools System — Database queries & system actions
+// DINA can READ (query) and WRITE (update) to the database
+// This makes DINA a true AI agent that can actually DO things
 
 import { db } from '@/lib/db'
 
@@ -8,77 +8,186 @@ export interface ToolResult {
   toolName: string
   success: boolean
   data: any
-  summary: string // human-readable summary for DINA to use
+  summary: string
 }
-
-// ============================================================
-// INTENT DETECTION — analyze user message, return which tools to run
-// ============================================================
 
 export interface IntentResult {
-  tools: string[] // tool names to execute
-  customerName?: string // extracted customer name if mentioned
-  blockNumber?: string // extracted block/unit number
-  docType?: string // extracted document type
+  tools: string[]
+  customerName?: string
+  blockNumber?: string
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE'
+  newBankValue?: string
+  newStageValue?: string
 }
+
+// ============================================================
+// INTENT DETECTION — much more comprehensive
+// ============================================================
 
 export function detectIntent(message: string): IntentResult {
   const msg = message.toLowerCase()
   const tools: string[] = []
+  let action: IntentResult['action'] = 'READ'
+  let newBankValue: string | undefined
+  let newStageValue: string | undefined
+
+  // === READ INTENTS ===
 
   // Customer count / statistics
-  if (msg.includes('berapa') && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+  if (msg.includes('berapa') && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah') || msg.includes('orang'))) {
     tools.push('getCustomerStats')
   }
 
-  // Customer list / names
-  if ((msg.includes('siapa') || msg.includes('nama') || msg.includes('list') || msg.includes('daftar')) && (msg.includes('konsumen') || msg.includes('debitur'))) {
-    tools.push('getCustomerList')
+  // Customer list / names — broader matching
+  if ((msg.includes('siapa') || msg.includes('nama') || msg.includes('list') || msg.includes('daftar') || msg.includes('sebut') || msg.includes('siapa aja') || msg.includes('mana aja')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+    tools.push('getAllCustomers')
   }
 
   // Bank distribution
-  if (msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb') || msg.includes('bank')) {
-    if (msg.includes('berapa') || msg.includes('distribusi') || msg.includes('masuk')) {
-      tools.push('getBankDistribution')
+  if ((msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb')) && (msg.includes('berapa') || msg.includes('distribusi') || msg.includes('masuk') || msg.includes('berapa banyak'))) {
+    tools.push('getBankDistribution')
+  }
+
+  // Stage/pipeline
+  if (msg.includes('stage') || msg.includes('pipeline') || msg.includes('proses') || msg.includes('tahap') || msg.includes('status')) {
+    if (msg.includes('berapa') || msg.includes('distribusi') || msg.includes('ada') || msg.includes('gimana')) {
+      tools.push('getStageDistribution')
     }
   }
 
-  // Specific customer details
-  if (msg.includes('berkas') || msg.includes('lengkap') || msg.includes('kurang') || msg.includes('belum')) {
-    tools.push('getCustomerList') // to find customer by name
-  }
-
-  // Stage/pipeline distribution
-  if (msg.includes('stage') || msg.includes('pipeline') || msg.includes('proses') || msg.includes('tahap')) {
-    tools.push('getStageDistribution')
-  }
-
-  // Workplace / lokasi kerja
-  if (msg.includes('lokasi') || msg.includes('tempat kerja') || msg.includes('kerja') || msg.includes('maps') || msg.includes('google maps')) {
-    tools.push('getCustomerList') // to find customer + workplace info
-  }
-
-  // Dashboard stats (general)
-  if (msg.includes('dashboard') || msg.includes('ringkasan') || msg.includes('overview') || msg.includes('statistik')) {
-    tools.push('getCustomerStats')
+  // Dashboard / overview
+  if (msg.includes('dashboard') || msg.includes('ringkasan') || msg.includes('overview') || msg.includes('statistik') || msg.includes('summary') || msg.includes('kabar')) {
+    tools.push('getAllCustomers')
     tools.push('getStageDistribution')
     tools.push('getBankDistribution')
   }
 
-  // Always include relevant memories
+  // Document status — broader
+  if (msg.includes('berkas') || msg.includes('dokumen') || msg.includes('lengkap') || msg.includes('kurang') || msg.includes('belum') || msg.includes('kurang')) {
+    tools.push('getCustomerDocStatus')
+  }
+
+  // Workplace / lokasi
+  if ((msg.includes('lokasi') || msg.includes('tempat kerja') || msg.includes('kerja') || msg.includes('maps') || msg.includes('google maps') || msg.includes('alamat kerja')) && !msg.includes('update') && !msg.includes('ubah')) {
+    action = 'GET_WORKPLACE'
+    tools.push('getAllCustomers')
+  }
+
+  // === WRITE INTENTS (UPDATE) ===
+
+  // Update bank
+  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('pindahin') || msg.includes('gantiin')) && (msg.includes('bank') || msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb'))) {
+    action = 'UPDATE_BANK'
+    if (msg.includes('btn')) newBankValue = 'BTN'
+    if (msg.includes('mandiri')) newBankValue = 'MANDIRI'
+    if (msg.includes('bsb') || msg.includes('syariah')) newBankValue = 'BSB_SYARIAH'
+    tools.push('getAllCustomers') // find the customer first
+  }
+
+  // Update stage
+  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('majuin') || msg.includes('pindahin')) && (msg.includes('stage') || msg.includes('tahap') || msg.includes('proses') || msg.includes('status'))) {
+    action = 'UPDATE_STAGE'
+    const stageMap: Record<string, string> = {
+      'dm': 'DM', 'survey': 'SURVEY', 'closing': 'CLOSING', 'booking': 'BOOKING',
+      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'akad': 'AKAD',
+      'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
+    }
+    for (const [key, val] of Object.entries(stageMap)) {
+      if (msg.includes(key)) { newStageValue = val; break }
+    }
+    tools.push('getAllCustomers')
+  }
+
+  // Fill form / isi data
+  if ((msg.includes('isi') || msg.includes('fill') || msg.includes('bantu') && msg.includes('data')) && !msg.includes('bank')) {
+    action = 'FILL_FORM'
+    tools.push('getAllCustomers')
+  }
+
+  // Always include memories
   tools.push('getRelevantMemories')
 
-  // Extract customer name (simple heuristic)
+  // Always include ALL customers as context (so DINA knows everyone)
+  if (!tools.includes('getAllCustomers')) {
+    tools.push('getAllCustomers')
+  }
+
+  // Extract customer name
   let customerName: string | undefined
-  const nameMatch = message.match(/konsumen\s+([A-Za-z]+)/i) || message.match(/debitur\s+([A-Za-z]+)/i) || message.match(/dari\s+([A-Za-z]+)/i)
+  // Match "konsumen [Name]" or "debitur [Name]" or just a capitalized word after certain keywords
+  const nameMatch = message.match(/(?:konsumen|debitur|nasabah)\s+([A-Z][a-z]+)/) ||
+                    message.match(/(?:dari|si)\s+([A-Z][a-z]+)/) ||
+                    message.match(/\b([A-Z][a-z]{3,})\b/) // any capitalized word 3+ chars
   if (nameMatch) customerName = nameMatch[1]
 
   // Extract block number
   let blockNumber: string | undefined
-  const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d+)\b/)
+  const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue }
+}
+
+// ============================================================
+// TOOL: Get ALL Customers (full context for DINA)
+// ============================================================
+
+async function getAllCustomers(): Promise<ToolResult> {
+  const customers = await db.customer.findMany({
+    include: { units: true, bankPipelines: true },
+    take: 50,
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const customerList = customers.map(c => {
+    const block = c.units?.[0]?.blockNumber || (c.blockLetter || '') + (c.houseNumber || '') || '-'
+    const bank = c.bankName || c.bankPipelines?.[0]?.bankName || 'Belum dipilih'
+    let docCount = 0
+    let docsList: string[] = []
+    try {
+      if (c.uploadedDocs) {
+        const docs = JSON.parse(c.uploadedDocs)
+        docsList = Object.keys(docs)
+        docCount = docsList.length
+      }
+    } catch {}
+
+    return {
+      id: c.id,
+      name: c.name,
+      block,
+      bank,
+      stage: c.stage,
+      phone: c.whatsappNumber || c.phone || '',
+      nik: c.nik || '',
+      occupation: c.occupation || '',
+      companyName: c.companyName || '',
+      monthlyIncome: c.monthlyIncome || 0,
+      maritalStatus: c.maritalStatus || '',
+      docCount,
+      docsList,
+      berkasLengkap: c.berkasLengkap,
+      closingDate: c.closingDate,
+      sp3kDate: c.sp3kDate,
+      akadDate: c.akadDate,
+      workplaceMapsLink: c.workplaceMapsLink || '',
+      workplaceMapsShortLink: c.workplaceMapsShortLink || '',
+      workplaceJamOperasional: c.workplaceJamOperasional || '',
+      atasanName: c.atasanName || '',
+      atasanNip: c.atasanNip || '',
+      companyAddress: c.companyAddress || '',
+    }
+  })
+
+  const summary = `DATA SEMUA KONSUMEN (${customers.length} total):\n` +
+    customerList.map(c => `- ${c.name} | Blok ${c.block} | Bank: ${c.bank} | Stage: ${c.stage} | Telp: ${c.phone} | Dokumen: ${c.docCount} file (${c.docsList.join(', ')}) | Berkas Lengkap: ${c.berkasLengkap ? 'YA' : 'BELUM'} | Lokasi Kerja: ${c.workplaceMapsLink || 'belum ada'} | Jam Operasional: ${c.workplaceJamOperasional || 'belum ada'}`).join('\n')
+
+  return {
+    toolName: 'getAllCustomers',
+    success: true,
+    data: customerList,
+    summary,
+  }
 }
 
 // ============================================================
@@ -87,57 +196,14 @@ export function detectIntent(message: string): IntentResult {
 
 async function getCustomerStats(): Promise<ToolResult> {
   const total = await db.customer.count()
-  const byStage = await db.customer.groupBy({
-    by: ['stage'],
-    _count: true,
-  })
+  const byStage = await db.customer.groupBy({ by: ['stage'], _count: true })
   const berkasLengkap = await db.customer.count({ where: { berkasLengkap: true } })
 
   return {
     toolName: 'getCustomerStats',
     success: true,
     data: { total, byStage, berkasLengkap },
-    summary: `Total konsumen: ${total}. Berkas lengkap: ${berkasLengkap}. Stage distribution: ${byStage.map(s => `${s.stage}=${s._count}`).join(', ')}.`,
-  }
-}
-
-// ============================================================
-// TOOL: Get Customer List
-// ============================================================
-
-async function getCustomerList(customerName?: string, blockNumber?: string): Promise<ToolResult> {
-  let where: any = {}
-
-  if (customerName) {
-    where.name = { contains: customerName, mode: 'insensitive' }
-  }
-
-  if (blockNumber) {
-    where.OR = [
-      { blockLetter: { startsWith: blockNumber[0] } },
-      { units: { some: { blockNumber: { contains: blockNumber } } } },
-    ]
-  }
-
-  const customers = await db.customer.findMany({
-    where,
-    include: { units: true, bankPipelines: true },
-    take: 20,
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const customerSummary = customers.map(c => {
-    const block = c.units?.[0]?.blockNumber || c.blockLetter + (c.houseNumber || '') || '-'
-    const bank = c.bankName || c.bankPipelines?.[0]?.bankName || 'Belum dipilih'
-    const docsUploaded = c.uploadedDocs ? Object.keys(JSON.parse(c.uploadedDocs)).length : 0
-    return `- ${c.name} | Blok ${block} | ${bank} | Stage: ${c.stage} | Dokumen: ${docsUploaded} file`
-  }).join('\n')
-
-  return {
-    toolName: 'getCustomerList',
-    success: true,
-    data: customers,
-    summary: `Ditemukan ${customers.length} konsumen:\n${customerSummary}`,
+    summary: `Total konsumen: ${total}. Berkas lengkap: ${berkasLengkap}. Stage: ${byStage.map(s => `${s.stage}=${s._count}`).join(', ')}.`,
   }
 }
 
@@ -164,101 +230,77 @@ async function getBankDistribution(): Promise<ToolResult> {
 // ============================================================
 
 async function getStageDistribution(): Promise<ToolResult> {
-  const stages = await db.customer.groupBy({
-    by: ['stage'],
-    _count: true,
-    orderBy: { _count: { stage: 'desc' } },
-  })
+  const stages = await db.customer.groupBy({ by: ['stage'], _count: true, orderBy: { _count: { stage: 'desc' } } })
 
   const stageNames: Record<string, string> = {
-    DM: 'DM (Pertama kontak)',
-    SURVEY: 'Survey',
-    CLOSING: 'Closing',
-    BOOKING: 'Booking',
-    SLIK: 'SLIK (BI Checking)',
-    PEMBERKASAN: 'Pemberkasan',
-    SP3K: 'SP3K (Persetujuan Bank)',
-    AKAD: 'Akad',
-    SERAH_TERIMA: 'Serah Terima',
-    LOST: 'Lost (Batal)',
+    DM: 'DM (Pertama kontak)', SURVEY: 'Survey', CLOSING: 'Closing', BOOKING: 'Booking',
+    SLIK: 'SLIK (BI Checking)', PEMBERKASAN: 'Pemberkasan', SP3K: 'SP3K (Persetujuan Bank)',
+    AKAD: 'Akad', SERAH_TERIMA: 'Serah Terima', LOST: 'Lost (Batal)',
   }
-
-  const summary = stages.map(s => `${stageNames[s.stage] || s.stage}: ${s._count} konsumen`).join(', ')
 
   return {
     toolName: 'getStageDistribution',
     success: true,
     data: stages,
-    summary: `Pipeline: ${summary}`,
+    summary: `Pipeline: ${stages.map(s => `${stageNames[s.stage] || s.stage}=${s._count}`).join(', ')}`,
   }
 }
 
 // ============================================================
-// TOOL: Get Customer Document Status
+// TOOL: Get Customer Document Status (detailed)
 // ============================================================
 
 const REQUIRED_DOCS = [
-  { id: 'ktp', label: 'KTP' },
-  { id: 'kk', label: 'KK' },
-  { id: 'npwp', label: 'NPWP' },
-  { id: 'status-nikah', label: 'Akta Nikah/Belum Menikah' },
-  { id: 'slip-gaji', label: 'Slip Gaji' },
-  { id: 'sk-kerja', label: 'SK Kerja/NIB' },
-  { id: 'surat-rumah', label: 'Surat Belum Punya Rumah' },
-  { id: 'sertifikat', label: 'Sertifikat Rumah' },
-  { id: 'pbb', label: 'PBB' },
+  { id: 'ktp', label: 'KTP' }, { id: 'kk', label: 'KK' }, { id: 'npwp', label: 'NPWP' },
+  { id: 'status-nikah', label: 'Akta Nikah/Belum Menikah' }, { id: 'slip-gaji', label: 'Slip Gaji' },
+  { id: 'sk-kerja', label: 'SK Kerja/NIB' }, { id: 'surat-rumah', label: 'Surat Belum Punya Rumah' },
+  { id: 'sertifikat', label: 'Sertifikat Rumah' }, { id: 'pbb', label: 'PBB' },
 ]
-
 const SIGNED_DOCS = [
-  { id: 'flpp-signed', label: 'Form FLPP (TTD)' },
-  { id: 'spr-signed', label: 'SPR (TTD)' },
-  { id: 'aplikasi-signed', label: 'Form Aplikasi (TTD)' },
-  { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan (TTD)' },
-  { id: 'rekening-koran-signed', label: 'Rekening Koran (TTD)' },
-  { id: 'sp3k-btn', label: 'SP3K BTN' },
-  { id: 'sppk-mandiri', label: 'SPPK Mandiri' },
-  { id: 'sp4-bsb', label: 'SP4 BSB' },
+  { id: 'flpp-signed', label: 'Form FLPP (TTD)' }, { id: 'spr-signed', label: 'SPR (TTD)' },
+  { id: 'aplikasi-signed', label: 'Form Aplikasi (TTD)' }, { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan (TTD)' },
+  { id: 'rekening-koran-signed', label: 'Rekening Koran (TTD)' }, { id: 'sp3k-btn', label: 'SP3K BTN' },
+  { id: 'sppk-mandiri', label: 'SPPK Mandiri' }, { id: 'sp4-bsb', label: 'SP4 BSB' },
 ]
 
 async function getCustomerDocStatus(customerId?: string, customerName?: string): Promise<ToolResult> {
   let customer: any = null
-
   if (customerId) {
     customer = await db.customer.findUnique({ where: { id: customerId }, include: { units: true } })
   } else if (customerName) {
-    customer = await db.customer.findFirst({
-      where: { name: { contains: customerName, mode: 'insensitive' } },
-      include: { units: true },
-    })
+    customer = await db.customer.findFirst({ where: { name: { contains: customerName, mode: 'insensitive' } }, include: { units: true } })
+  } else {
+    // Get all customers' doc status
+    const allCustomers = await db.customer.findMany({ include: { units: true }, take: 20 })
+    const summaries = allCustomers.map(c => {
+      const uploadedDocs = c.uploadedDocs ? JSON.parse(c.uploadedDocs) : {}
+      const uploadedIds = Object.keys(uploadedDocs)
+      const missing = REQUIRED_DOCS.filter(d => !uploadedIds.includes(d.id)).map(d => d.label)
+      const block = c.units?.[0]?.blockNumber || (c.blockLetter || '') + (c.houseNumber || '') || '-'
+      return `- ${c.name} (Blok ${block}): ${uploadedIds.length} dokumen, BELUM: ${missing.join(', ') || 'semua lengkap'}`
+    }).join('\n')
+    return { toolName: 'getCustomerDocStatus', success: true, data: allCustomers, summary: `Status berkas semua konsumen:\n${summaries}` }
   }
 
-  if (!customer) {
-    return { toolName: 'getCustomerDocStatus', success: false, data: null, summary: 'Konsumen tidak ditemukan.' }
-  }
+  if (!customer) return { toolName: 'getCustomerDocStatus', success: false, data: null, summary: 'Konsumen tidak ditemukan.' }
 
   const uploadedDocs = customer.uploadedDocs ? JSON.parse(customer.uploadedDocs) : {}
   const uploadedIds = Object.keys(uploadedDocs)
-
-  const requiredComplete = REQUIRED_DOCS.filter(d => uploadedIds.includes(d.id))
   const requiredMissing = REQUIRED_DOCS.filter(d => !uploadedIds.includes(d.id))
-  const signedComplete = SIGNED_DOCS.filter(d => uploadedIds.includes(d.id))
   const signedMissing = SIGNED_DOCS.filter(d => !uploadedIds.includes(d.id))
-
-  const block = customer.units?.[0]?.blockNumber || customer.blockLetter + (customer.houseNumber || '') || '-'
-
-  const summary = `Konsumen: ${customer.name} (Blok ${block})
-Dokumen wajib LENGKAP (${requiredComplete.length}/${REQUIRED_DOCS.length}): ${requiredComplete.map(d => d.label).join(', ') || '-'}
-Dokumen wajib BELUM ADA (${requiredMissing.length}): ${requiredMissing.map(d => d.label).join(', ') || '-'}
-Dokumen TTD LENGKAP (${signedComplete.length}/${SIGNED_DOCS.length}): ${signedComplete.map(d => d.label).join(', ') || '-'}
-Dokumen TTD BELUM ADA: ${signedMissing.map(d => d.label).join(', ') || '-'}
-Workplace Maps Link: ${customer.workplaceMapsLink || 'Belum ada'}
-Workplace Short Link: ${customer.workplaceMapsShortLink || 'Belum ada'}`
+  const block = customer.units?.[0]?.blockNumber || (customer.blockLetter || '') + (customer.houseNumber || '') || '-'
 
   return {
     toolName: 'getCustomerDocStatus',
     success: true,
-    data: { customer, requiredComplete, requiredMissing, signedComplete, signedMissing },
-    summary,
+    data: { customer, requiredMissing, signedMissing },
+    summary: `Konsumen: ${customer.name} (Blok ${block}, Bank: ${customer.bankName || 'belum'}, Stage: ${customer.stage})
+Dokumen wajib SUDAH: ${REQUIRED_DOCS.filter(d => uploadedIds.includes(d.id)).map(d => d.label).join(', ') || 'tidak ada'}
+Dokumen wajib BELUM: ${requiredMissing.map(d => d.label).join(', ') || 'semua lengkap'}
+Dokumen TTD BELUM: ${signedMissing.map(d => d.label).join(', ') || 'semua lengkap'}
+Lokasi Kerja: ${customer.workplaceMapsLink || 'belum ada'}
+Jam Operasional: ${customer.workplaceJamOperasional || 'belum ada'}
+Atasan: ${customer.atasanName || 'belum ada'} (${customer.atasanNip || 'belum ada'})`,
   }
 }
 
@@ -266,22 +308,53 @@ Workplace Short Link: ${customer.workplaceMapsShortLink || 'Belum ada'}`
 // TOOL: Get Relevant Memories
 // ============================================================
 
-async function getRelevantMemories(message: string): Promise<ToolResult> {
-  const memories = await db.memory.findMany({
-    where: { OR: [{ agentId: null }, { agentId: { not: null } }] },
-    orderBy: { importance: 'desc' },
-    take: 10,
-  })
-
-  const memorySummary = memories.length > 0
-    ? memories.map(m => `- [${m.category}] ${m.content}`).join('\n')
-    : 'Belum ada memory tersimpan.'
-
+async function getRelevantMemories(): Promise<ToolResult> {
+  const memories = await db.memory.findMany({ orderBy: { importance: 'desc' }, take: 15 })
   return {
     toolName: 'getRelevantMemories',
     success: true,
     data: memories,
-    summary: `Memory sistem (${memories.length} items):\n${memorySummary}`,
+    summary: memories.length > 0
+      ? `Memory sistem (${memories.length} items):\n${memories.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
+      : 'Belum ada memory tersimpan.',
+  }
+}
+
+// ============================================================
+// TOOL: UPDATE Customer Bank (WRITE ACTION)
+// ============================================================
+
+async function updateCustomerBank(customerId: string, newBank: string): Promise<ToolResult> {
+  const customer = await db.customer.update({
+    where: { id: customerId },
+    data: { bankName: newBank },
+    include: { units: true },
+  })
+
+  return {
+    toolName: 'updateCustomerBank',
+    success: true,
+    data: customer,
+    summary: `✅ Berhasil update bank ${customer.name} → ${newBank}. Perubahan sudah tersimpan di database.`,
+  }
+}
+
+// ============================================================
+// TOOL: UPDATE Customer Stage (WRITE ACTION)
+// ============================================================
+
+async function updateCustomerStage(customerId: string, newStage: string): Promise<ToolResult> {
+  const customer = await db.customer.update({
+    where: { id: customerId },
+    data: { stage: newStage, stageUpdatedAt: new Date() },
+    include: { units: true },
+  })
+
+  return {
+    toolName: 'updateCustomerStage',
+    success: true,
+    data: customer,
+    summary: `✅ Berhasil update stage ${customer.name} → ${newStage}. Perubahan sudah tersimpan di database.`,
   }
 }
 
@@ -297,11 +370,11 @@ export async function executeTools(intent: IntentResult, customerId?: string): P
       let result: ToolResult
 
       switch (toolName) {
+        case 'getAllCustomers':
+          result = await getAllCustomers()
+          break
         case 'getCustomerStats':
           result = await getCustomerStats()
-          break
-        case 'getCustomerList':
-          result = await getCustomerList(intent.customerName, intent.blockNumber)
           break
         case 'getBankDistribution':
           result = await getBankDistribution()
@@ -313,17 +386,49 @@ export async function executeTools(intent: IntentResult, customerId?: string): P
           result = await getCustomerDocStatus(customerId, intent.customerName)
           break
         case 'getRelevantMemories':
-          result = await getRelevantMemories(intent.customerName || '')
+          result = await getRelevantMemories()
           break
         default:
           continue
       }
 
-      if (result.success) {
-        results.push(`[${toolName}] ${result.summary}`)
-      }
+      if (result.success) results.push(`[${toolName}] ${result.summary}`)
     } catch (err) {
       console.error(`Tool ${toolName} error:`, err)
+    }
+  }
+
+  // Handle WRITE actions (after reading data)
+  if (intent.action === 'UPDATE_BANK' && intent.newBankValue) {
+    // Find the customer to update
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    } else if (intent.customerName) {
+      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+
+    if (targetCustomer) {
+      const result = await updateCustomerBank(targetCustomer.id, intent.newBankValue)
+      results.push(`[updateCustomerBank] ${result.summary}`)
+    } else {
+      results.push(`[updateCustomerBank] ⚠️ Konsumen tidak ditemukan. Tanyakan ke user konsumen mana yang mau diupdate.`)
+    }
+  }
+
+  if (intent.action === 'UPDATE_STAGE' && intent.newStageValue) {
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    } else if (intent.customerName) {
+      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+
+    if (targetCustomer) {
+      const result = await updateCustomerStage(targetCustomer.id, intent.newStageValue)
+      results.push(`[updateCustomerStage] ${result.summary}`)
+    } else {
+      results.push(`[updateCustomerStage] ⚠️ Konsumen tidak ditemukan.`)
     }
   }
 
@@ -331,58 +436,26 @@ export async function executeTools(intent: IntentResult, customerId?: string): P
 }
 
 // ============================================================
-// Save memory from conversation
+// Save memory
 // ============================================================
 
 export async function saveMemory(content: string, category: string, customerId?: string, importance: number = 0.5) {
   try {
-    await db.memory.create({
-      data: {
-        content,
-        category,
-        importance,
-        source: 'CONVERSATION',
-        customerId: customerId || null,
-        agentId: null, // shared central brain
-      },
-    })
-  } catch (err) {
-    console.error('Save memory error:', err)
-  }
+    await db.memory.create({ data: { content, category, importance, source: 'CONVERSATION', customerId: customerId || null, agentId: null } })
+  } catch (err) { console.error('Save memory error:', err) }
 }
-
-// ============================================================
-// Extract learning from conversation (simple heuristic)
-// ============================================================
 
 export function extractLearning(userMessage: string, aiResponse: string): { content: string; category: string; importance: number } | null {
   const msg = userMessage.toLowerCase()
 
-  // If user asks about a specific customer, save as context
-  if (msg.includes('konsumen') || msg.includes('debitur')) {
-    return {
-      content: `User asked: "${userMessage.substring(0, 200)}". DINA answered with DB data.`,
-      category: 'INTERACTION',
-      importance: 0.3,
-    }
+  if (msg.includes('update') || msg.includes('ubah') || msg.includes('ganti')) {
+    return { content: `User melakukan UPDATE: "${userMessage.substring(0, 200)}". DINA executed action.`, category: 'DECISION', importance: 0.8 }
   }
-
-  // If user asks about bank requirements, save as fact
-  if (msg.includes('syarat') || msg.includes('requirement')) {
-    return {
-      content: `User bertanya soal syarat KPR. Jawaban: ${aiResponse.substring(0, 300)}`,
-      category: 'FACT',
-      importance: 0.7,
-    }
+  if (msg.includes('syarat') || msg.includes('requirement') || msg.includes('proses') || msg.includes('tahap')) {
+    return { content: `User bertanya: "${userMessage.substring(0, 200)}". Jawaban: ${aiResponse.substring(0, 300)}`, category: 'FACT', importance: 0.7 }
   }
-
-  // If user asks about process/stage, save as context
-  if (msg.includes('proses') || msg.includes('tahap') || msg.includes('stage')) {
-    return {
-      content: `User bertanya soal proses KPR: "${userMessage.substring(0, 200)}"`,
-      category: 'CONTEXT',
-      importance: 0.4,
-    }
+  if (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('berkas') || msg.includes('bank')) {
+    return { content: `User bertanya: "${userMessage.substring(0, 200)}"`, category: 'INTERACTION', importance: 0.4 }
   }
 
   return null
