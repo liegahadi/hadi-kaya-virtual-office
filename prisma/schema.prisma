@@ -319,8 +319,8 @@ model CustomerStageHistory {
 
 model Conversation {
   id          String   @id @default(cuid())
-  customerId  String
-  agentId     String
+  customerId  String?
+  agentId     String?
   channel     String   @default("WHATSAPP") // WHATSAPP | DASHBOARD | INSTAGRAM | FACEBOOK | TIKTOK
   status      String   @default("ACTIVE") // ACTIVE | ARCHIVED | CLOSED
   summary     String?  // AI-generated summary
@@ -328,8 +328,8 @@ model Conversation {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  agent    Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  agent    Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@index([customerId, agentId])
