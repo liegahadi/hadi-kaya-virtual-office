@@ -21,12 +21,14 @@ export async function GET(req: NextRequest) {
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 100 } },
       })
     } else {
-      // General chat (no customer) — find conversation with channel DASHBOARD but no customerId
-      conversation = await db.conversation.findFirst({
+      // General chat (no customer) — find conversation with channel DASHBOARD and no customerId
+      const allConvos = await db.conversation.findMany({
         where: { channel: 'DASHBOARD' },
         orderBy: { updatedAt: 'desc' },
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 100 } },
       })
+      // Filter to find one without customerId
+      conversation = allConvos.find(c => !c.customerId) || null
     }
 
     if (!conversation || !conversation.messages || conversation.messages.length === 0) {
