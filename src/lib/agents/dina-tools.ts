@@ -15,11 +15,16 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER'
   newBankValue?: string
   newStageValue?: string
-  updateField?: string // field name to update
-  updateValue?: string  // value to set
+  updateField?: string
+  updateValue?: string
+  // For CREATE_CUSTOMER
+  newCustomerName?: string
+  newCustomerPhone?: string
+  newCustomerBlock?: string
+  newCustomerBank?: string
 }
 
 // ============================================================
@@ -52,6 +57,10 @@ export function detectIntent(message: string): IntentResult {
   let newStageValue: string | undefined
   let intent_updateField: string | undefined
   let intent_updateValue: string | undefined
+  let newCustomerName: string | undefined
+  let newCustomerPhone: string | undefined
+  let newCustomerBlock: string | undefined
+  let newCustomerBank: string | undefined
 
   // === READ INTENTS ===
 
@@ -178,6 +187,40 @@ export function detectIntent(message: string): IntentResult {
     }
   }
 
+  // === CREATE CUSTOMER ===
+  // Detect: "tambah konsumen", "daftarin konsumen", "bikin konsumen baru", "input konsumen"
+  if ((msg.includes('tambah') || msg.includes('daftarin') || msg.includes('daftar') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input') || msg.includes('masukin konsumen')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+    action = 'CREATE_CUSTOMER'
+    // Try to extract name after "konsumen" or "nama"
+    const nameMatch = msg.match(/(?:konsumen|debitur|nasabah|nama)\s+([A-Za-z\s]+)/)
+    if (nameMatch) {
+      // Take first 3 words max
+      newCustomerName = nameMatch[1].trim().split(/\s+/).slice(0, 4).join(' ')
+      // Filter stopwords
+      const stop = ['baru', 'dong', 'ya', 'tolong', 'dengan', 'dari', 'ke', 'yang', 'ini', 'itu']
+      const words = newCustomerName.split(' ').filter((w: string) => !stop.includes(w.toLowerCase()))
+      if (words.length > 0) newCustomerName = words.join(' ')
+    }
+    // Extract phone
+    const phoneMatch = msg.match(/(?:hp|wa|whatsapp|telepon|telp|no)\s*[:.]?\s*(\d{8,15})/) || msg.match(/(\d{10,15})/)
+    if (phoneMatch) newCustomerPhone = phoneMatch[1]
+    // Extract block
+    const blockMatchCreate = msg.match(/blok\s+([A-Za-z]\d+)/i)
+    if (blockMatchCreate) newCustomerBlock = blockMatchCreate[1].toUpperCase()
+    // Extract bank
+    if (msg.includes('btn')) newCustomerBank = 'BTN'
+    else if (msg.includes('mandiri')) newCustomerBank = 'MANDIRI'
+    else if (msg.includes('bsb') || msg.includes('syariah')) newCustomerBank = 'BSB_SYARIAH'
+    tools.push('getAllCustomers')
+  }
+
+  // === DELETE CUSTOMER ===
+  // Detect: "hapus konsumen", "hapus jenni", "apus debitur", "delete konsumen", "hilangin konsumen"
+  if ((msg.includes('hapus') || msg.includes('apus') || msg.includes('delete') || msg.includes('hilangin') || msg.includes('buang') || msg.includes('remove')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+    action = 'DELETE_CUSTOMER'
+    tools.push('getAllCustomers')
+  }
+
   // Always include memories
   tools.push('getRelevantMemories')
 
@@ -215,7 +258,7 @@ export function detectIntent(message: string): IntentResult {
   const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank }
 }
 
 // ============================================================
@@ -414,6 +457,100 @@ async function getRelevantMemories(message: string): Promise<ToolResult> {
     summary: memories.length > 0
       ? `Memory kategori ${category} + UTAMA (${memories.length} items):\n${memories.map(m => `- [${m.category}] (importance: ${m.importance}) ${m.content}`).join('\n')}`
       : `Belum ada memory untuk kategori ${category}.`,
+  }
+}
+
+// ============================================================
+// TOOL: CREATE Customer (WRITE ACTION)
+// ============================================================
+
+async function createCustomer(data: { name: string; phone?: string; block?: string; bank?: string }): Promise<ToolResult> {
+  try {
+    // Find the project (Anjayo 16)
+    const project = await db.project.findFirst()
+    if (!project) {
+      return { toolName: 'createCustomer', success: false, data: null, summary: '❌ Project tidak ditemukan di database.' }
+    }
+
+    // Parse block letter + house number
+    let blockLetter = '', houseNumber = ''
+    if (data.block) {
+      const match = data.block.match(/^([A-Za-z]+)(\d+.*)$/)
+      if (match) { blockLetter = match[1]; houseNumber = match[2] }
+      else { blockLetter = data.block }
+    }
+
+    const customer = await db.customer.create({
+      data: {
+        name: data.name,
+        whatsappNumber: data.phone || null,
+        phone: data.phone || null,
+        bankName: data.bank || null,
+        blockLetter: blockLetter || null,
+        houseNumber: houseNumber || null,
+        stage: 'DM',
+        projectId: project.id,
+        closingDate: new Date(),
+      } as any,
+    })
+
+    // Create unit if block provided
+    if (data.block) {
+      await db.unit.create({
+        data: {
+          blockNumber: data.block,
+          status: 'BOOKED',
+          projectId: project.id,
+          customerId: customer.id,
+        } as any,
+      })
+    }
+
+    return {
+      toolName: 'createCustomer',
+      success: true,
+      data: customer,
+      summary: `✅ Berhasil menambahkan konsumen baru: ${customer.name}${data.block ? ` (Blok ${data.block})` : ''}${data.bank ? ` Bank: ${data.bank}` : ''}${data.phone ? ` Telp: ${data.phone}` : ''}. Stage awal: DM. Data tersimpan di database.`,
+    }
+  } catch (err: any) {
+    return { toolName: 'createCustomer', success: false, data: null, summary: `❌ GAGAL menambahkan konsumen: ${err?.message || 'unknown error'}` }
+  }
+}
+
+// ============================================================
+// TOOL: DELETE Customer (WRITE ACTION — permanent!)
+// ============================================================
+
+async function deleteCustomer(customerId: string, customerName: string): Promise<ToolResult> {
+  try {
+    // Get customer info before delete (for confirmation message)
+    const customer = await db.customer.findUnique({
+      where: { id: customerId },
+      include: { units: true },
+    })
+
+    if (!customer) {
+      return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ Konsumen tidak ditemukan.` }
+    }
+
+    // Delete all related data (cascading)
+    await db.googleDoc.deleteMany({ where: { customerId } })
+    await db.customerStageHistory.deleteMany({ where: { customerId } })
+    await db.conversation.deleteMany({ where: { customerId } })
+    await db.unit.deleteMany({ where: { customerId } })
+    await db.bankPipeline.deleteMany({ where: { customerId: customerId as any } })
+
+    // Finally delete the customer
+    await db.customer.delete({ where: { id: customerId } })
+
+    return {
+      toolName: 'deleteCustomer',
+      success: true,
+      data: { deletedCustomer: customer.name },
+      summary: `✅ Berhasil MENGHAPUS konsumen: ${customer.name} (Blok ${customer.blockLetter || '-'}${customer.houseNumber || ''}). Semua data terkait (unit, berkas, percakapan) juga dihapus permanen dari database.`,
+    }
+  } catch (err: any) {
+    return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ GAGAL menghapus: ${err?.message || 'unknown error'}` }
   }
 }
 
@@ -662,6 +799,49 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
       }
     } else {
       results.push(`[updateCustomerStage] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil. Minta user sebutkan nama konsumen dengan jelas.`)
+    }
+  }
+
+  // Handle CREATE_CUSTOMER
+  if (intent.action === 'CREATE_CUSTOMER' && intent.newCustomerName) {
+    try {
+      const result = await createCustomer({
+        name: intent.newCustomerName,
+        phone: intent.newCustomerPhone,
+        block: intent.newCustomerBlock,
+        bank: intent.newCustomerBank,
+      })
+      results.push(`[createCustomer] ${result.summary}`)
+    } catch (err: any) {
+      results.push(`[createCustomer] ❌ GAGAL: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+    }
+  } else if (intent.action === 'CREATE_CUSTOMER' && !intent.newCustomerName) {
+    results.push(`[createCustomer] ⚠️ User ingin tambah konsumen tapi nama tidak terdeteksi. Minta user sebutkan nama konsumen.`)
+  }
+
+  // Handle DELETE_CUSTOMER
+  if (intent.action === 'DELETE_CUSTOMER') {
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+    if (!targetCustomer && intent.blockNumber) {
+      targetCustomer = await db.customer.findFirst({
+        where: { OR: [
+          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+        ] }
+      })
+    }
+
+    if (targetCustomer) {
+      const result = await deleteCustomer(targetCustomer.id, targetCustomer.name)
+      results.push(`[deleteCustomer] ${result.summary}`)
+    } else {
+      results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
     }
   }
 
