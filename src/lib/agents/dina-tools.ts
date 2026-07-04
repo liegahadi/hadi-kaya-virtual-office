@@ -15,9 +15,11 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE'
   newBankValue?: string
   newStageValue?: string
+  updateField?: string // field name to update
+  updateValue?: string  // value to set
 }
 
 // ============================================================
@@ -48,6 +50,8 @@ export function detectIntent(message: string): IntentResult {
   let action: IntentResult['action'] = 'READ'
   let newBankValue: string | undefined
   let newStageValue: string | undefined
+  let intent_updateField: string | undefined
+  let intent_updateValue: string | undefined
 
   // === READ INTENTS ===
 
@@ -133,6 +137,47 @@ export function detectIntent(message: string): IntentResult {
     tools.push('getAllCustomers')
   }
 
+  // === GENERIC FIELD UPDATE ===
+  // Detect patterns like: "ubah NIK jenni jadi 12345", "ganti alamat andas ke jl xyz", "set penghasilan jenni 5000000"
+  if ((msg.includes('ubah') || msg.includes('ganti') || msg.includes('set') || msg.includes('update') || msg.includes('isi'))) {
+    const fieldPatterns: Array<{ keywords: string[], field: string }> = [
+      { keywords: ['nik', 'ktp', 'no ktp'], field: 'nik' },
+      { keywords: ['npwp', 'no npwp'], field: 'npwp' },
+      { keywords: ['alamat'], field: 'alamat' },
+      { keywords: ['telepon', 'no hp', 'wa', 'whatsapp'], field: 'telepon' },
+      { keywords: ['pekerjaan', 'job'], field: 'pekerjaan' },
+      { keywords: ['perusahaan', 'nama perusahaan'], field: 'perusahaan' },
+      { keywords: ['jabatan', 'posisi'], field: 'jabatan' },
+      { keywords: ['penghasilan', 'gaji', 'income'], field: 'penghasilan' },
+      { keywords: ['tempat lahir'], field: 'tempat lahir' },
+      { keywords: ['tanggal lahir', 'tgl lahir'], field: 'tanggal lahir' },
+      { keywords: ['tgl closing', 'tanggal closing'], field: 'tgl closing' },
+      { keywords: ['tgl sp3k', 'tanggal sp3k'], field: 'tgl sp3k' },
+      { keywords: ['tgl akad', 'tanggal akad'], field: 'tgl akad' },
+      { keywords: ['no akad'], field: 'no akad' },
+      { keywords: ['atasan', 'nama atasan'], field: 'atasan' },
+      { keywords: ['jam operasional'], field: 'jam operasional' },
+      { keywords: ['maps link', 'link maps'], field: 'maps link' },
+      { keywords: ['short link'], field: 'short link' },
+    ]
+
+    for (const fp of fieldPatterns) {
+      if (fp.keywords.some(kw => msg.includes(kw))) {
+        // Check this is not just asking about the field (e.g., "berapa penghasilan jenni?")
+        const isAsking = msg.includes('berapa') || msg.includes('apa') || msg.includes('siapa')
+        if (!isAsking) {
+          action = 'UPDATE_FIELD'
+          intent_updateField = fp.field
+          // Try to extract the value after "jadi" or "ke" or "="
+          const valueMatch = msg.match(/(?:jadi|ke|=)\s*(.+?)(?:\s*(?:dong|ya|tolong|saya|untuk|dari|$))/)
+          if (valueMatch) intent_updateValue = valueMatch[1].trim()
+          tools.push('getAllCustomers')
+        }
+        break
+      }
+    }
+  }
+
   // Always include memories
   tools.push('getRelevantMemories')
 
@@ -170,7 +215,7 @@ export function detectIntent(message: string): IntentResult {
   const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue }
 }
 
 // ============================================================
@@ -373,40 +418,117 @@ async function getRelevantMemories(message: string): Promise<ToolResult> {
 }
 
 // ============================================================
-// TOOL: UPDATE Customer Bank (WRITE ACTION)
+// TOOL: UPDATE Customer Field (generic WRITE — any field)
 // ============================================================
 
-async function updateCustomerBank(customerId: string, newBank: string): Promise<ToolResult> {
-  const customer = await db.customer.update({
-    where: { id: customerId },
-    data: { bankName: newBank },
-    include: { units: true },
-  })
-
-  return {
-    toolName: 'updateCustomerBank',
-    success: true,
-    data: customer,
-    summary: `✅ Berhasil update bank ${customer.name} → ${newBank}. Perubahan sudah tersimpan di database.`,
+async function updateCustomerField(customerId: string, field: string, value: any): Promise<ToolResult> {
+  // Map common field names to DB column names
+  const fieldMap: Record<string, string> = {
+    'bank': 'bankName', 'nama bank': 'bankName',
+    'stage': 'stage', 'status': 'stage', 'tahap': 'stage',
+    'nik': 'nik', 'ktp': 'nik', 'nomor ktp': 'nik',
+    'npwp': 'npwpNumber', 'nomor npwp': 'npwpNumber',
+    'nama': 'name', 'nama lengkap': 'name', 'nama konsumen': 'name',
+    'alamat': 'ktpAddress', 'alamat ktp': 'ktpAddress',
+    'telepon': 'whatsappNumber', 'no hp': 'whatsappNumber', 'wa': 'whatsappNumber', 'whatsapp': 'whatsappNumber',
+    'pekerjaan': 'occupation', 'job': 'occupation',
+    'perusahaan': 'companyName', 'nama perusahaan': 'companyName',
+    'jabatan': 'workPosition', 'posisi': 'workPosition',
+    'penghasilan': 'monthlyIncome', 'gaji': 'monthlyIncome', 'income': 'monthlyIncome',
+    'tempat lahir': 'birthPlace',
+    'tanggal lahir': 'birthDate',
+    'blok': 'blockLetter',
+    'no rumah': 'houseNumber',
+    'luas tanah': 'landSize',
+    'luas bangunan': 'houseSize',
+    'tgl closing': 'closingDate', 'tanggal closing': 'closingDate',
+    'tgl sp3k': 'sp3kDate', 'tanggal sp3k': 'sp3kDate',
+    'tgl akad': 'akadDate', 'tanggal akad': 'akadDate',
+    'no akad': 'akadNumber',
+    'tgl lpa': 'lpaDate', 'tanggal lpa': 'lpaDate',
+    'no lpa': 'lpaNumber',
+    'no rekening btn': 'btnAccountNumber', 'rekening btn': 'btnAccountNumber',
+    'atasan': 'atasanName', 'nama atasan': 'atasanName',
+    'no hp atasan': 'atasanNip',
+    'jam operasional': 'workplaceJamOperasional',
+    'waktu hubungi': 'workplaceWaktuHubungi',
+    'maps link': 'workplaceMapsLink',
+    'short link': 'workplaceMapsShortLink',
+    'berkas lengkap': 'berkasLengkap',
   }
-}
 
-// ============================================================
-// TOOL: UPDATE Customer Stage (WRITE ACTION)
-// ============================================================
+  const dbField = fieldMap[field.toLowerCase()] || field
+  const isDateField = ['closingDate', 'sp3kDate', 'akadDate', 'lpaDate', 'birthDate'].includes(dbField)
+  const isIntField = ['landSize', 'houseSize', 'monthlyIncome', 'gajiPokok'].includes(dbField)
+  const isBoolField = ['berkasLengkap'].includes(dbField)
 
-async function updateCustomerStage(customerId: string, newStage: string): Promise<ToolResult> {
-  const customer = await db.customer.update({
-    where: { id: customerId },
-    data: { stage: newStage, stageUpdatedAt: new Date() },
-    include: { units: true },
-  })
+  let dbValue: any = value
+  if (isDateField) {
+    // Parse date — accept "2025-06-30", "30 Juni 2025", "30/06/2025"
+    const dateStr = String(value).trim()
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      dbValue = new Date(dateStr)
+    } else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      const [d, m, y] = dateStr.split('/')
+      dbValue = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`)
+    } else {
+      // Try Indonesian date format
+      const months: Record<string, string> = {
+        'januari': '01', 'februari': '02', 'maret': '03', 'april': '04', 'mei': '05', 'juni': '06',
+        'juli': '07', 'agustus': '08', 'september': '09', 'oktober': '10', 'november': '11', 'desember': '12',
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'okt': '10',
+      }
+      const match = dateStr.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/)
+      if (match) {
+        const day = match[1].padStart(2, '0')
+        const month = months[match[2].toLowerCase()] || '01'
+        dbValue = new Date(`${match[3]}-${month}-${day}`)
+      }
+    }
+  }
+  if (isIntField) dbValue = parseInt(String(value).replace(/[^\d]/g, '')) || 0
+  if (isBoolField) dbValue = ['true', 'ya', 'lengkap', '1', 'yes'].includes(String(value).toLowerCase())
 
-  return {
-    toolName: 'updateCustomerStage',
-    success: true,
-    data: customer,
-    summary: `✅ Berhasil update stage ${customer.name} → ${newStage}. Perubahan sudah tersimpan di database.`,
+  // Bank name normalization
+  if (dbField === 'bankName') {
+    const v = String(value).toLowerCase()
+    if (v.includes('btn')) dbValue = 'BTN'
+    else if (v.includes('mandiri')) dbValue = 'MANDIRI'
+    else if (v.includes('bsb') || v.includes('syariah') || v.includes('sumsel') || v.includes('babel')) dbValue = 'BSB_SYARIAH'
+  }
+
+  // Stage normalization
+  if (dbField === 'stage') {
+    const stageMap: Record<string, string> = {
+      'dm': 'DM', 'survey': 'SURVEY', 'closing': 'CLOSING', 'booking': 'BOOKING',
+      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'sppk': 'SP3K',
+      'akad': 'AKAD', 'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
+    }
+    const v = String(value).toLowerCase()
+    for (const [key, val] of Object.entries(stageMap)) {
+      if (v.includes(key)) { dbValue = val; break }
+    }
+  }
+
+  try {
+    const customer = await db.customer.update({
+      where: { id: customerId },
+      data: { [dbField]: dbValue },
+    })
+    return {
+      toolName: 'updateCustomerField',
+      success: true,
+      data: { field: dbField, value: dbValue, customer },
+      summary: `✅ Berhasil update ${dbField} = ${dbValue} untuk konsumen ${customer.name}.`,
+    }
+  } catch (err: any) {
+    return {
+      toolName: 'updateCustomerField',
+      success: false,
+      data: null,
+      summary: `❌ GAGAL update ${dbField}: ${err?.message || 'unknown error'}`,
+    }
   }
 }
 
@@ -450,8 +572,35 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     }
   }
 
-  // Handle WRITE actions (after reading data)
-  // CRITICAL: These must actually execute against DB and report real results
+  // Handle UPDATE_FIELD (generic field update)
+  if (intent.action === 'UPDATE_FIELD' && intent.updateField) {
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+    if (!targetCustomer && intent.blockNumber) {
+      targetCustomer = await db.customer.findFirst({
+        where: { OR: [
+          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+        ] }
+      })
+    }
+
+    if (targetCustomer && intent.updateValue) {
+      const result = await updateCustomerField(targetCustomer.id, intent.updateField, intent.updateValue)
+      results.push(`[updateCustomerField] ${result.summary}`)
+    } else if (!targetCustomer) {
+      results.push(`[updateCustomerField] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
+    } else if (!intent.updateValue) {
+      results.push(`[updateCustomerField] ⚠️ Field "${intent.updateField}" terdeteksi tapi value tidak ditemukan. Minta user sebutkan value yang baru.`)
+    }
+  }
+
+  // Handle UPDATE_BANK (still works, uses generic updateCustomerField)
   if (intent.action === 'UPDATE_BANK' && intent.newBankValue) {
     let targetCustomer: any = null
     if (customerId) {
@@ -475,7 +624,7 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
 
     if (targetCustomer) {
       try {
-        const result = await updateCustomerBank(targetCustomer.id, intent.newBankValue)
+        const result = await updateCustomerField(targetCustomer.id, 'bankName', intent.newBankValue)
         results.push(`[updateCustomerBank] ${result.summary}`)
       } catch (err: any) {
         results.push(`[updateCustomerBank] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
@@ -506,7 +655,7 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
 
     if (targetCustomer) {
       try {
-        const result = await updateCustomerStage(targetCustomer.id, intent.newStageValue)
+        const result = await updateCustomerField(targetCustomer.id, 'stage', intent.newStageValue)
         results.push(`[updateCustomerStage] ${result.summary}`)
       } catch (err: any) {
         results.push(`[updateCustomerStage] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)

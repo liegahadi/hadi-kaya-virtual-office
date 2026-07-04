@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
       response: aiResponse,
       model: modelUsed,
       toolsExecuted: intent.tools,
-      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE',
+      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD',
     })
   } catch (err: any) {
     console.error('DINA chat error:', err)
