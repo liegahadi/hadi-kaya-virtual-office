@@ -157,7 +157,13 @@ export async function POST(req: NextRequest) {
       }
     } catch (memErr) { console.error('Memory save (non-fatal):', memErr) }
 
-    return NextResponse.json({ success: true, response: aiResponse, model: modelUsed, toolsExecuted: intent.tools })
+    return NextResponse.json({
+      success: true,
+      response: aiResponse,
+      model: modelUsed,
+      toolsExecuted: intent.tools,
+      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE',
+    })
   } catch (err: any) {
     console.error('DINA chat error:', err)
     return NextResponse.json({ success: false, error: err?.message || 'Failed' }, { status: 500 })
