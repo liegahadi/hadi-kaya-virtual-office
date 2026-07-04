@@ -162,7 +162,7 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
       </div>
 
       {/* DINA SIDEBAR - PERSISTENT */}
-      <DinaSidebar customer={selectedCustomer} />
+      <DinaSidebar customer={selectedCustomer} onDbUpdate={fetchCustomers} />
     </div>
   )
 }
@@ -215,7 +215,8 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
 // ============================================================
 // DINA SIDEBAR — Powered by Gemini 2.0 Flash with full knowledge base + customer context
 // Chat persists across page reloads (loaded from DB)
-function DinaSidebar({ customer }: { customer: any }) {
+// DINA can READ and WRITE to database (update bank, stage, etc)
+function DinaSidebar({ customer, onDbUpdate }: { customer: any; onDbUpdate?: () => void }) {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'agent'; content: string; ts: number }>>([
     { role: 'agent', content: 'Halo! Saya DINA, Document AI Assistant untuk PT. Marlindo Bangun Persada. Saya bisa bantu soal berkas KPR, proses bank, dokumen yang dibutuhkan, status konsumen, dan update data langsung dari database. Apa yang bisa saya bantu? 😊', ts: Date.now() }
   ])
@@ -255,6 +256,11 @@ function DinaSidebar({ customer }: { customer: any }) {
       const d = await res.json()
       if (d.success) {
         setMessages(prev => [...prev, { role: 'agent', content: d.response, ts: Date.now() }])
+        // If DINA updated the database, refresh the dashboard
+        if (d.dbUpdated && onDbUpdate) {
+          onDbUpdate()
+          toast.success('🔄 Data diperbarui oleh DINA — dashboard direfresh')
+        }
       } else {
         setMessages(prev => [...prev, { role: 'agent', content: 'Maaf, saya lagi ada gangguan teknis. Coba lagi ya. 😅', ts: Date.now() }])
       }

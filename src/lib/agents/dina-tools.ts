@@ -91,27 +91,38 @@ export function detectIntent(message: string): IntentResult {
     tools.push('getAllCustomers')
   }
 
-  // === WRITE INTENTS (UPDATE) ===
+  // === WRITE INTENTS (UPDATE) — broader detection ===
 
-  // Update bank
-  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('pindahin') || msg.includes('gantiin')) && (msg.includes('bank') || msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb'))) {
+  // Update bank — catch any "ubah/ganti/pindah/update" + bank name
+  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('pindahin') || msg.includes('gantiin') || msg.includes('jadikan') || msg.includes('masukin ke')) && (msg.includes('bank') || msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb') || msg.includes('syariah'))) {
     action = 'UPDATE_BANK'
     if (msg.includes('btn')) newBankValue = 'BTN'
     if (msg.includes('mandiri')) newBankValue = 'MANDIRI'
     if (msg.includes('bsb') || msg.includes('syariah')) newBankValue = 'BSB_SYARIAH'
-    tools.push('getAllCustomers') // find the customer first
+    tools.push('getAllCustomers')
   }
 
-  // Update stage
-  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('majuin') || msg.includes('pindahin')) && (msg.includes('stage') || msg.includes('tahap') || msg.includes('proses') || msg.includes('status'))) {
+  // Update stage — catch "ubah status jadi sp3k", "ganti stage ke akad", etc
+  // Also catch: "jadi sp3k", "jadikan sp3k", "pindah ke sp3k", "maju ke akad"
+  const stageKeywords = ['dm', 'survey', 'closing', 'booking', 'slik', 'pemberkasan', 'sp3k', 'sppk', 'akad', 'serah terima', 'serahterima']
+  const hasStageKeyword = stageKeywords.some(kw => msg.includes(kw))
+  const hasUpdateKeyword = msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('majuin') || msg.includes('pindahin') || msg.includes('jadikan') || msg.includes('jadi') || msg.includes('masuk') || msg.includes('naik')
+
+  if (hasStageKeyword && (hasUpdateKeyword || msg.includes('status') || msg.includes('stage') || msg.includes('tahap'))) {
     action = 'UPDATE_STAGE'
     const stageMap: Record<string, string> = {
       'dm': 'DM', 'survey': 'SURVEY', 'closing': 'CLOSING', 'booking': 'BOOKING',
-      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'akad': 'AKAD',
-      'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
+      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'sppk': 'SP3K',
+      'akad': 'AKAD', 'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
     }
     for (const [key, val] of Object.entries(stageMap)) {
       if (msg.includes(key)) { newStageValue = val; break }
+    }
+    // If stage keyword found but not in map, try uppercase
+    if (!newStageValue) {
+      for (const kw of stageKeywords) {
+        if (msg.includes(kw)) { newStageValue = kw.toUpperCase().replace(' ', '_'); break }
+      }
     }
     tools.push('getAllCustomers')
   }
@@ -130,13 +141,29 @@ export function detectIntent(message: string): IntentResult {
     tools.push('getAllCustomers')
   }
 
-  // Extract customer name
+  // Extract customer name — case insensitive, try multiple patterns
   let customerName: string | undefined
-  // Match "konsumen [Name]" or "debitur [Name]" or just a capitalized word after certain keywords
-  const nameMatch = message.match(/(?:konsumen|debitur|nasabah)\s+([A-Z][a-z]+)/) ||
-                    message.match(/(?:dari|si)\s+([A-Z][a-z]+)/) ||
-                    message.match(/\b([A-Z][a-z]{3,})\b/) // any capitalized word 3+ chars
-  if (nameMatch) customerName = nameMatch[1]
+  // Pattern 1: "konsumen/debitur/nasabah [Name]" (case insensitive)
+  const nameMatch1 = message.match(/(?:konsumen|debitur|nasabah)\s+([A-Za-z]+)/i)
+  // Pattern 2: "dari/si [Name]"
+  const nameMatch2 = message.match(/(?:dari|si)\s+([A-Za-z]+)/i)
+  // Pattern 3: any word 3+ chars (lowercase too — will match against DB case-insensitive)
+  const nameMatch3 = message.match(/\b([A-Za-z]{3,})\b/)
+  // Pattern 4: "ubah/ganti/update [Name] ..."
+  const nameMatch4 = message.match(/(?:ubah|ganti|update|pindah|jadikan)\s+(?:status\s+)?(?:konsumen\s+)?(?:debitur\s+)?([A-Za-z]+)/i)
+
+  if (nameMatch4) customerName = nameMatch4[1]
+  else if (nameMatch1) customerName = nameMatch1[1]
+  else if (nameMatch2) customerName = nameMatch2[1]
+  // Don't use nameMatch3 — too noisy (matches "ubah", "jadi", etc)
+
+  // Filter out common non-name words
+  const stopWords = ['ubah', 'ganti', 'update', 'pindah', 'jadikan', 'jadi', 'status', 'stage', 'tahap', 'bank', 'btn', 'mandiri', 'bsb', 'syariah', 'sp3k', 'sppk', 'akad', 'booking', 'closing', 'survey', 'slik', 'pemberkasan', 'serah', 'terima', 'dong', 'ke', 'yang', 'ini', 'itu', 'dari', 'untuk', 'pada', 'dengan', 'agar', 'supaya', 'bisa', 'tolong', 'bantu', 'mohon', 'jenni']
+  // Note: 'jenni' is removed from stopwords — we WANT to match it
+  const actualStopWords = ['ubah', 'ganti', 'update', 'pindah', 'jadikan', 'jadi', 'status', 'stage', 'tahap', 'bank', 'btn', 'mandiri', 'bsb', 'syariah', 'sp3k', 'sppk', 'akad', 'booking', 'closing', 'survey', 'slik', 'pemberkasan', 'serah', 'terima', 'dong', 'yang', 'ini', 'itu', 'untuk', 'pada', 'dengan', 'agar', 'supaya', 'bisa', 'tolong', 'bantu', 'mohon', 'dengan', 'saya', 'kamu', 'kita']
+  if (customerName && actualStopWords.includes(customerName.toLowerCase())) {
+    customerName = undefined
+  }
 
   // Extract block number
   let blockNumber: string | undefined
@@ -424,20 +451,37 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
   }
 
   // Handle WRITE actions (after reading data)
+  // CRITICAL: These must actually execute against DB and report real results
   if (intent.action === 'UPDATE_BANK' && intent.newBankValue) {
-    // Find the customer to update
     let targetCustomer: any = null
     if (customerId) {
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
-    } else if (intent.customerName) {
-      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      // Case-insensitive search
+      targetCustomer = await db.customer.findFirst({
+        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      })
+    }
+    // Try block number if name not found
+    if (!targetCustomer && intent.blockNumber) {
+      targetCustomer = await db.customer.findFirst({
+        where: { OR: [
+          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+        ] }
+      })
     }
 
     if (targetCustomer) {
-      const result = await updateCustomerBank(targetCustomer.id, intent.newBankValue)
-      results.push(`[updateCustomerBank] ${result.summary}`)
+      try {
+        const result = await updateCustomerBank(targetCustomer.id, intent.newBankValue)
+        results.push(`[updateCustomerBank] ${result.summary}`)
+      } catch (err: any) {
+        results.push(`[updateCustomerBank] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+      }
     } else {
-      results.push(`[updateCustomerBank] ⚠️ Konsumen tidak ditemukan. Tanyakan ke user konsumen mana yang mau diupdate.`)
+      results.push(`[updateCustomerBank] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil. Minta user sebutkan nama konsumen dengan jelas.`)
     }
   }
 
@@ -445,15 +489,30 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     let targetCustomer: any = null
     if (customerId) {
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
-    } else if (intent.customerName) {
-      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      targetCustomer = await db.customer.findFirst({
+        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      })
+    }
+    if (!targetCustomer && intent.blockNumber) {
+      targetCustomer = await db.customer.findFirst({
+        where: { OR: [
+          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+        ] }
+      })
     }
 
     if (targetCustomer) {
-      const result = await updateCustomerStage(targetCustomer.id, intent.newStageValue)
-      results.push(`[updateCustomerStage] ${result.summary}`)
+      try {
+        const result = await updateCustomerStage(targetCustomer.id, intent.newStageValue)
+        results.push(`[updateCustomerStage] ${result.summary}`)
+      } catch (err: any) {
+        results.push(`[updateCustomerStage] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+      }
     } else {
-      results.push(`[updateCustomerStage] ⚠️ Konsumen tidak ditemukan.`)
+      results.push(`[updateCustomerStage] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil. Minta user sebutkan nama konsumen dengan jelas.`)
     }
   }
 
