@@ -135,7 +135,44 @@ export async function POST(req: NextRequest) {
           channel: 'DASHBOARD',
           // No conversationId — scope by channel only (dashboard = single owner)
         }
-    const toolResults = await executeTools(intent, customerId, message, executeContext)
+    const toolExecution = await executeTools(intent, customerId, message, executeContext)
+    const toolResults = toolExecution.results
+
+    // === CRITICAL: If executeTools returned a directResponse, BYPASS the LLM call entirely.
+    // This prevents hallucinations on critical operations (DELETE, CONFIRM, CANCEL).
+    // The LLM (especially Nemotron fallback) tends to hallucinate "Berhasil menghapus X"
+    // even when no delete actually happened. Direct response = tool result = truth.
+    if (toolExecution.directResponse) {
+      const aiResponseDirect = toolExecution.directResponse
+      console.log(`[DINA] directResponse bypass: action=${intent.action}, response="${aiResponseDirect.substring(0, 80)}..."`)
+
+      // Save messages to DB (for history continuity)
+      try {
+        if (conversationId) {
+          await db.message.createMany({ data: [
+            { conversationId, role: 'user', content: message },
+            { conversationId, role: 'assistant', content: aiResponseDirect },
+          ]})
+          await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
+        }
+      } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
+
+      // Extract learning (lightweight, no LLM needed)
+      try {
+        const learning = extractLearning(message, aiResponseDirect)
+        if (learning) {
+          await saveMemory(learning.content, learning.category, customerId, learning.importance)
+        }
+      } catch (memErr) { console.error('Memory save (non-fatal):', memErr) }
+
+      return NextResponse.json({
+        success: true,
+        response: aiResponseDirect,
+        model: 'direct-bypass',
+        toolsExecuted: intent.tools,
+        dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
+      })
+    }
 
     // Step 3: Check if there's a pending action — tell LLM about it so it knows context
     const pendingAction = await getActivePendingAction(executeContext)

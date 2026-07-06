@@ -937,8 +937,9 @@ export async function executeTools(
   customerId?: string,
   userMessage?: string,
   executeContext: ExecuteContext = {},
-): Promise<string> {
+): Promise<{ results: string; directResponse: string | null }> {
   const results: string[] = []
+  let directResponse: string | null = null  // If set, chat route returns this directly without calling LLM
 
   for (const toolName of intent.tools) {
     try {
@@ -1091,38 +1092,47 @@ export async function executeTools(
 
   // Handle CONFIRM_DELETE / CONFIRM_CREATE — user confirmed, fetch from DB
   // CRITICAL: Validate target name matches user's confirmation message to prevent wrong-customer deletes
+  // CRITICAL: For all delete operations, set directResponse to bypass LLM (prevent hallucination)
   if (intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE') {
     const pending = await getActivePendingAction(executeContext)
     if (!pending) {
       results.push(`[confirm] ⚠️ Tidak ada aksi pending yang menunggu konfirmasi. JANGAN bilang berhasil melakukan apapun. Minta user jelaskan apa yang ingin dilakukan.`)
+      directResponse = `Tidak ada aksi yang menunggu konfirmasi. Silakan sebutkan apa yang ingin Anda lakukan. 🙏`
     } else if (pending.type === 'DELETE') {
       // Validate target still exists
       if (!pending.targetId) {
         results.push(`[deleteCustomer] ❌ Pending action tidak punya target ID. Aksi dibatalkan.`)
+        directResponse = `❌ Aksi penghapusan dibatalkan karena tidak ada target yang valid. Silakan ulangi permintaan dengan menyebutkan nama konsumen.`
         await cancelPendingAction(executeContext)
       } else {
         const target = await db.customer.findUnique({ where: { id: pending.targetId } })
         if (!target) {
           results.push(`[deleteCustomer] ❌ Konsumen "${pending.targetName}" tidak ditemukan (mungkin sudah dihapus). Aksi dibatalkan.`)
+          directResponse = `❌ Konsumen "${pending.targetName}" tidak ditemukan di database (mungkin sudah dihapus). Aksi dibatalkan.`
           await cancelPendingAction(executeContext)
         } else {
           // VALIDATION: if user's confirmation message contains a customer name that differs
           // from the pending target, ABORT (user is confused about what they're confirming)
           const msgLower = (userMessage || '').toLowerCase()
           const targetNameLower = (target.name || '').toLowerCase()
-          // Extract first name token from target
-          const targetFirstToken = targetNameLower.split(/\s+/)[0]
           // Check if msg mentions a DIFFERENT customer name
           const otherCustomers = await db.customer.findMany({
             where: { id: { not: target.id } },
             select: { name: true }
           })
-          const mentionsOther = otherCustomers.some(c => {
+          const mentionsOther = otherCustomers.find(c => {
             const cFirst = (c.name || '').toLowerCase().split(/\s+/)[0]
             return cFirst.length >= 3 && msgLower.includes(cFirst) && !targetNameLower.includes(cFirst)
           })
           if (mentionsOther) {
-            results.push(`[deleteCustomer] ❌ ABORT: Pesan konfirmasi menyebutkan nama konsumen LAIN, bukan "${target.name}" yang sebelumnya diminta untuk dihapus. Aksi dibatalkan demi keamanan. Jelaskan ke user: "Konfirmasi dibatalkan karena nama di pesan tidak cocok dengan konsumen yang akan dihapus. Sebutkan nama dengan jelas jika ingin hapus konsumen lain."`)
+            results.push(`[deleteCustomer] ❌ ABORT: Pesan konfirmasi menyebutkan nama konsumen LAIN ("${mentionsOther.name}"), bukan "${target.name}" yang sebelumnya diminta untuk dihapus. Aksi dibatalkan demi keamanan.`)
+            directResponse = `⚠️ **Konfirmasi DIBATALKAN otomatis.**
+
+Alasan: Pesan Anda menyebutkan nama konsumen lain ("${mentionsOther.name}"), tetapi aksi pending yang menunggu konfirmasi adalah penghapusan "${target.name}".
+
+Demi keamanan, aksi penghapusan dibatalkan. **Tidak ada konsumen yang dihapus.** ✅
+
+Jika Anda ingin menghapus konsumen lain, silakan buat permintaan baru dengan menyebutkan nama lengkapnya. 🙏`
             await cancelPendingAction(executeContext)
           } else {
             // All checks passed — execute delete
@@ -1137,6 +1147,7 @@ export async function executeTools(
               userMessage: userMessage?.substring(0, 200),
             })
             results.push(`[deleteCustomer] ${result.summary}`)
+            directResponse = result.summary  // Use the actual tool result (no LLM)
           }
         }
       }
@@ -1150,12 +1161,15 @@ export async function executeTools(
           confirmedBy: executeContext.senderNumber || 'dashboard',
         })
         results.push(`[createCustomer] ${result.summary}`)
+        directResponse = result.summary
       } else {
         results.push(`[createCustomer] ❌ Data konsumen tidak lengkap di pending action.`)
+        directResponse = `❌ Data konsumen tidak lengkap. Aksi dibatalkan.`
         await cancelPendingAction(executeContext)
       }
     } else {
       results.push(`[confirm] ⚠️ Tipe pending action tidak dikenal: ${pending.type}`)
+      directResponse = `⚠️ Tipe aksi pending tidak dikenal. Aksi dibatalkan.`
       await cancelPendingAction(executeContext)
     }
   }
@@ -1166,8 +1180,10 @@ export async function executeTools(
     if (pending) {
       await cancelPendingAction(executeContext)
       results.push(`[cancel] ✅ Aksi pending (${pending.type} ${pending.targetName || ''}) telah dibatalkan.`)
+      directResponse = `✅ Aksi pending (${pending.type}${pending.targetName ? ' ' + pending.targetName : ''}) telah dibatalkan. Tidak ada perubahan yang dilakukan di database.`
     } else {
       results.push(`[cancel] ℹ️ Tidak ada aksi pending yang perlu dibatalkan.`)
+      directResponse = `ℹ️ Tidak ada aksi pending yang perlu dibatalkan.`
     }
   }
 
@@ -1238,13 +1254,29 @@ export async function executeTools(
         customerData: null,
       })
       const block = (targetCustomer.blockLetter || '') + (targetCustomer.houseNumber || '') || '-'
-      results.push(`[deleteCustomer] ⏳ PENDING (DB-backed): Konsumen "${targetCustomer.name}" (Blok ${block}, ID: ${targetCustomer.id}) akan dihapus PERMANEN. Semua data (berkas, unit, percakapan) akan hilang. Tanya user: "Yakin ingin hapus ${targetCustomer.name}? Ketik 'ya' untuk konfirmasi (atau 'batal' untuk membatalkan)." Pending action ini expired dalam 5 menit.`)
+      const bank = targetCustomer.bankName || 'belum dipilih'
+      results.push(`[deleteCustomer] ⏳ PENDING (DB-backed): Konsumen "${targetCustomer.name}" (Blok ${block}, ID: ${targetCustomer.id}) akan dihapus PERMANEN.`)
+      // Direct response — bypass LLM to prevent hallucination
+      directResponse = `⚠️ **Konfirmasi Penghapusan**
+
+Yakin ingin menghapus konsumen berikut SECARA PERMANEN?
+
+• Nama: **${targetCustomer.name}**
+• Blok: **${block}**
+• Bank: **${bank}**
+
+Semua data terkait (berkas, unit, percakapan) akan ikut terhapus dan TIDAK bisa dikembalikan.
+
+Ketik **"ya"** untuk konfirmasi, atau **"batal"** untuk membatalkan.
+
+_Pending action akan expired dalam 5 menit._`
     } else {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
+      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap atau blok yang benar. 🙏`
     }
   }
 
-  return results.join('\n\n')
+  return { results: results.join('\n\n'), directResponse }
 }
 
 // ============================================================
