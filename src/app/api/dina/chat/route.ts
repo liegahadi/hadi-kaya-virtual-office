@@ -113,8 +113,12 @@ export async function POST(req: NextRequest) {
           })
         }
       } else {
-        // General dashboard chat
-        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD' } })
+        // General dashboard chat — pick MOST RECENTLY ACTIVE dashboard conversation
+        // (there might be multiple from different customer tabs; we want the latest)
+        conversation = await db.conversation.findFirst({
+          where: { channel: 'DASHBOARD' },
+          orderBy: { updatedAt: 'desc' },
+        })
         if (!conversation) {
           conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
         }
