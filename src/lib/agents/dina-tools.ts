@@ -762,6 +762,103 @@ Atasan: ${customer.atasanName || 'belum ada'} (${customer.atasanNip || 'belum ad
 }
 
 // ============================================================
+// HELPER: Find customer by name with duplicate detection
+// Returns:
+//   - { customer, duplicates: [] } if exactly 1 match
+//   - { customer: first, duplicates: [...] } if 2+ matches (caller must disambiguate)
+//   - null if no match
+//
+// CRITICAL: 2+ customers can have SAME exact name + birthdate (rare but legal).
+// When this happens, DINA must NOT silently pick the first one — that causes
+// wrong-customer operations (e.g., delete wrong person, send wrong berkas).
+// Instead: list all matches + ask user to disambiguate by blok or NIK.
+// ============================================================
+
+export interface CustomerLookupResult {
+  customer: any  // first match (for backwards-compat in non-critical paths)
+  duplicates: any[]  // empty if only 1 match, otherwise ALL matches (including customer)
+  needsDisambiguation: boolean
+}
+
+export async function findCustomerWithDisambiguation(
+  name: string,
+  options?: { nik?: string; blockNumber?: string }
+): Promise<CustomerLookupResult | null> {
+  // If NIK provided, use that (NIK is unique per person by Indonesian law)
+  if (options?.nik) {
+    const byNik = await db.customer.findFirst({
+      where: { nik: options.nik },
+      include: { units: true },
+    })
+    if (byNik) {
+      return { customer: byNik, duplicates: [], needsDisambiguation: false }
+    }
+    // NIK not found — fall through to name search
+  }
+
+  // If blockNumber provided, use that (each unit is unique)
+  if (options?.blockNumber) {
+    const byBlock = await db.customer.findFirst({
+      where: {
+        OR: [
+          { blockLetter: { startsWith: options.blockNumber[0], mode: 'insensitive' }, houseNumber: { contains: options.blockNumber.substring(1), mode: 'insensitive' } },
+          { units: { some: { blockNumber: { equals: options.blockNumber, mode: 'insensitive' } } } }
+        ]
+      },
+      include: { units: true },
+    })
+    if (byBlock) {
+      return { customer: byBlock, duplicates: [], needsDisambiguation: false }
+    }
+  }
+
+  // Try exact name match first (case-insensitive)
+  let matches = await db.customer.findMany({
+    where: { name: { equals: name, mode: 'insensitive' } },
+    include: { units: true },
+  })
+
+  // If no exact match, fall back to contains
+  if (matches.length === 0) {
+    matches = await db.customer.findMany({
+      where: { name: { contains: name, mode: 'insensitive' } },
+      include: { units: true },
+    })
+  }
+
+  if (matches.length === 0) return null
+  if (matches.length === 1) return { customer: matches[0], duplicates: [], needsDisambiguation: false }
+
+  // Multiple matches — need disambiguation
+  return {
+    customer: matches[0],  // first match (caller can choose to use or not)
+    duplicates: matches,
+    needsDisambiguation: true,
+  }
+}
+
+// Build disambiguation message for user
+export function buildDisambiguationMessage(duplicates: any[]): string {
+  const list = duplicates.map((c: any, i: number) => {
+    const block = (c.blockLetter || '') + (c.houseNumber || '') || '-'
+    const bank = c.bankName || 'belum dipilih'
+    const stage = c.stage || '-'
+    const nikSuffix = c.nik ? ` (NIK: ...${c.nik.substring(c.nik.length - 4)})` : ''
+    const phone = c.whatsappNumber ? ` | WA: ${c.whatsappNumber}` : ''
+    return `${i + 1}. **${c.name}** — Blok ${block} | Bank ${bank} | Stage ${stage}${nikSuffix}${phone}`
+  }).join('\n')
+
+  return `⚠️ **Ditemukan ${duplicates.length} konsumen dengan nama yang cocok.**
+
+${list}
+
+Sebutkan **blok** atau **NIK** untuk memastikan konsumen yang mana. Contoh:
+• "yang blok E5"
+• "yang NIK 1234567890"
+• "yang bank BTN"`
+}
+
+// ============================================================
 // TOOL: Get Customer Files (from GoogleDoc table — list berkas yang tersimpan di Drive)
 // ============================================================
 
@@ -1198,15 +1295,24 @@ export async function executeTools(
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
     }
     if (!targetCustomer && intent.customerName) {
-      targetCustomer = await db.customer.findFirst({
-        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      // Disambiguation-aware lookup
+      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+        blockNumber: intent.blockNumber,
       })
+      if (lookup) {
+        if (lookup.needsDisambiguation) {
+          directResponse = buildDisambiguationMessage(lookup.duplicates)
+          results.push(`[getCustomerFiles] ⚠️ Duplicates: ${lookup.duplicates.length} customers. Asking user to disambiguate.`)
+        } else {
+          targetCustomer = lookup.customer
+        }
+      }
     }
 
-    if (!targetCustomer) {
+    if (!targetCustomer && !directResponse) {
       results.push(`[getCustomerFiles] ❌ Konsumen tidak ditemukan. Minta user sebutkan nama konsumen dengan jelas.`)
       directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
-    } else {
+    } else if (targetCustomer && !directResponse) {
       const fileResult = await getCustomerFiles(targetCustomer.id, undefined)
       if (fileResult.success && fileResult.data?.docs?.length > 0) {
         // Build directResponse with the file list — bypass LLM for accuracy
@@ -1251,15 +1357,24 @@ Pilih berkas yang mau dikirim dengan menyebut **nomor** (contoh: "yang nomor 2")
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
     }
     if (!targetCustomer && intent.customerName) {
-      targetCustomer = await db.customer.findFirst({
-        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      // Disambiguation-aware lookup
+      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+        blockNumber: intent.blockNumber,
       })
+      if (lookup) {
+        if (lookup.needsDisambiguation) {
+          directResponse = buildDisambiguationMessage(lookup.duplicates)
+          results.push(`[sendFile] ⚠️ Duplicates: ${lookup.duplicates.length} customers. Asking user to disambiguate.`)
+        } else {
+          targetCustomer = lookup.customer
+        }
+      }
     }
 
-    if (!targetCustomer) {
+    if (!targetCustomer && !directResponse) {
       results.push(`[sendFile] ❌ Konsumen tidak ditemukan. JANGAN bilang berhasil.`)
       directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
-    } else {
+    } else if (targetCustomer && !directResponse) {
       const docs = await db.googleDoc.findMany({
         where: { customerId: targetCustomer.id },
         orderBy: { createdAt: 'desc' },
@@ -1326,9 +1441,17 @@ Silakan sebutkan nomor atau jenis dokumen yang benar. 🙏`
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
     }
     if (!targetCustomer && intent.customerName) {
-      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+      const lookup = await findCustomerWithDisambiguation(intent.customerName, { blockNumber: intent.blockNumber })
+      if (lookup) {
+        if (lookup.needsDisambiguation) {
+          directResponse = buildDisambiguationMessage(lookup.duplicates)
+          results.push(`[updateCustomerField] ⚠️ Duplicates: ${lookup.duplicates.length}. Asking user to disambiguate.`)
+        } else {
+          targetCustomer = lookup.customer
+        }
+      }
     }
-    if (!targetCustomer && intent.blockNumber) {
+    if (!targetCustomer && intent.blockNumber && !directResponse) {
       targetCustomer = await db.customer.findFirst({
         where: { OR: [
           { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
@@ -1337,7 +1460,7 @@ Silakan sebutkan nomor atau jenis dokumen yang benar. 🙏`
       })
     }
 
-    if (targetCustomer && intent.updateValue) {
+    if (targetCustomer && intent.updateValue && !directResponse) {
       const result = await updateCustomerField(targetCustomer.id, intent.updateField, intent.updateValue)
       if (result.success) {
         await writeAuditLog('UPDATE_FIELD', 'Customer', targetCustomer.id, {
@@ -1573,22 +1696,31 @@ Contoh: "dapat konsumen baru namanya Budi Santoso di blok F7 bank btn"`
   // Handle DELETE_CUSTOMER — set DB-backed pending action for confirmation
   if (intent.action === 'DELETE_CUSTOMER') {
     let targetCustomer: any = null
+    let duplicates: any[] = []
+
     if (customerId) {
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
     }
+
     if (!targetCustomer && intent.customerName) {
-      // Use exact match first (most reliable)
-      targetCustomer = await db.customer.findFirst({
-        where: { name: { equals: intent.customerName, mode: 'insensitive' } }
+      // Use disambiguation-aware lookup
+      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+        blockNumber: intent.blockNumber,
       })
-      // Fall back to "contains" if no exact match
-      if (!targetCustomer) {
-        targetCustomer = await db.customer.findFirst({
-          where: { name: { contains: intent.customerName, mode: 'insensitive' } }
-        })
+      if (lookup) {
+        if (lookup.needsDisambiguation) {
+          // Multiple matches — ask user to disambiguate, DO NOT proceed
+          directResponse = buildDisambiguationMessage(lookup.duplicates)
+          results.push(`[deleteCustomer] ⚠️ Duplicates found: ${lookup.duplicates.length} customers match. Asking user to disambiguate.`)
+          // Skip the rest of DELETE_CUSTOMER handling
+          // (jump to return at end of executeTools)
+        } else {
+          targetCustomer = lookup.customer
+        }
       }
     }
-    if (!targetCustomer && intent.blockNumber) {
+
+    if (!targetCustomer && intent.blockNumber && !directResponse) {
       targetCustomer = await db.customer.findFirst({
         where: { OR: [
           { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
@@ -1597,7 +1729,7 @@ Contoh: "dapat konsumen baru namanya Budi Santoso di blok F7 bank btn"`
       })
     }
 
-    if (targetCustomer) {
+    if (targetCustomer && !directResponse) {
       // Set DB-backed pending action
       // Don't set conversationId — scope by channel (+ senderNumber for WA)
       // This prevents scoping issues when conversationId differs between requests
@@ -1628,7 +1760,7 @@ Semua data terkait (berkas, unit, percakapan) akan ikut terhapus dan TIDAK bisa 
 Ketik **"ya"** untuk konfirmasi, atau **"batal"** untuk membatalkan.
 
 _Pending action akan expired dalam 5 menit._`
-    } else {
+    } else if (!directResponse) {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
       directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap atau blok yang benar. 🙏`
     }

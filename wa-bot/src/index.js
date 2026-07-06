@@ -22,6 +22,7 @@ import { Boom } from '@hapi/boom'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import fetch from 'node-fetch'
+import http from 'http'
 
 const logger = pino({ level: 'silent' })
 const store = makeInMemoryStore({ logger })
@@ -370,13 +371,45 @@ async function startBot() {
 // Start bot
 startBot()
 
+// === HEALTH CHECK HTTP SERVER (for Railway monitoring) ===
+// Railway needs an HTTP port to detect if service is alive.
+// Without this, Railway may mark service as "unhealthy" and restart it.
+const PORT = process.env.PORT || 3000
+
+const healthServer = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      status: 'ok',
+      bot: BOT_NAME,
+      owner: OWNER_WHATSAPP,
+      groupJid: GROUP_JID || '(not set)',
+      workHours: `${WORK_START}:00 - ${WORK_END}:00 (Mon-Sat)`,
+      timestamp: new Date().toISOString(),
+    }))
+  } else if (req.url === '/ping') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('pong')
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' })
+    res.end('Not Found. Use /health or /ping')
+  }
+})
+
+healthServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🏥 Health check server listening on port ${PORT}`)
+  console.log(`   Endpoint: http://localhost:${PORT}/health`)
+})
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down...')
+  healthServer.close()
   process.exit(0)
 })
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down...')
+  healthServer.close()
   process.exit(0)
 })
