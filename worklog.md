@@ -274,3 +274,108 @@ Next Steps:
   3. DM DINA from owner number → expect normal response
   4. DM DINA from number already in group (non-owner) → expect "hanya melayani di grup" (no link)
   5. DM DINA from random number not in group → expect SILENT (no reply at all)
+
+---
+Task ID: dina-v8.2-critical-bugfix
+Agent: Main (GLM)
+Task: CRITICAL BUGFIX — DINA menghapus konsumen yang salah (Jenni terhapus padahal user minta hapus Hadi)
+
+Investigation:
+- User report: minta hapus "Hadi Ekaputra Liega", tapi Jenni (E5) malah terhapus
+- DB state: 3 customer → 2 customer (Jenni hilang)
+- Conversation log analysis:
+  * 04:16:25 user "ya" (konfirmasi hapus siti rahma) → DINA jawab "Berhasil update NIK Jenni" (HALUSINASI!)
+  * 07:14:10 user "ya hapus aja" (konfirmasi hapus Hadi) → DINA jawab "Silakan pilih dulu" (pendingAction lost)
+
+Root Causes Identified:
+1. pendingAction disimpan di in-memory module-level variable (Vercel serverless lambdas don't preserve module state) → pendingAction NULL di request berikutnya → confirm flow broken
+2. detectIntent konfirmasi terlalu loose (msg.includes('ya') match "ya hapus aja" dll)
+3. Tidak ada validasi nama target saat konfirmasi (user bisa konfirmasi dengan nama berbeda, DINA eksekusi anyway)
+4. LLM (Nemotron fallback) halusinasi jawaban "Berhasil menghapus X" padahal tool result bilang ABORT
+5. Tidak ada AuditLog untuk traceability
+
+Fixes Implemented (v8.2 → v8.2.2):
+
+1. New Prisma model: PendingAction (DB-backed, 5-min TTL, scoped by channel/sender)
+   - Replaces in-memory pendingAction
+   - Survives Vercel lambda cold starts
+   - Scoping: DASHBOARD=channel-only, WHATSAPP=channel+senderNumber
+
+2. detectIntent: STRICT confirmation detection
+   - Pesan harus ≤15 chars ATAU pure confirm keyword
+   - "ya hapus aja" tidak lagi ditandai sebagai valid confirmation
+   - Tambah CANCEL_PENDING untuk "batal"/"tidak"/"jangan"
+
+3. Target validation di executeTools
+   - Saat CONFIRM_DELETE, fetch pending dari DB
+   - Cek target masih exists
+   - Cek user's confirmation tidak menyebut nama konsumen LAIN
+   - Jika ada nama lain → ABORT + cancel + directResponse explanation
+
+4. DirectResponse mechanism (LLM bypass) — v8.2.2
+   - executeTools return { results, directResponse }
+   - Untuk critical ops (DELETE, CONFIRM, CANCEL), directResponse di-set = tool result literal
+   - Chat route bypass LLM call entirely → return directResponse as-is
+   - TIDAK ADA LLM interpretation = TIDAK ADA halusinasi
+
+5. Anti-hallucination rules di system prompt
+   - "JANGAN PERNAH mengarang aksi yang tidak dilakukan"
+   - "Jika tool result bilang GAGAL → JANGAN bilang berhasil"
+   - Contoh buruk vs baik
+   - Target validation rule
+
+6. AuditLog for all WRITE operations
+   - CREATE_CUSTOMER, UPDATE_FIELD, UPDATE_BANK, UPDATE_STAGE, DELETE_CUSTOMER
+   - Track: who, when, what changed, original user message
+
+7. Permission: non-owner di grup tidak bisa CONFIRM_DELETE
+   - Cek pending action oleh sender ini
+   - Kalau bukan miliknya → reject
+
+Tests Run (production):
+- Test 1: "hapus konsumen hadi ekaputra liega" → direct-bypass, tampilkan konfirmasi dengan detail (nama, blok, bank)
+- Test 2: "ya hapus Jenni" (WRONG name) → direct-bypass, "Konfirmasi DIBATALKAN otomatis, tidak ada konsumen yang dihapus" ✅
+- Test 3: "ya" (legitimate confirm) → direct-bypass, "Berhasil MENGHAPUS konsumen: Hadi Ekaputra Liega" ✅
+- Verify DB state setelah test 3: Hadi hilang, Jenni tetap ada ✅
+- Restore: Hadi di-restore ke DB via scripts/restore-hadi.ts
+
+Files Modified:
+- prisma/schema.prisma (+32 lines: PendingAction model)
+- src/lib/agents/dina-tools.ts (DB-backed pending + strict intent + target validation + directResponse + AuditLog)
+- src/app/api/dina/chat/route.ts (pass executeContext + permission check + directResponse bypass + pending info to prompt)
+- src/lib/agents/dina-knowledge.ts (anti-hallucination rules + target validation rules)
+
+Files Added:
+- scripts/check-db.ts (DB inspection tool for debugging)
+- scripts/check-pending.ts (verify pending action state)
+- scripts/check-custs.ts (verify customer list)
+- scripts/clear-pending.ts (clear pending state for testing)
+- scripts/restore-jenni.ts (one-shot restore Jenni)
+- scripts/restore-hadi.ts (one-shot restore Hadi after testing)
+
+EMERGENCY RESTORES DONE:
+- Jenni (customer-jenni-e5, Blok E5, BTN, PEMBERKASAN) — restored
+- Hadi Ekaputra Liega (Blok E6, BTN, BOOKING) — restored after testing
+- All 3 customers back to original state
+
+Deploy: pushed 3 commits to GitHub main → Vercel auto-deploy:
+- 67c9c88 (v8.2): DB-backed PendingAction + strict confirmation + target validation + AuditLog
+- 77d5b5b (v8.2.1): fix pending action scoping for dashboard chat
+- f0d52a3 (v8.2.2): bypass LLM for critical ops (DELETE/CONFIRM/CANCEL) — prevent hallucination
+
+Stage Summary:
+- Bug kritis "DINA hapus konsumen salah" FIXED
+- Pending action sekarang persist di DB (tidak hilang antar Vercel lambda)
+- Target validation mencegah eksekusi jika nama konsumen di konfirmasi berbeda
+- LLM bypass untuk critical ops → tidak ada lagi halusinasi "Berhasil menghapus X"
+- AuditLog untuk semua write operations → traceability
+- Permission matrix: non-owner di grup tidak bisa trigger DELETE atau CONFIRM_DELETE
+- All 3 customers (Hadi, Jenni, Andas) restored to original state
+
+Next Steps:
+- Owner test di production:
+  1. Minta hapus konsumen → lihat konfirmasi dengan detail (nama, blok, bank)
+  2. Coba "ya hapus [nama lain]" → harus bilang "Konfirmasi DIBATALKAN otomatis"
+  3. "ya" (legitimate) → harus bilang "Berhasil MENGHAPUS konsumen: X"
+  4. "batal" → harus bilang "Aksi pending telah dibatalkan"
+  5. AuditLog bisa dicek via DB untuk traceability
