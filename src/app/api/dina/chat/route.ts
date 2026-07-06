@@ -28,16 +28,27 @@ export async function POST(req: NextRequest) {
     const isPrivateChat = channel === 'WHATSAPP_PRIVATE'
     const isOwnerUser = isOwner || (!isWhatsApp) // Dashboard chat = always owner
 
-    // Permission check: private chat from non-owner → reject
+    // === WHATSAPP BEHAVIOR ===
+    // The WA bot (Baileys) enforces these rules BEFORE calling this API:
+    //   1. Group: DINA only responds if @tagged (the bot won't even call this API otherwise)
+    //   2. Private chat from non-owner:
+    //      - If sender IS in group → bot replies "hanya melayani di grup" without calling API
+    //      - If sender NOT in group → bot silent-ignores (no API call)
+    //   3. Owner private chat → calls API normally
+    //
+    // SAFETY FALLBACK: if somehow a non-owner private chat reaches this API,
+    // return silent=true so the bot knows NOT to reply (defensive — should never happen)
     if (isPrivateChat && !isOwnerUser) {
       return NextResponse.json({
-        success: true,
-        response: 'Maaf, saya DINA hanya melayani di grup. Silakan join grup untuk berkomunikasi dengan saya. 🙏',
-        model: 'permission-reject',
+        success: false,
+        silent: true, // Bot should NOT send any reply
+        response: '',
+        model: 'silent-ignore',
       })
     }
 
     // Permission check: DELETE in group from non-owner → reject
+    // (Per user requirement: in groups, everyone can READ/UPDATE/CREATE, only owner can DELETE)
     const intent = detectIntent(message)
     if (intent.action === 'DELETE_CUSTOMER' && isGroupChat && !isOwnerUser) {
       return NextResponse.json({

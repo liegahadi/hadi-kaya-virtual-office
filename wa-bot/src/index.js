@@ -1,14 +1,23 @@
 // DINA WhatsApp Bot — Baileys
 // Connects to WhatsApp Web, routes messages to DINA API on Vercel
 // Deploy this to Railway.app (free 500 hours/month)
-// 
+//
+// === BEHAVIOR RULES (updated) ===
+// 1. GRUP: DINA HANYA respon jika di-tag (@Dina atau @[nomor HP DINA])
+//    - Pesan tanpa tag → DINA diam, tidak respon sama sekali
+// 2. PRIVATE CHAT (DM):
+//    - Owner → respon normal (semua fitur: READ, UPDATE, CREATE, DELETE)
+//    - Non-owner yang SUDAH ada di grup → DINA balas "hanya melayani di grup"
+//    - Non-owner yang BELUM ada di grup → DINA diam, tidak respon sama sekali
+// 3. JANGAN PERNAH share link grup ke siapapun (owner maupun non-owner)
+//
 // Setup:
 // 1. Deploy this folder to Railway
 // 2. Set env vars: VERCEL_API_URL, OWNER_WHATSAPP, GROUP_JID
 // 3. Scan QR code in Railway logs
 // 4. DINA is now online on WhatsApp!
 
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysMessage, makeInMemoryStore } from '@whiskeysockets/baileys'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, makeInMemoryStore } from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
@@ -24,6 +33,48 @@ const GROUP_JID = process.env.GROUP_JID || '' // Group JID where DINA participat
 const BOT_NAME = process.env.BOT_NAME || 'DINA'
 const WORK_START = parseInt(process.env.WORK_START || '9')  // 9 AM
 const WORK_END = parseInt(process.env.WORK_END || '17')     // 5 PM
+
+// ============================================================
+// GROUP PARTICIPANT CACHE
+// DINA needs to know who's in the group to decide:
+//   - DM from non-owner IN group → reply "hanya melayani di grup"
+//   - DM from non-owner NOT in group → silent ignore
+// Cache is refreshed every 5 minutes + on-demand when cache is empty
+// ============================================================
+let groupParticipantsCache = new Set() // set of phone numbers (without @)
+let groupCacheLastUpdate = 0
+const GROUP_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function refreshGroupParticipants(sock) {
+  if (!GROUP_JID) {
+    console.log('⚠️  GROUP_JID not set — cannot check group membership. Set GROUP_JID env var.')
+    return
+  }
+  try {
+    const metadata = await sock.groupMetadata(GROUP_JID)
+    groupParticipantsCache = new Set(
+      metadata.participants.map(p => p.id.split('@')[0].split(':')[0])
+    )
+    groupCacheLastUpdate = Date.now()
+    console.log(`📋 Group participants refreshed: ${groupParticipantsCache.size} members`)
+  } catch (err) {
+    console.error('Failed to fetch group metadata:', err?.message || err)
+  }
+}
+
+async function isGroupMember(senderNumber) {
+  // If no GROUP_JID set, treat everyone as non-member (safe default — silent ignore)
+  if (!GROUP_JID) return false
+
+  // Refresh cache if expired or empty
+  if (groupParticipantsCache.size === 0 || Date.now() - groupCacheLastUpdate > GROUP_CACHE_TTL) {
+    // We need the socket reference; pass it in via a global or restructure
+    // For simplicity, refresh is triggered in the message handler with sock
+    // If cache is empty here, return false (safe default)
+    if (groupParticipantsCache.size === 0) return false
+  }
+  return groupParticipantsCache.has(senderNumber)
+}
 
 // Schedule: check if bot should be active
 function isWorkHours() {
@@ -78,14 +129,12 @@ async function callDina(message, senderNumber, senderName, isGroup, customerId) 
 async function sendFile(sock, jid, fileDataUrl, fileName, caption) {
   try {
     if (fileDataUrl.startsWith('data:image')) {
-      // Send as image
       const buffer = Buffer.from(fileDataUrl.split(',')[1], 'base64')
       await sock.sendMessage(jid, {
         image: buffer,
         caption: caption || fileName,
       })
     } else if (fileDataUrl.startsWith('data:application/pdf')) {
-      // Send as document
       const buffer = Buffer.from(fileDataUrl.split(',')[1], 'base64')
       await sock.sendMessage(jid, {
         document: buffer,
@@ -102,7 +151,7 @@ async function sendFile(sock, jid, fileDataUrl, fileName, caption) {
 // Main bot function
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_state')
-  
+
   const sock = makeWASocket({
     auth: state,
     logger,
@@ -116,9 +165,9 @@ async function startBot() {
   sock.ev.on('creds.update', saveCreds)
 
   // Connection state
-  sock.ev.on('connection.update', (update) => {
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
-    
+
     if (qr) {
       console.log('\n📱 Scan QR Code di WhatsApp kamu:')
       qrcode.generate(qr, { small: true })
@@ -133,9 +182,22 @@ async function startBot() {
     } else if (connection === 'open') {
       console.log(`✅ ${BOT_NAME} berhasil terhubung ke WhatsApp!`)
       console.log(`   Owner: ${OWNER_WHATSAPP}`)
+      console.log(`   Group JID: ${GROUP_JID || '(belum diset)'}`)
       console.log(`   Work hours: ${WORK_START}:00 - ${WORK_END}:00 (Mon-Sat)`)
+      console.log(`   Bot Number: ${sock.user?.id}`)
+      // Initial group participant cache load
+      if (GROUP_JID) {
+        await refreshGroupParticipants(sock)
+      }
     }
   })
+
+  // Auto-refresh group participants every 5 minutes
+  setInterval(async () => {
+    if (GROUP_JID) {
+      await refreshGroupParticipants(sock)
+    }
+  }, GROUP_CACHE_TTL)
 
   // Message handler
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
@@ -151,49 +213,86 @@ async function startBot() {
       const senderName = msg.pushName || senderNumber
 
       // Get message text
-      const text = msg.message?.conversation || 
-                   msg.message?.extendedTextMessage?.text || 
+      const text = msg.message?.conversation ||
+                   msg.message?.extendedTextMessage?.text ||
                    msg.message?.imageMessage?.caption ||
                    msg.message?.videoMessage?.caption ||
                    ''
 
-      // Check if message mentions bot (in groups, bot must be mentioned)
       const isGroup = isGroupMessage(jid)
       const isPrivate = isPrivateChat(jid)
 
-      // In groups, only respond if bot is mentioned or message starts with "dina"
+      // ============================================================
+      // RULE 1: In groups, DINA ONLY responds if tagged (@Dina or @[bot's number])
+      // No fallback to "Dina ..." prefix — must be explicit @mention
+      // ============================================================
       if (isGroup) {
         const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
         const botJid = sock.user?.id
-        const isMentioned = mentionedJids.includes(botJid)
-        const startsWithDina = text.toLowerCase().startsWith('dina') || text.toLowerCase().startsWith('dina ')
-        
-        if (!isMentioned && !startsWithDina) continue
+        const botJidBase = botJid?.split('@')[0].split(':')[0] // bot's phone number
+
+        const isMentioned = mentionedJids.some(mjid => {
+          const mjidBase = mjid.split('@')[0].split(':')[0]
+          return mjid === botJid || mjidBase === botJidBase
+        })
+
+        // STRICT: only respond if explicitly tagged
+        if (!isMentioned) continue
+
+        // Also require that the message is sent in OUR group (if GROUP_JID is set)
+        // This prevents DINA from responding in random groups it's been added to
+        if (GROUP_JID && jid !== GROUP_JID) continue
       }
 
-      // Private chat from non-owner → reject
+      // ============================================================
+      // RULE 2: Private chat logic
+      //   - Owner → process normally
+      //   - Non-owner IN group → reply "hanya melayani di grup" (NO LINK)
+      //   - Non-owner NOT in group → SILENT IGNORE (no reply at all)
+      // ============================================================
       if (isPrivate && !isOwner(senderJid)) {
-        await sock.sendMessage(jid, {
-          text: `Maaf, saya ${BOT_NAME} hanya melayani di grup. Silakan join grup untuk berkomunikasi dengan saya. 🙏`
-        })
+        // Refresh cache if stale (best-effort)
+        if (Date.now() - groupCacheLastUpdate > GROUP_CACHE_TTL) {
+          await refreshGroupParticipants(sock)
+        }
+
+        const memberOfGroup = await isGroupMember(senderNumber)
+
+        if (memberOfGroup) {
+          // Reply with rejection — but NEVER share the group link
+          await sock.sendMessage(jid, {
+            text: `Maaf, saya ${BOT_NAME} hanya melayani di grup. Silakan ajukan pertanyaan di grup ya. 🙏`
+          })
+        } else {
+          // Silent ignore — do not reply at all
+          // (Logging only, no response sent)
+          console.log(`🔇 Silent ignore: DM from ${senderNumber} (not a group member)`)
+        }
         continue
       }
 
-      // Check work hours (for non-owner in private chat)
+      // ============================================================
+      // Owner in private chat OR group member tagged DINA → process normally
+      // ============================================================
+
+      // Check work hours (skip for owner)
       if (isPrivate && !isWorkHours() && !isOwner(senderJid)) {
         await sock.sendMessage(jid, {
           text: `Maaf, saya sedang offline. Jam kerja saya: ${WORK_START}:00 - ${WORK_END}:00 (Senin-Sabtu). Pesan Anda akan saya balas saat saya online. 🙏`
         })
-        // Store message for later processing (when bot comes online)
         continue
       }
 
-      // Clean message text (remove "dina" prefix if present)
+      // Clean message text (remove @mention of bot if present)
       let cleanText = text.trim()
-      if (cleanText.toLowerCase().startsWith('dina ')) {
-        cleanText = cleanText.substring(5).trim()
-      } else if (cleanText.toLowerCase().startsWith('dina')) {
-        cleanText = cleanText.substring(4).trim()
+      // Remove @Dina mention artifacts (the mention itself is shown as @number in text)
+      const botJidBase = sock.user?.id?.split('@')[0].split(':')[0]
+      if (botJidBase) {
+        // Remove patterns like "@628117176687" or just "@" followed by bot number
+        const mentionRegex = new RegExp(`@${botJidBase}\\s*`, 'g')
+        cleanText = cleanText.replace(mentionRegex, '').trim()
+        // Also remove "@Dina" case insensitive
+        cleanText = cleanText.replace(/@dina\s*/gi, '').trim()
       }
 
       if (!cleanText) continue
@@ -204,6 +303,12 @@ async function startBot() {
 
       // Call DINA API
       const response = await callDina(cleanText, senderNumber, senderName, isGroup)
+
+      // SAFETY: if API returns silent=true, do NOT reply (defensive — should never happen)
+      if (response?.silent === true) {
+        console.log(`🔇 API returned silent flag — not replying to ${senderNumber}`)
+        continue
+      }
 
       // Send text response
       if (response.success && response.response) {
@@ -217,6 +322,18 @@ async function startBot() {
           await sendFile(sock, jid, file.dataUrl, file.fileName, file.caption)
         }
       }
+    }
+  })
+
+  // Handle group join/leave events — refresh cache
+  sock.ev.on('groups.upsert', async () => {
+    if (GROUP_JID) await refreshGroupParticipants(sock)
+  })
+
+  sock.ev.on('group-participants.update', async (event) => {
+    if (event.id === GROUP_JID) {
+      console.log(`👥 Group participants changed: ${event.action} ${event.participants?.length || 0} user(s)`)
+      await refreshGroupParticipants(sock)
     }
   })
 
