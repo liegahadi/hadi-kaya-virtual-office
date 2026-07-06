@@ -165,9 +165,11 @@ export async function POST(req: NextRequest) {
             console.log(`[DINA] Context recovery: found customer "${matched.name}" from recent message`)
             // Re-run executeTools with recovered customerId
             const retryExecution = await executeTools(intent, matched.id, message, executeContext)
-            // Replace toolExecution with retry
+            // Replace toolExecution with retry (BOTH results AND directResponse)
             toolExecution.results = retryExecution.results
             toolExecution.directResponse = retryExecution.directResponse
+            // CRITICAL: also update toolResults variable so file fetching code sees new results
+            // (file fetching uses toolResults, not toolExecution.results)
             break
           }
         }
@@ -179,9 +181,11 @@ export async function POST(req: NextRequest) {
     // === FILE SENDING: If SEND_FILE was triggered, fetch files from Google Drive ===
     // The executeTools pushed `[sendFile:FILES_TO_SEND] [{...}]` to results.
     // We parse that, fetch each file from Drive, and include as base64 dataUrl in response.
+    // CRITICAL: re-read toolExecution.results here (it may have been updated by context recovery)
     let filesToSend: Array<{ dataUrl: string; fileName: string; caption: string; mimeType: string }> = []
     if (intent.action === 'SEND_FILE') {
-      const filesLine = toolResults.split('\n').find(l => l.startsWith('[sendFile:FILES_TO_SEND]'))
+      const currentResults = toolExecution.results  // use latest (post-context-recovery)
+      const filesLine = currentResults.split('\n').find(l => l.startsWith('[sendFile:FILES_TO_SEND]'))
       if (filesLine) {
         try {
           const jsonStr = filesLine.replace('[sendFile:FILES_TO_SEND] ', '').trim()
