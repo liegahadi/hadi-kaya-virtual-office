@@ -554,15 +554,18 @@ export function detectIntent(message: string): IntentResult {
   const nameMatch3 = message.match(/\b([A-Za-z]{3,})\b/)
   // Pattern 4: "ubah/ganti/update [Name] ..."
   const nameMatch4 = message.match(/(?:ubah|ganti|update|pindah|jadikan)\s+(?:status\s+)?(?:konsumen\s+)?(?:debitur\s+)?([A-Za-z]+)/i)
-  // Pattern 5: "berkas/dokumen/file [Name]" — for file requests
-  const nameMatch5 = message.match(/(?:berkas|dokumen|file|kirim|minta|lihat|cek)\s+(?:konsumen\s+|debitur\s+|nasabah\s+)?(?:dari\s+|si\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:yang|di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|,|$|\?))/i)
+  // Pattern 5: "(minta|kirim|lihat|cek) berkas/dokumen/file [Name]" — consumes both verbs
+  const nameMatch5a = message.match(/(?:minta|kirim|lihat|cek|tolong)\s+(?:berkas|dokumen|file)\s+(?:konsumen\s+|debitur\s+|nasabah\s+)?(?:dari\s+|si\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:yang|di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|,|$|\?))/i)
+  // Pattern 5b: "berkas/dokumen/file [Name]" — for "berkas Jenni"
+  const nameMatch5b = message.match(/(?:berkas|dokumen|file)\s+(?:konsumen\s+|debitur\s+|nasabah\s+)?(?:dari\s+|si\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:yang|di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|,|$|\?))/i)
   // Pattern 6: For "Dina minta berkas Jenni" — name at END of message after "berkas"
   const nameMatch6 = message.match(/(?:berkas|dokumen|file)\s+([A-Za-z]+)$/i)
 
   if (nameMatch4) customerName = nameMatch4[1]
   else if (nameMatch1) customerName = nameMatch1[1]
   else if (nameMatch2) customerName = nameMatch2[1]
-  else if (nameMatch5) customerName = nameMatch5[1]
+  else if (nameMatch5a) customerName = nameMatch5a[1]
+  else if (nameMatch5b) customerName = nameMatch5b[1]
   else if (nameMatch6) customerName = nameMatch6[1]
   // Don't use nameMatch3 — too noisy (matches "ubah", "jadi", etc)
 
