@@ -20,7 +20,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -29,6 +29,8 @@ export interface IntentResult {
   newCustomerPhone?: string
   newCustomerBlock?: string
   newCustomerBank?: string
+  requestedFileIndex?: number  // For SEND_FILE: which file number user picked (1, 2, 3, ...)
+  requestedFileDocType?: string  // For SEND_FILE: user said "KTP" or "slip gaji" etc
 }
 
 // ============================================================
@@ -242,6 +244,8 @@ export function detectIntent(message: string): IntentResult {
   let newCustomerPhone: string | undefined
   let newCustomerBlock: string | undefined
   let newCustomerBank: string | undefined
+  let intent_requestedFileIndex: number | undefined
+  let intent_requestedFileDocType: string | undefined
 
   // === READ INTENTS ===
 
@@ -325,6 +329,63 @@ export function detectIntent(message: string): IntentResult {
   if ((msg.includes('isi') || msg.includes('fill') || msg.includes('bantu') && msg.includes('data')) && !msg.includes('bank')) {
     action = 'FILL_FORM'
     tools.push('getAllCustomers')
+  }
+
+  // === GET_FILES / SEND_FILE (Berkas request from Google Drive) ===
+  // Detect: "minta berkas [konsumen]", "kirim berkas [konsumen]", "berkas [konsumen] apa saja",
+  //         "Dina minta KTP [konsumen]", "kirim slip gaji [konsumen]", "list berkas [konsumen]"
+  const berkasKeywords = ['berkas', 'file', 'dokumen', 'kirim', 'minta', 'ktp', 'kk', 'npwp', 'slip gaji', 'sk kerja', 'spr', 'flpp', 'bphtb', 'notaris', 'lokasi kerja']
+  const hasBerkasIntent = (
+    (msg.includes('minta') || msg.includes('kirim') || msg.includes('lihat') || msg.includes('list') || msg.includes('daftar') || msg.includes('cek') || msg.includes('apa saja'))
+    && berkasKeywords.some(kw => msg.includes(kw))
+  )
+
+  if (hasBerkasIntent) {
+    // Check if user is requesting SPECIFIC file type (e.g., "minta KTP jenni")
+    // vs just asking what files are available
+    const docTypeKeywords: Array<{ keywords: string[], docType: string }> = [
+      { keywords: ['ktp'], docType: 'ktp' },
+      { keywords: ['kk', 'kartu keluarga'], docType: 'kk' },
+      { keywords: ['npwp'], docType: 'npwp' },
+      { keywords: ['slip gaji', 'slip'], docType: 'sk-slip-gaji' },
+      { keywords: ['sk kerja', 'surat keterangan kerja'], docType: 'sk-slip-gaji' },
+      { keywords: ['spr'], docType: 'spr' },
+      { keywords: ['flpp'], docType: 'flpp' },
+      { keywords: ['ajb'], docType: 'ajb' },
+      { keywords: ['bphtb'], docType: 'bphtb' },
+      { keywords: ['notaris'], docType: 'notaris' },
+      { keywords: ['lokasi kerja', 'lokasi'], docType: 'lokasi-kerja' },
+      { keywords: ['sertifikat', 'shgb'], docType: 'sertifikat' },
+    ]
+    const matchedDocType = docTypeKeywords.find(dt => dt.keywords.some(kw => msg.includes(kw)))
+
+    // Check if user picked a number (e.g., "yang nomor 2", "kirim 1 dan 3")
+    const numberMatch = msg.match(/(?:nomor|no|urut)?\s*(\d+(?:\s*(?:dan|,|&)\s*\d+)*)/)
+    const requestedIndices: number[] = []
+    if (numberMatch) {
+      // Extract all numbers from the match
+      const nums = numberMatch[1].match(/\d+/g)
+      if (nums) {
+        for (const n of nums) {
+          const i = parseInt(n)
+          if (i >= 1 && i <= 20) requestedIndices.push(i)  // reasonable range
+        }
+      }
+    }
+
+    if (matchedDocType || requestedIndices.length > 0) {
+      // User wants a specific file → SEND_FILE
+      action = 'SEND_FILE'
+      if (matchedDocType) intent_requestedFileDocType = matchedDocType.docType
+      if (requestedIndices.length > 0) intent_requestedFileIndex = requestedIndices[0]  // First one for now
+      tools.push('getCustomerFiles')
+      tools.push('getAllCustomers')
+    } else {
+      // User wants to see what files are available → GET_FILES
+      action = 'GET_FILES'
+      tools.push('getCustomerFiles')
+      tools.push('getAllCustomers')
+    }
   }
 
   // === GENERIC FIELD UPDATE ===
@@ -510,7 +571,7 @@ export function detectIntent(message: string): IntentResult {
   const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType }
 }
 
 // ============================================================
@@ -690,6 +751,91 @@ Atasan: ${customer.atasanName || 'belum ada'} (${customer.atasanNip || 'belum ad
 }
 
 // ============================================================
+// TOOL: Get Customer Files (from GoogleDoc table — list berkas yang tersimpan di Drive)
+// ============================================================
+
+async function getCustomerFiles(customerId?: string, customerName?: string): Promise<ToolResult> {
+  try {
+    let docs: any[] = []
+
+    if (customerId) {
+      docs = await db.googleDoc.findMany({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+      })
+    } else if (customerName) {
+      // Find customer first by name (case-insensitive contains)
+      const customer = await db.customer.findFirst({
+        where: { name: { contains: customerName, mode: 'insensitive' } },
+      })
+      if (customer) {
+        docs = await db.googleDoc.findMany({
+          where: { customerId: customer.id },
+          orderBy: { createdAt: 'desc' },
+        })
+      } else {
+        return {
+          toolName: 'getCustomerFiles',
+          success: false,
+          data: null,
+          summary: `❌ Konsumen "${customerName}" tidak ditemukan di database.`,
+        }
+      }
+    } else {
+      return {
+        toolName: 'getCustomerFiles',
+        success: false,
+        data: null,
+        summary: `❌ Tidak ada customer yang ditentukan. Sebutkan nama konsumen.`,
+      }
+    }
+
+    if (docs.length === 0) {
+      return {
+        toolName: 'getCustomerFiles',
+        success: true,
+        data: { docs: [], count: 0 },
+        summary: `ℹ️ Belum ada berkas yang tersimpan di Google Drive untuk konsumen ini.`,
+      }
+    }
+
+    // Build readable file list
+    const fileList = docs.map((d, i) => {
+      const docTypeLabel: Record<string, string> = {
+        'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+        'lokasi-kerja': 'Lokasi Kerja',
+        'spr': 'SPR',
+        'flpp': 'FLPP',
+        'ajb': 'AJB',
+        'bphtb': 'BPHTB',
+        'notaris': 'Notaris',
+        'ktp': 'KTP',
+        'kk': 'KK',
+        'npwp': 'NPWP',
+        'sertifikat': 'Sertifikat',
+        'lainnya': 'Lainnya',
+      }
+      const label = docTypeLabel[d.docType] || d.docType
+      return `${i + 1}. **${label}** — ${d.fileName} (docId: ${d.docId.substring(0, 12)}...)`
+    }).join('\n')
+
+    return {
+      toolName: 'getCustomerFiles',
+      success: true,
+      data: { docs, count: docs.length },
+      summary: `📁 Ditemukan ${docs.length} berkas di Google Drive:\n${fileList}\n\nUser dapat memilih berkas dengan menyebut nomor atau nama jenis dokumen. Saya akan kirim file-nya.`,
+    }
+  } catch (err: any) {
+    return {
+      toolName: 'getCustomerFiles',
+      success: false,
+      data: null,
+      summary: `❌ GAGAL mengambil daftar berkas: ${err?.message || 'unknown error'}`,
+    }
+  }
+}
+
+// ============================================================
 // TOOL: Get Relevant Memories (filtered by category)
 // ============================================================
 
@@ -732,6 +878,25 @@ async function createCustomer(data: { name: string; phone?: string; block?: stri
       else { blockLetter = data.block }
     }
 
+    // Check if customer with same name+block already exists (prevent duplicates)
+    if (data.block) {
+      const existing = await db.customer.findFirst({
+        where: {
+          name: { equals: data.name, mode: 'insensitive' },
+          blockLetter: blockLetter,
+          houseNumber: houseNumber,
+        }
+      })
+      if (existing) {
+        return {
+          toolName: 'createCustomer',
+          success: false,
+          data: existing,
+          summary: `ℹ️ Konsumen "${data.name}" (Blok ${data.block}) sudah ada di database (ID: ${existing.id}, stage: ${existing.stage}). Tidak perlu dibuat ulang.`,
+        }
+      }
+    }
+
     const customer = await db.customer.create({
       data: {
         name: data.name,
@@ -746,23 +911,30 @@ async function createCustomer(data: { name: string; phone?: string; block?: stri
       } as any,
     })
 
-    // Create unit if block provided
+    // Try to link to existing Unit by blockNumber — DON'T create new Unit
+    // (Unit creation requires landSize/buildingSize/price/dpAmount which we don't have here.
+    //  Those values come from site plan data, not from chat input.)
+    let unitLinked = false
     if (data.block) {
-      await db.unit.create({
-        data: {
-          blockNumber: data.block,
-          status: 'BOOKED',
-          projectId: project.id,
-          customerId: customer.id,
-        } as any,
+      const existingUnit = await db.unit.findFirst({
+        where: { blockNumber: { equals: data.block, mode: 'insensitive' }, projectId: project.id }
       })
+      if (existingUnit) {
+        // Link unit to this customer + mark as BOOKED
+        await db.unit.update({
+          where: { id: existingUnit.id },
+          data: { customerId: customer.id, status: 'BOOKED', bookedAt: new Date() },
+        })
+        unitLinked = true
+      }
+      // If no existing unit found, that's OK — owner can assign manually later via dashboard
     }
 
     return {
       toolName: 'createCustomer',
       success: true,
       data: customer,
-      summary: `✅ Berhasil menambahkan konsumen baru: ${customer.name}${data.block ? ` (Blok ${data.block})` : ''}${data.bank ? ` Bank: ${data.bank}` : ''}${data.phone ? ` Telp: ${data.phone}` : ''}. Stage awal: DM. Data tersimpan di database.`,
+      summary: `✅ Berhasil menambahkan konsumen baru: ${customer.name}${data.block ? ` (Blok ${data.block})` : ''}${data.bank ? ` Bank: ${data.bank}` : ''}${data.phone ? ` Telp: ${data.phone}` : ''}. Stage awal: DM. Data tersimpan di database.${unitLinked ? ' Unit berhasil di-link.' : (data.block ? ' Unit belum di-link (blok tidak ditemukan di site plan, owner bisa assign manual).' : '')}`,
     }
   } catch (err: any) {
     return { toolName: 'createCustomer', success: false, data: null, summary: `❌ GAGAL menambahkan konsumen: ${err?.message || 'unknown error'}` }
@@ -775,31 +947,62 @@ async function createCustomer(data: { name: string; phone?: string; block?: stri
 
 async function deleteCustomer(customerId: string, customerName: string): Promise<ToolResult> {
   try {
-    // Get customer info before delete (for confirmation message)
+    // Get customer info before delete (for confirmation message + audit log)
     const customer = await db.customer.findUnique({
       where: { id: customerId },
-      include: { units: true },
+      include: { units: true, googleDocs: true },
     })
 
     if (!customer) {
       return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ Konsumen tidak ditemukan.` }
     }
 
-    // Delete all related data (cascading)
-    await db.googleDoc.deleteMany({ where: { customerId } })
-    await db.customerStageHistory.deleteMany({ where: { customerId } })
+    const block = (customer.blockLetter || '') + (customer.houseNumber || '') || '-'
+    const bank = customer.bankName || 'belum dipilih'
+    const googleDocCount = customer.googleDocs?.length || 0
+
+    // === PRESERVE GOOGLE DRIVE FILES ===
+    // Per owner requirement: hapus dari DB saja, JANGAN hapus file dari Google Drive.
+    // - Schema already has `onDelete: SetNull` on GoogleDoc.customerId
+    //   → when customer is deleted, GoogleDoc records have customerId set to null automatically
+    //   → Drive files remain accessible (we never call Drive API to delete)
+    // - We do NOT call db.googleDoc.deleteMany anymore — that would erase DB metadata
+    //   and we'd lose reference to those Drive files entirely.
+    // - Units: unlink (set customerId=null) instead of delete, so site plan history is preserved
+    //   (we don't want to mark a unit as AVAILABLE just because customer was deleted from DB)
+
+    // Unlink units (don't delete them — they belong to the project/site plan)
+    await db.unit.updateMany({
+      where: { customerId },
+      data: { customerId: null, status: 'AVAILABLE', bookedAt: null, soldAt: null },
+    })
+
+    // Delete conversation history (chat logs are not Drive files — safe to delete)
     await db.conversation.deleteMany({ where: { customerId } })
-    await db.unit.deleteMany({ where: { customerId } })
+
+    // Delete stage history (internal tracking, not user-facing)
+    await db.customerStageHistory.deleteMany({ where: { customerId } })
+
+    // Delete bank pipelines (internal tracking)
     await db.bankPipeline.deleteMany({ where: { customerId: customerId as any } })
 
-    // Finally delete the customer
+    // === Finally delete the customer (GoogleDoc records auto-set customerId=null via SetNull) ===
     await db.customer.delete({ where: { id: customerId } })
 
     return {
       toolName: 'deleteCustomer',
       success: true,
-      data: { deletedCustomer: customer.name },
-      summary: `✅ Berhasil MENGHAPUS konsumen: ${customer.name} (Blok ${customer.blockLetter || '-'}${customer.houseNumber || ''}). Semua data terkait (unit, berkas, percakapan) juga dihapus permanen dari database.`,
+      data: {
+        deletedCustomer: customer.name,
+        block,
+        bank,
+        googleDocsPreserved: googleDocCount,
+      },
+      summary: `✅ Berhasil MENGHAPUS konsumen: ${customer.name} (Blok ${block}, Bank: ${bank}) dari database.
+
+📦 **Google Drive files DIPERTAHANKAN** (${googleDocCount} file metadata tetap tersimpan di DB dengan customerId=NULL). File di Drive tidak dihapus dan masih bisa diakses jika konsumen ini didaftarkan ulang di kemudian hari.
+
+🏠 Unit site plan di-unlink (status kembali AVAILABLE), tidak dihapus dari site plan.`,
     }
   } catch (err: any) {
     return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ GAGAL menghapus: ${err?.message || 'unknown error'}` }
@@ -961,6 +1164,9 @@ export async function executeTools(
         case 'getCustomerDocStatus':
           result = await getCustomerDocStatus(customerId, intent.customerName)
           break
+        case 'getCustomerFiles':
+          result = await getCustomerFiles(customerId, intent.customerName)
+          break
         case 'getRelevantMemories':
           result = await getRelevantMemories(userMessage || '')
           break
@@ -971,6 +1177,134 @@ export async function executeTools(
       if (result.success) results.push(`[${toolName}] ${result.summary}`)
     } catch (err) {
       console.error(`Tool ${toolName} error:`, err)
+    }
+  }
+
+  // Handle GET_FILES — list available files for customer (DINA shows list, user picks next)
+  if (intent.action === 'GET_FILES') {
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      targetCustomer = await db.customer.findFirst({
+        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      })
+    }
+
+    if (!targetCustomer) {
+      results.push(`[getCustomerFiles] ❌ Konsumen tidak ditemukan. Minta user sebutkan nama konsumen dengan jelas.`)
+      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
+    } else {
+      const fileResult = await getCustomerFiles(targetCustomer.id, undefined)
+      if (fileResult.success && fileResult.data?.docs?.length > 0) {
+        // Build directResponse with the file list — bypass LLM for accuracy
+        const docs = fileResult.data.docs
+        const docTypeLabel: Record<string, string> = {
+          'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+          'lokasi-kerja': 'Lokasi Kerja',
+          'spr': 'SPR',
+          'flpp': 'FLPP',
+          'ajb': 'AJB',
+          'bphtb': 'BPHTB',
+          'notaris': 'Notaris',
+          'ktp': 'KTP',
+          'kk': 'KK',
+          'npwp': 'NPWP',
+          'sertifikat': 'Sertifikat',
+        }
+        const fileList = docs.map((d: any, i: number) => {
+          const label = docTypeLabel[d.docType] || d.docType
+          return `${i + 1}. **${label}** — ${d.fileName}`
+        }).join('\n')
+
+        directResponse = `📁 **Berkas ${targetCustomer.name}** (Blok ${(targetCustomer.blockLetter || '') + (targetCustomer.houseNumber || '') || '-'}) di Google Drive:
+
+${fileList}
+
+Pilih berkas yang mau dikirim dengan menyebut **nomor** (contoh: "yang nomor 2") atau **jenis dokumen** (contoh: "kirim slip gaji"). Bisa lebih dari 1 (contoh: "1 dan 3"). 🙏`
+        results.push(`[getCustomerFiles] ${fileResult.summary}`)
+      } else {
+        directResponse = fileResult.summary
+        results.push(`[getCustomerFiles] ${fileResult.summary}`)
+      }
+    }
+  }
+
+  // Handle SEND_FILE — user picked specific file, fetch from Drive + return as dataUrl
+  // NOTE: The actual file fetching happens in chat route (because it needs Google API client).
+  // Here we just identify which GoogleDoc record matches and push its docId to results.
+  if (intent.action === 'SEND_FILE') {
+    let targetCustomer: any = null
+    if (customerId) {
+      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+    }
+    if (!targetCustomer && intent.customerName) {
+      targetCustomer = await db.customer.findFirst({
+        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+      })
+    }
+
+    if (!targetCustomer) {
+      results.push(`[sendFile] ❌ Konsumen tidak ditemukan. JANGAN bilang berhasil.`)
+      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
+    } else {
+      const docs = await db.googleDoc.findMany({
+        where: { customerId: targetCustomer.id },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      if (docs.length === 0) {
+        results.push(`[sendFile] ℹ️ Belum ada berkas untuk konsumen ini.`)
+        directResponse = `ℹ️ Belum ada berkas yang tersimpan di Google Drive untuk ${targetCustomer.name}. Silakan upload berkas terlebih dahulu melalui dashboard. 🙏`
+      } else {
+        // Determine which file(s) to send
+        let selectedDocs: any[] = []
+
+        if (intent.requestedFileDocType) {
+          // Match by doc type
+          selectedDocs = docs.filter(d => d.docType === intent.requestedFileDocType)
+          if (selectedDocs.length === 0) {
+            // No exact match — try partial match
+            selectedDocs = docs.filter(d => d.docType.includes(intent.requestedFileDocType!) || intent.requestedFileDocType!.includes(d.docType))
+          }
+        }
+
+        if (intent.requestedFileIndex && intent.requestedFileIndex >= 1 && intent.requestedFileIndex <= docs.length) {
+          // Match by index (1-based)
+          const docByIndex = docs[intent.requestedFileIndex - 1]
+          if (!selectedDocs.find(d => d.id === docByIndex.id)) {
+            selectedDocs.push(docByIndex)
+          }
+        }
+
+        if (selectedDocs.length === 0) {
+          // No match — show available files
+          const docTypeLabel: Record<string, string> = {
+            'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+            'lokasi-kerja': 'Lokasi Kerja',
+            'spr': 'SPR', 'flpp': 'FLPP', 'ajb': 'AJB', 'bphtb': 'BPHTB',
+            'notaris': 'Notaris', 'ktp': 'KTP', 'kk': 'KK', 'npwp': 'NPWP', 'sertifikat': 'Sertifikat',
+          }
+          const fileList = docs.map((d, i) => `${i + 1}. **${docTypeLabel[d.docType] || d.docType}** — ${d.fileName}`).join('\n')
+          results.push(`[sendFile] ⚠️ Tidak ada berkas yang cocok dengan permintaan. Berkas yang tersedia: ${fileList}`)
+          directResponse = `⚠️ Berkas yang Anda minta tidak ditemukan. 
+
+📁 **Berkas ${targetCustomer.name} yang tersedia:**
+
+${fileList}
+
+Silakan sebutkan nomor atau jenis dokumen yang benar. 🙏`
+        } else {
+          // Files selected — push to results with structured data for chat route to pick up
+          // Chat route will read these from results and fetch from Drive
+          const fileSummary = selectedDocs.map(d => `${d.fileName} (docId: ${d.docId}, type: ${d.docType})`).join(', ')
+          results.push(`[sendFile] ✅ Siap kirim ${selectedDocs.length} berkas: ${fileSummary}`)
+          results.push(`[sendFile:FILES_TO_SEND] ${JSON.stringify(selectedDocs.map(d => ({ docId: d.docId, fileName: d.fileName, docType: d.docType, customerId: d.customerId })))}`)
+          // directResponse will be set by chat route AFTER fetching files from Drive
+          // (chat route needs to call Google Drive API to get actual file content)
+        }
+      }
     }
   }
 
@@ -1205,11 +1539,24 @@ Jika Anda ingin menghapus konsumen lain, silakan buat permintaan baru dengan men
         })
       }
       results.push(`[createCustomer] ${result.summary}`)
+      // Bypass LLM for CREATE — use the actual tool result (prevent hallucination)
+      directResponse = result.summary
     } catch (err: any) {
-      results.push(`[createCustomer] ❌ GAGAL: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+      const errMsg = `❌ GAGAL: ${err?.message || 'unknown error'}`
+      results.push(`[createCustomer] ${errMsg}`)
+      directResponse = errMsg
     }
   } else if (intent.action === 'CREATE_CUSTOMER' && !intent.newCustomerName) {
     results.push(`[createCustomer] ⚠️ User ingin tambah konsumen tapi nama tidak terdeteksi. Minta user sebutkan nama konsumen.`)
+    directResponse = `Halo! Saya butuh nama konsumen untuk menambahkannya ke database. 🙏
+
+Format yang saya pahami:
+• "dapat konsumen baru namanya **[Nama]** di blok **[Blok]**"
+• "tambah konsumen **[Nama]** blok **[Blok]** bank **[BTN/Mandiri/BSB]**"
+• "daftarin konsumen **[Nama]** di blok **[Blok]**"
+
+Contoh: "dapat konsumen baru namanya Budi Santoso di blok F7 bank btn"`
+
   }
 
   // Handle DELETE_CUSTOMER — set DB-backed pending action for confirmation

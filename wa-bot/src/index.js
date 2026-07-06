@@ -126,25 +126,42 @@ async function callDina(message, senderNumber, senderName, isGroup, customerId) 
 }
 
 // Send file (image or document) via WA
-async function sendFile(sock, jid, fileDataUrl, fileName, caption) {
+// Supports: image (jpg/png/webp), PDF, Word doc, and any other document type
+async function sendFile(sock, jid, file) {
+  // file = { dataUrl, fileName, caption, mimeType }
+  const { dataUrl, fileName, caption, mimeType } = file
   try {
-    if (fileDataUrl.startsWith('data:image')) {
-      const buffer = Buffer.from(fileDataUrl.split(',')[1], 'base64')
+    if (!dataUrl) return
+    const buffer = Buffer.from(dataUrl.split(',')[1], 'base64')
+    const mime = mimeType || (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'application/octet-stream'
+
+    if (mime.startsWith('image/')) {
+      // Send as image
       await sock.sendMessage(jid, {
         image: buffer,
         caption: caption || fileName,
+        mimetype: mime,
       })
-    } else if (fileDataUrl.startsWith('data:application/pdf')) {
-      const buffer = Buffer.from(fileDataUrl.split(',')[1], 'base64')
+    } else if (mime === 'application/pdf') {
+      // Send as PDF document
       await sock.sendMessage(jid, {
         document: buffer,
         fileName: fileName || 'document.pdf',
         caption: caption || '',
         mimetype: 'application/pdf',
       })
+    } else {
+      // Send as generic document (Word, Excel, etc.)
+      await sock.sendMessage(jid, {
+        document: buffer,
+        fileName: fileName || 'document',
+        caption: caption || '',
+        mimetype: mime,
+      })
     }
+    console.log(`✅ Sent file: ${fileName} (${mime}, ${buffer.length} bytes)`)
   } catch (err) {
-    console.error('Send file error:', err)
+    console.error('Send file error:', err?.message || err)
   }
 }
 
@@ -319,7 +336,9 @@ async function startBot() {
       // If DINA has files to send (berkas request)
       if (response.success && response.files && response.files.length > 0) {
         for (const file of response.files) {
-          await sendFile(sock, jid, file.dataUrl, file.fileName, file.caption)
+          await sendFile(sock, jid, file)  // Pass full file object
+          // Small delay between files to avoid WA rate limit
+          await new Promise(r => setTimeout(r, 500))
         }
       }
     }

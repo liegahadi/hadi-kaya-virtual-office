@@ -138,6 +138,101 @@ export async function POST(req: NextRequest) {
     const toolExecution = await executeTools(intent, customerId, message, executeContext)
     const toolResults = toolExecution.results
 
+    // === FILE SENDING: If SEND_FILE was triggered, fetch files from Google Drive ===
+    // The executeTools pushed `[sendFile:FILES_TO_SEND] [{...}]` to results.
+    // We parse that, fetch each file from Drive, and include as base64 dataUrl in response.
+    let filesToSend: Array<{ dataUrl: string; fileName: string; caption: string; mimeType: string }> = []
+    if (intent.action === 'SEND_FILE') {
+      const filesLine = toolResults.split('\n').find(l => l.startsWith('[sendFile:FILES_TO_SEND]'))
+      if (filesLine) {
+        try {
+          const jsonStr = filesLine.replace('[sendFile:FILES_TO_SEND] ', '').trim()
+          const selectedDocs = JSON.parse(jsonStr)
+          console.log(`[DINA] SEND_FILE: fetching ${selectedDocs.length} file(s) from Drive`)
+
+          // Try to get Drive client (only works if owner has OAuth'd)
+          let drive: any = null
+          try {
+            const { getDriveClientOAuth } = await import('@/lib/google/auth')
+            drive = await getDriveClientOAuth()
+          } catch (driveErr: any) {
+            console.error('[DINA] Drive client error:', driveErr?.message)
+          }
+
+          if (!drive) {
+            // Drive not connected — fallback: just tell user the file URL
+            toolExecution.directResponse = `⚠️ Google Drive belum terhubung. Owner perlu login Google terlebih dahulu di dashboard.
+
+File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
+          } else {
+            for (const doc of selectedDocs) {
+              try {
+                // Determine mimeType based on docType
+                let exportMimeType: string | null = null
+                let outputMimeType = 'application/pdf'
+                let fileExtension = 'pdf'
+
+                // Google Docs (sk-slip-gaji, lokasi-kerja, spr, flpp, etc.) need to be exported
+                // Regular files (KTP.jpg, KK.pdf) can be downloaded directly
+                const isGoogleDocType = ['sk-slip-gaji', 'lokasi-kerja', 'spr', 'flpp', 'ajb', 'bphtb', 'notaris'].includes(doc.docType)
+
+                let buffer: Buffer
+                let finalFileName = doc.fileName
+
+                if (isGoogleDocType) {
+                  // Export as PDF
+                  const exportRes = await drive.files.export({
+                    fileId: doc.docId,
+                    mimeType: 'application/pdf',
+                  }, { responseType: 'arraybuffer' })
+                  buffer = Buffer.from(exportRes.data as ArrayBuffer)
+                  finalFileName = (doc.fileName || 'document') + '.pdf'
+                } else {
+                  // Download directly (for uploaded files like KTP.jpg, KK.pdf)
+                  const downloadRes = await drive.files.get({
+                    fileId: doc.docId,
+                    alt: 'media',
+                  }, { responseType: 'arraybuffer' })
+                  buffer = Buffer.from(downloadRes.data as ArrayBuffer)
+
+                  // Get file metadata for mimetype
+                  const meta = await drive.files.get({ fileId: doc.docId, fields: 'name,mimeType' })
+                  outputMimeType = meta.data.mimeType || 'application/octet-stream'
+                  finalFileName = meta.data.name || doc.fileName
+                }
+
+                // Convert to base64 data URL
+                const base64 = buffer.toString('base64')
+                const dataUrl = `data:${outputMimeType};base64,${base64}`
+
+                // Build caption
+                const docTypeLabel: Record<string, string> = {
+                  'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+                  'lokasi-kerja': 'Lokasi Kerja',
+                  'spr': 'SPR', 'flpp': 'FLPP', 'ajb': 'AJB', 'bphtb': 'BPHTB',
+                  'notaris': 'Notaris', 'ktp': 'KTP', 'kk': 'KK', 'npwp': 'NPWP', 'sertifikat': 'Sertifikat',
+                }
+                const label = docTypeLabel[doc.docType] || doc.docType
+                const caption = `📄 ${label} — ${finalFileName}`
+
+                filesToSend.push({ dataUrl, fileName: finalFileName, caption, mimeType: outputMimeType })
+              } catch (fileErr: any) {
+                console.error(`[DINA] Failed to fetch file ${doc.docId}:`, fileErr?.message)
+              }
+            }
+
+            if (filesToSend.length > 0) {
+              toolExecution.directResponse = `✅ Berhasil mengambil ${filesToSend.length} berkas dari Google Drive. File terlampir. 📄`
+            } else if (!toolExecution.directResponse) {
+              toolExecution.directResponse = `❌ GAGAL mengambil berkas dari Google Drive. Cek log untuk detail.`
+            }
+          }
+        } catch (parseErr) {
+          console.error('[DINA] Failed to parse FILES_TO_SEND:', parseErr)
+        }
+      }
+    }
+
     // === CRITICAL: If executeTools returned a directResponse, BYPASS the LLM call entirely.
     // This prevents hallucinations on critical operations (DELETE, CONFIRM, CANCEL).
     // The LLM (especially Nemotron fallback) tends to hallucinate "Berhasil menghapus X"
@@ -170,6 +265,7 @@ export async function POST(req: NextRequest) {
         response: aiResponseDirect,
         model: 'direct-bypass',
         toolsExecuted: intent.tools,
+        files: filesToSend,  // For WA bot to send via sendFile()
         dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
       })
     }
@@ -296,6 +392,7 @@ export async function POST(req: NextRequest) {
       response: aiResponse,
       model: modelUsed,
       toolsExecuted: intent.tools,
+      files: filesToSend,  // Empty array if not SEND_FILE (for WA bot consistency)
       dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
     })
   } catch (err: any) {
