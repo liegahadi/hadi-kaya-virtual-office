@@ -16,11 +16,36 @@ export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, customerId } = await req.json()
+    const { message, customerId, channel, senderNumber, senderName, isOwner } = await req.json()
     if (!message) return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 })
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not configured' }, { status: 500 })
+
+    // Determine channel context
+    const isWhatsApp = channel === 'WHATSAPP_GROUP' || channel === 'WHATSAPP_PRIVATE'
+    const isGroupChat = channel === 'WHATSAPP_GROUP'
+    const isPrivateChat = channel === 'WHATSAPP_PRIVATE'
+    const isOwnerUser = isOwner || (!isWhatsApp) // Dashboard chat = always owner
+
+    // Permission check: private chat from non-owner → reject
+    if (isPrivateChat && !isOwnerUser) {
+      return NextResponse.json({
+        success: true,
+        response: 'Maaf, saya DINA hanya melayani di grup. Silakan join grup untuk berkomunikasi dengan saya. 🙏',
+        model: 'permission-reject',
+      })
+    }
+
+    // Permission check: DELETE in group from non-owner → reject
+    const intent = detectIntent(message)
+    if (intent.action === 'DELETE_CUSTOMER' && isGroupChat && !isOwnerUser) {
+      return NextResponse.json({
+        success: true,
+        response: 'Maaf, hapus konsumen hanya bisa dilakukan oleh owner (Hadi). Silakan hubungi Hadi untuk menghapus konsumen. 🙏',
+        model: 'permission-reject',
+      })
+    }
 
     // Step 1: Get customer data for context
     let customer: any = null
@@ -31,16 +56,17 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Step 2: Detect intent from user message
-    const intent = detectIntent(message)
-
     // Step 3: Execute DB tools based on intent
     const toolResults = await executeTools(intent, customerId, message)
 
-    // Step 4: Build system prompt with customer context + tool results
+    // Step 4: Build system prompt with customer context + tool results + channel info
     const customerContext = buildCustomerContext(customer)
+    const channelInfo = isWhatsApp
+      ? `\n## KONTEKS CHANNEL\n- Channel: ${channel}\n- Pengirim: ${senderName || 'Unknown'} (${senderNumber || '-'})\n- Is Owner: ${isOwnerUser ? 'YA' : 'TIDAK'}\n- Is Group: ${isGroupChat ? 'YA' : 'TIDAK'}`
+      : ''
     const systemPrompt = DINA_SYSTEM_PROMPT
       .replace('{customerContext}', customerContext)
+      + channelInfo
       + (toolResults ? `\n\n## HASIL QUERY DATABASE (gunakan data ini untuk menjawab)\n${toolResults}` : '')
 
     // Step 5: Get conversation history

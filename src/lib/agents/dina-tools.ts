@@ -208,29 +208,54 @@ export function detectIntent(message: string): IntentResult {
   }
 
   // === CREATE CUSTOMER ===
-  // Detect: "tambah konsumen", "daftarin konsumen", "bikin konsumen baru", "input konsumen"
-  if ((msg.includes('tambah') || msg.includes('daftarin') || msg.includes('daftar') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input') || msg.includes('masukin konsumen')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+  // Detect: "dapat konsumen baru", "tambah konsumen", "daftarin konsumen", "bikin konsumen baru"
+  // Also: "namanya [X] di blok [Y]" or "namanya [X] blok [Y]"
+  const hasCreateKeyword = msg.includes('tambah') || msg.includes('daftarin') || msg.includes('daftar') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input') || msg.includes('masukin') || msg.includes('dapat konsumen') || msg.includes('konsumen baru')
+  const hasCustomerWord = msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah')
+
+  if (hasCreateKeyword && hasCustomerWord) {
     action = 'CREATE_CUSTOMER'
-    // Try to extract name after "konsumen" or "nama"
-    const nameMatch = msg.match(/(?:konsumen|debitur|nasabah|nama)\s+([A-Za-z\s]+)/)
-    if (nameMatch) {
-      // Take first 3 words max
-      newCustomerName = nameMatch[1].trim().split(/\s+/).slice(0, 4).join(' ')
-      // Filter stopwords
-      const stop = ['baru', 'dong', 'ya', 'tolong', 'dengan', 'dari', 'ke', 'yang', 'ini', 'itu']
-      const words = newCustomerName.split(' ').filter((w: string) => !stop.includes(w.toLowerCase()))
-      if (words.length > 0) newCustomerName = words.join(' ')
+
+    // Extract name: "namanya [X]", "nama [X]", "konsumen [X]", "debitur [X]"
+    const namePatterns = [
+      msg.match(/namanya\s+([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+      msg.match(/nama\s+([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+      msg.match(/(?:konsumen|debitur|nasabah)\s+(?:baru\s+)?(?:namanya\s+)?([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+    ]
+    for (const m of namePatterns) {
+      if (m && m[1]) {
+        const stop = ['baru', 'dong', 'ya', 'tolong', 'dengan', 'dari', 'ke', 'yang', 'ini', 'itu', 'namanya', 'nama', 'konsumen', 'debitur', 'nasabah', 'di']
+        const words = m[1].trim().split(/\s+/).filter((w: string) => !stop.includes(w.toLowerCase()))
+        if (words.length > 0) {
+          newCustomerName = words.join(' ')
+          break
+        }
+      }
     }
+
+    // Extract block: "di blok E7", "blok E7", "di E7", "unit E7"
+    const blockPatterns = [
+      msg.match(/di\s+blok\s+([A-Za-z]\d+)/i),
+      msg.match(/blok\s+([A-Za-z]\d+)/i),
+      msg.match(/di\s+([A-Za-z]\d+)/i),
+      msg.match(/unit\s+([A-Za-z]\d+)/i),
+    ]
+    for (const m of blockPatterns) {
+      if (m && m[1]) {
+        newCustomerBlock = m[1].toUpperCase()
+        break
+      }
+    }
+
     // Extract phone
     const phoneMatch = msg.match(/(?:hp|wa|whatsapp|telepon|telp|no)\s*[:.]?\s*(\d{8,15})/) || msg.match(/(\d{10,15})/)
     if (phoneMatch) newCustomerPhone = phoneMatch[1]
-    // Extract block
-    const blockMatchCreate = msg.match(/blok\s+([A-Za-z]\d+)/i)
-    if (blockMatchCreate) newCustomerBlock = blockMatchCreate[1].toUpperCase()
+
     // Extract bank
     if (msg.includes('btn')) newCustomerBank = 'BTN'
     else if (msg.includes('mandiri')) newCustomerBank = 'MANDIRI'
-    else if (msg.includes('bsb') || msg.includes('syariah')) newCustomerBank = 'BSB_SYARIAH'
+    else if (msg.includes('bsb') || msg.includes('syariah') || msg.includes('sumsel') || msg.includes('babel')) newCustomerBank = 'BSB_SYARIAH'
+
     tools.push('getAllCustomers')
   }
 
