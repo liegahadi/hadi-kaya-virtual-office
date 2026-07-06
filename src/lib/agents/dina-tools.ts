@@ -52,6 +52,10 @@ export interface PendingActionRecord {
 const PENDING_TTL_MINUTES = 5
 
 // Find active pending action for this conversation/sender
+// Scoping rules:
+//   1. If conversationId provided → scope by conversationId
+//   2. Else if channel + senderNumber provided → scope by both (WA per-user)
+//   3. Else if channel only provided → scope by channel (DASHBOARD single owner)
 export async function getActivePendingAction(opts: {
   conversationId?: string
   channel?: string
@@ -67,15 +71,22 @@ export async function getActivePendingAction(opts: {
 
     // Find active one for this context
     const where: any = { status: 'PENDING' }
-    if (opts.conversationId) where.conversationId = opts.conversationId
-    else if (opts.channel && opts.senderNumber) {
+    if (opts.conversationId) {
+      where.conversationId = opts.conversationId
+    } else if (opts.channel && opts.senderNumber) {
       where.channel = opts.channel
       where.senderNumber = opts.senderNumber
     } else if (opts.channel) {
       where.channel = opts.channel
+      // For DASHBOARD channel, only match where senderNumber is null
+      // (so DASHBOARD pending doesn't conflict with WA pending)
+      if (opts.channel === 'DASHBOARD') {
+        where.OR = [{ senderNumber: null }, { senderNumber: '' }]
+      }
     } else {
       // Default to DASHBOARD
       where.channel = 'DASHBOARD'
+      where.OR = [{ senderNumber: null }, { senderNumber: '' }]
     }
 
     const action = await db.pendingAction.findFirst({
@@ -105,14 +116,20 @@ export async function getActivePendingAction(opts: {
 // Create new pending action (cancels previous pending for same context)
 export async function setPendingAction(action: Omit<PendingActionRecord, 'id'>): Promise<void> {
   try {
-    // Cancel previous pending for same context
-    const where: any = { status: 'PENDING' }
-    if (action.conversationId) where.conversationId = action.conversationId
-    else if (action.channel && action.senderNumber) {
-      where.channel = action.channel
-      where.senderNumber = action.senderNumber
+    // Cancel previous pending for same context (same scoping rules as getActivePendingAction)
+    const cancelWhere: any = { status: 'PENDING' }
+    if (action.conversationId) {
+      cancelWhere.conversationId = action.conversationId
+    } else if (action.channel && action.senderNumber) {
+      cancelWhere.channel = action.channel
+      cancelWhere.senderNumber = action.senderNumber
+    } else if (action.channel) {
+      cancelWhere.channel = action.channel
+      if (action.channel === 'DASHBOARD') {
+        cancelWhere.OR = [{ senderNumber: null }, { senderNumber: '' }]
+      }
     }
-    await db.pendingAction.updateMany({ where, data: { status: 'CANCELLED' } })
+    await db.pendingAction.updateMany({ where: cancelWhere, data: { status: 'CANCELLED' } })
 
     // Create new
     await db.pendingAction.create({
@@ -156,10 +173,16 @@ export async function cancelPendingAction(opts: {
 }): Promise<void> {
   try {
     const where: any = { status: 'PENDING' }
-    if (opts.conversationId) where.conversationId = opts.conversationId
-    else if (opts.channel && opts.senderNumber) {
+    if (opts.conversationId) {
+      where.conversationId = opts.conversationId
+    } else if (opts.channel && opts.senderNumber) {
       where.channel = opts.channel
       where.senderNumber = opts.senderNumber
+    } else if (opts.channel) {
+      where.channel = opts.channel
+      if (opts.channel === 'DASHBOARD') {
+        where.OR = [{ senderNumber: null }, { senderNumber: '' }]
+      }
     }
     await db.pendingAction.updateMany({ where, data: { status: 'CANCELLED' } })
   } catch (err) {
@@ -1202,8 +1225,10 @@ export async function executeTools(
 
     if (targetCustomer) {
       // Set DB-backed pending action
+      // Don't set conversationId — scope by channel (+ senderNumber for WA)
+      // This prevents scoping issues when conversationId differs between requests
       await setPendingAction({
-        conversationId: executeContext.conversationId || null,
+        conversationId: null,
         channel: executeContext.channel || 'DASHBOARD',
         senderNumber: executeContext.senderNumber || null,
         type: 'DELETE',
