@@ -641,3 +641,134 @@ Next Steps for Owner:
 8. Set GROUP_JID di Railway variables
 9. Test: tag DINA di grup dengan "@Dina berapa konsumen kita?"
 10. Kalau ada masalah, baca troubleshooting section di DEPLOY.md
+
+---
+Task ID: multi-agent-v15-oracle-cloud
+Agent: Main (GLM)
+Task: Multi-agent WA bot architecture (15 agents) + Oracle Cloud Always Free deployment
+
+User requirements:
+1. Plan for 15 AI agents (not just DINA)
+2. 15th agent = Leader Marketing (RANGGA — creative + KPI manager for marketing team)
+3. Currently has 3 SIM cards: DINA, RINA, MITRA
+4. Want free-forever hosting (Railway free only 30 days)
+
+Database Changes:
+- Added 15th agent: RANGGA (Leader Marketing & Creative Director)
+  * Role: MARKETING_LEADER
+  * Skills: strategi-marketing, content-creation, video-editing, image-design,
+    copywriting, social-media-management, team-leadership, kpi-tracking
+  * Personality: Tegas tapi adil, kreatif, detail-oriented, bisa marah kalau perlu
+  * Set KPI untuk 10 Marketing AI, evaluate performa, report ke owner
+  * Devil's advocate mode enabled
+- Total agents in DB: 15 (4 staff + 1 leader + 10 marketing)
+
+Multi-Agent WA Bot Architecture (config-driven):
+- wa-bot/src/agent.js (NEW, 280 lines) — config-driven single agent runner
+  * Each agent: own auth_state_${agentName}/ folder (separate WA sessions)
+  * Own WA connection, own QR code (printed with [AGENT_NAME] prefix)
+  * Own group participant cache, own message handler
+  * Auto-reconnect on disconnect (5s delay, prevents tight loop)
+  * Returns handle: { sock, status, stop }
+- wa-bot/src/agents/index.js (NEW) — All 15 agent configs
+  * Read from env vars: ${NAME}_WHATSAPP, ${NAME}_GROUP_JID, ${NAME}_AGENT_ID
+  * Agent ENABLED only if its WHATSAPP env var is set
+  * Owner enables agents one-by-one as SIM cards become available
+  * printAgentStatus() — pretty print all 15 agents + enable status
+  * Tested locally: 'node src/main.js --status' shows registry correctly
+- wa-bot/src/main.js (NEW) — Orchestrator
+  * Loads all enabled agents, starts each concurrently in same Node process
+  * CLI args: 'node src/main.js' (all), 'DINA' (single), '--status' (list)
+  * Health check HTTP server on PORT (Railway/Oracle compatible)
+    - GET /health — JSON status (all agents connected, messagesProcessed, botJid)
+    - GET /status — text agent status
+    - GET /ping — pong
+  * Graceful shutdown (SIGTERM/SIGINT closes all agents + HTTP server)
+
+Vercel API Routes (new):
+- src/lib/agents/agent-chat-handler.ts (shared handler, config-driven)
+- /api/rina/chat — RINA (Finance AI)
+- /api/mitra/chat — MITRA (Material AI)
+- /api/ratna/chat — RATNA (CAO)
+- /api/rangga/chat — RANGGA (Leader Marketing)
+- /api/marketing/chat — Shared endpoint for 10 Marketing AI (agentId in body)
+- /api/dina/chat — kept as-is (has DB tools, file sending, pending action — too complex to merge)
+
+Each agent has custom system prompt with:
+- Identity (name, role, responsibilities)
+- Personality (teliti/ramah/tegas/kreatif sesuai role)
+- Knowledge context (project info, target market, materials, etc.)
+- Routing rules (kalau ditanya hal teknis → arahkan ke agent lain)
+- Output style (emoji usage, language, format)
+
+Oracle Cloud Always Free Deployment (REPLACES Railway):
+- wa-bot/DEPLOY.md (rewritten, 450+ lines):
+  * Why Oracle Cloud Always Free (24GB RAM, free forever, vs Railway 30-day trial)
+  * Step 1: Daftar Oracle Cloud + buat ARM VM (4 cores, 24GB RAM, 200GB storage)
+    - Region: Singapore (terdekat Indonesia)
+    - Need credit card verification (TIDAK akan ditarik)
+  * Step 2: SSH to VM + run setup-oracle-cloud.sh (1 command)
+  * Step 3: Scan QR per agent (each agent prints its own QR with [AGENT_NAME] prefix)
+  * Step 4: Buat grup WA + dapatkan GROUP_JID
+  * Step 5: Test multi-agent (tag @Dina, @Rina, @Mitra, @Rangga in group)
+  * Step 6: Add more agents bertahap (edit .env, restart PM2, scan QR baru)
+  * Step 7: Maintenance & monitoring (PM2 commands, backup auth_state)
+  * Troubleshooting (SSH issues, bot crash loop, QR not appearing, session expired)
+  * Architecture diagram: HP ↔ WA Server ↔ Oracle VM ↔ Vercel ↔ Neon DB + Drive
+  * RAM estimate: 15 agents × 200MB = 3GB (well within 24GB free tier)
+- wa-bot/setup-oracle-cloud.sh (NEW, executable, 1-command setup):
+  * Run on Oracle VM as root
+  * Auto: update system, install Node 20 LTS, git, PM2
+  * Clone repo, npm install wa-bot deps
+  * Create .env from .env.example
+  * Setup PM2 + systemd auto-start on boot
+  * Open firewall port 3000
+  * Print next steps for owner
+- wa-bot/.env.example (NEW):
+  * Template for all 15 agents env vars
+  * Common: OWNER_WHATSAPP, VERCEL_API_URL, WORK_START, WORK_END, PORT
+  * Per-agent: ${NAME}_WHATSAPP, ${NAME}_GROUP_JID, ${NAME}_AGENT_ID
+
+Multi-Agent Mode vs Single-Agent Mode:
+- Multi (recommended): 1 Node process, all enabled agents
+  - RAM efficient (~50MB base + 200MB per agent = 3GB for 15 agents)
+  - 1 PM2 process, 1 log file
+  - If 1 agent crashes, auto-restart only that agent
+- Single (legacy): 1 Node process per agent
+  - Useful for debugging 1 specific agent
+  - Or for deploying to multiple VMs (1 VM per agent)
+
+Production Tests (all PASSED):
+- /api/dina/chat → ✅ "Hai! Selamat datang di grup KPR ANJAYO 16..."
+- /api/rina/chat → ✅ "Halo! Saya RINA – Finance AI Assistant..."
+- /api/mitra/chat → ✅ "Halo! Untuk mengetahui stok semen saat ini..."
+- /api/rangga/chat → ✅ "Hai! Berikut beberapa ide TikTok konten untuk ANJAYO 16..."
+- wa-bot 'node src/main.js --status' → ✅ Shows all 15 agents with enable status
+
+Files Created: 11 new files
+Files Modified: 2 (DEPLOY.md rewritten, package.json updated)
+DB state: 15 agents in DB (RATNA, DINA, RINA, MITRA, RANGGA + 10 Marketing AI)
+
+Deploy: pushed 1 commit (e1ff3bf) → Vercel auto-deploy successful
+
+Stage Summary:
+- 15-agent architecture READY (config-driven, scalable)
+- Oracle Cloud Always Free guide READY (1-command setup script)
+- 3 agent endpoints tested in production (DINA, RINA, MITRA, RANGGA)
+- Owner can start deploying to Oracle Cloud NOW with 3 SIM cards (DINA, RINA, MITRA)
+- Add more agents anytime by editing .env + restarting PM2
+
+Next Steps for Owner:
+1. Daftar Oracle Cloud Always Free (cloud.oracle.com, ~10 menit)
+2. Buat ARM VM (4 cores, 24GB RAM) — see DEPLOY.md Step 1
+3. SSH to VM + run: wget .../setup-oracle-cloud.sh && sudo ./setup-oracle-cloud.sh
+4. Edit .env — isi DINA_WHATSAPP, RINA_WHATSAPP, MITRA_WHATSAPP
+5. pm2 restart hadi-kaya-wa-bot → scan 3 QR codes dengan 3 HP berbeda
+6. Buat grup WA + tambahkan 3 agents → dapatkan GROUP_JID
+7. Edit .env again — isi GROUP_JID per agent → restart
+8. Test: tag @Dina, @Rina, @Mitra di grup
+9. Kalau SIM cards baru datang (RATNA, RANGGA, 10 Marketing AI):
+   - Edit .env, tambah ${NAME}_WHATSAPP
+   - pm2 restart
+   - Scan QR baru untuk agent tersebut
+   - Test tag di grup
