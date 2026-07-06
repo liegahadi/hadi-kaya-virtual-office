@@ -123,11 +123,18 @@ export async function POST(req: NextRequest) {
     } catch (dbErr) { console.error('Conversation lookup (non-fatal):', dbErr) }
 
     // Step 2: Execute DB tools based on intent — pass executeContext for pending action scoping
-    const executeContext = {
-      conversationId,
-      channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
-      senderNumber: senderNumber || undefined,
-    }
+    // For DASHBOARD: scope by channel only (single owner, no need for conversationId scoping)
+    // For WHATSAPP: scope by channel + senderNumber (so each user has own pending state)
+    const executeContext = isWhatsApp
+      ? {
+          channel: channel as string,
+          senderNumber: senderNumber || undefined,
+          // No conversationId — scope by senderNumber instead
+        }
+      : {
+          channel: 'DASHBOARD',
+          // No conversationId — scope by channel only (dashboard = single owner)
+        }
     const toolResults = await executeTools(intent, customerId, message, executeContext)
 
     // Step 3: Check if there's a pending action — tell LLM about it so it knows context
