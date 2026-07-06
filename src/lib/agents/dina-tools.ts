@@ -485,10 +485,12 @@ export function detectIntent(message: string): IntentResult {
     action = 'CREATE_CUSTOMER'
 
     // Extract name: "namanya [X]", "nama [X]", "konsumen [X]", "debitur [X]"
+    // CRITICAL: Use \s+ (require whitespace) before keyword in lookahead, NOT \s*
+    // Otherwise "Budi" matches "di" inside the word — captures just "Bu" instead of "Budi Santoso"
     const namePatterns = [
-      msg.match(/namanya\s+([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
-      msg.match(/nama\s+([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
-      msg.match(/(?:konsumen|debitur|nasabah)\s+(?:baru\s+)?(?:namanya\s+)?([A-Za-z][A-Za-z\s]+?)(?:\s*(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+      msg.match(/namanya\s+([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+      msg.match(/nama\s+([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+      msg.match(/(?:konsumen|debitur|nasabah)\s+(?:baru\s+)?(?:namanya\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
     ]
     for (const m of namePatterns) {
       if (m && m[1]) {
