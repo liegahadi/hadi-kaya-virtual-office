@@ -440,21 +440,22 @@ export function detectIntent(message: string): IntentResult {
   //
   // We also detect CANCEL_PENDING here: "batal", "cancel", "tidak", "jangan"
   const confirmKeywords = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan', 'do it', 'sure', 'go']
-  const cancelKeywords = ['batal', 'cancel', 'tidak', 'jangan', 'ga jadi', 'gajadi', 'no', 'stop', 'berhenti']
+  const cancelKeywords = ['batal', 'cancel', 'tidak', 'jangan', 'ga jadi', 'gajadi', 'berhenti']
 
   const msgTrimmed = msg.trim()
   const isShortMsg = msgTrimmed.length <= 30 // short confirmation phrases only
+  const isVeryShort = msgTrimmed.length <= 15 // strict — for confirm/cancel triggers
+  // Use word boundary ONLY (no substring) to avoid false positives like "no" in "nomor"
   const isConfirmWord = confirmKeywords.some(kw => {
-    // Match whole word boundary, not substring (so "ya" doesn't match "yakin" falsely, etc.)
     const regex = new RegExp(`\\b${kw}\\b`, 'i')
     return regex.test(msgTrimmed)
   })
   const isCancelWord = cancelKeywords.some(kw => {
-    const regex = new RegExp(`\\b${kw}\\b|${kw}`, 'i')
+    const regex = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`, 'i')
     return regex.test(msgTrimmed)
   })
 
-  if (isCancelWord && isShortMsg) {
+  if (isCancelWord && isVeryShort) {
     action = 'CANCEL_PENDING'
     tools.push('getAllCustomers')
   } else if (isShortMsg && isConfirmWord) {
@@ -463,7 +464,6 @@ export function detectIntent(message: string): IntentResult {
     // Must be ≤15 chars OR pure confirmation keyword
     const pureConfirm = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan']
     const isPureConfirm = pureConfirm.some(kw => msgTrimmed.toLowerCase() === kw || msgTrimmed.toLowerCase() === `${kw}.` || msgTrimmed.toLowerCase() === `${kw}!`)
-    const isVeryShort = msgTrimmed.length <= 15
 
     if (isPureConfirm || isVeryShort) {
       // Mark as CONFIRM_DELETE or CONFIRM_CREATE — executeTools will check DB
