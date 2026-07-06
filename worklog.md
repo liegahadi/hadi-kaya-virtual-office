@@ -518,3 +518,126 @@ Next Steps for Owner:
   * Tag DINA lagi: "@Dina kirim yang nomor 1"
   * DINA kirim PDF ke grup
 - File akan dikirim sebagai PDF document (bisa di-download anggota grup)
+
+---
+Task ID: dina-v8.4-disambiguation + baileys-deploy-guide
+Agent: Main (GLM)
+Task: Duplicate customer detection + Baileys WA deployment guide
+
+User requests:
+1. Handle case where 2+ customers have same name + same birthdate
+2. Clarify: when DINA sends berkas via WA, link only or actual file? PDF or original format?
+3. Start connecting DINA to Baileys WA bridge
+
+Q2 ANSWER (file format):
+- DINA sends ACTUAL FILE (bukan link)
+- Format tergantung aslinya:
+  * KTP.jpg → dikirim sebagai image (inline preview di WA)
+  * KTP.png → dikirim sebagai image
+  * KTP.pdf → dikirim sebagai PDF document
+  * SK Kerja + Slip Gaji (Google Docs) → di-export sebagai PDF, dikirim sebagai document
+- WA bot sendFile() otomatis detect mimeType:
+  * image/* → kirim sebagai image (preview inline)
+  * application/pdf → kirim sebagai PDF document
+  * lainnya → kirim sebagai generic document
+- File size limit WA: ~100MB (KTP/slip gaji biasanya <5MB, aman)
+
+Q1 + Q3 IMPLEMENTED:
+
+1. DUPLICATE CUSTOMER DETECTION (Q1)
+   - New helper: findCustomerWithDisambiguation(name, {nik, blockNumber})
+   - Priority: NIK > blockNumber > exact name > contains name
+   - If 2+ matches: return needsDisambiguation=true
+   - New function: buildDisambiguationMessage(duplicates) — list all matches
+     with blok/bank/stage/NIK-suffix/phone, ask user to disambiguate
+   - Applied to DELETE_CUSTOMER, GET_FILES, SEND_FILE, UPDATE_FIELD
+   - Test verified: "hapus konsumen budi santoso" → DINA lists 2 matches,
+     asks user "yang blok F7 atau F8?"
+   - Test verified: "hapus budi santoso yang blok F8" → DINA identifies
+     correct customer (MANDIRI), proceeds with confirmation
+   - CRITICAL: pending action NOT created when duplicates exist (safer —
+     prevents wrong-customer delete when user is confused)
+
+2. BAILLEYS WA DEPLOYMENT GUIDE (Q3)
+   - wa-bot/DEPLOY.md (450+ lines) — comprehensive 6-step guide:
+     * Step 1: Setup Railway project (deploy from GitHub or CLI)
+       - Root Directory: wa-bot (PENTING — hanya deploy folder wa-bot)
+       - Build: npm install, Start: node src/index.js
+     * Step 2: Set env vars (VERCEL_API_URL, OWNER_WHATSAPP, GROUP_JID, dll)
+       - Format nomor: 628117176687 (tanpa + atau 0 di depan)
+     * Step 3: Scan QR code WhatsApp
+       - Buka Railway logs → QR muncul → scan pakai HP
+       - Warning: JANGAN pakai nomor WA pribadi (DINA butuh SIM sendiri)
+     * Step 4: Tambahkan DINA ke grup + dapatkan GROUP_JID
+       - Cara 1: kirim test msg di grup → lihat Railway logs → copy JID
+       - Cara 2: WA Web URL → copy JID dari URL
+     * Step 5: Test scenarios (grup tag, DM, permission matrix)
+     * Step 6: Monitor & maintain (logs, auto-restart, jam gratis)
+       - Railway free: 500 jam/bulan, DINA pakai ~208 jam (8h × 26 hari) ✅
+   - Troubleshooting section: QR tidak muncul, bot gak respon, file gak terkirim
+   - Architecture diagram: HP ↔ WA Server ↔ Railway ↔ Vercel ↔ DB+Drive
+   - Code structure overview
+   - Multi-agent setup (DINA+RINA+MITRA in 1 Railway service)
+
+3. HEALTH CHECK SERVER (Railway monitoring)
+   - wa-bot/src/index.js: tambah HTTP server di process.env.PORT
+   - GET /health → JSON status (bot name, owner, group JID, work hours, timestamp)
+   - GET /ping → 'pong'
+   - Tanpa ini, Railway bisa mark service as "unhealthy" dan restart terus
+   - Railway auto-assign PORT via env var
+
+4. RAILWAY CONFIG
+   - wa-bot/railway.json: NIXPACKS builder + restart policy (max 10 retries)
+   - wa-bot/.gitignore: exclude auth_state (WA session) + node_modules
+
+Production Tests:
+- "hapus konsumen budi santoso" → ✅ disambiguation message muncul (2 matches listed)
+- "hapus konsumen budi santoso yang blok F8" → ✅ correct customer identified (MANDIRI F8)
+- Cleanup: deleted 2 test Budi Santoso, DB back to 3 customers (Andas, Jenni, Hadi)
+
+Files Modified:
+- src/lib/agents/dina-tools.ts:
+  * +findCustomerWithDisambiguation helper
+  * +buildDisambiguationMessage helper
+  * DELETE_CUSTOMER: use disambiguation-aware lookup
+  * GET_FILES: use disambiguation-aware lookup
+  * SEND_FILE: use disambiguation-aware lookup
+  * UPDATE_FIELD: use disambiguation-aware lookup
+- wa-bot/src/index.js:
+  * +http import
+  * +health check HTTP server on PORT
+  * +GET /health, GET /ping endpoints
+  * Graceful shutdown closes HTTP server
+
+Files Added:
+- wa-bot/DEPLOY.md (comprehensive 450+ line deploy guide)
+- wa-bot/railway.json (Railway builder config)
+- wa-bot/.gitignore (exclude auth_state, node_modules)
+- scripts/create-duplicate-test.ts (test disambiguation)
+- scripts/cleanup-duplicates.ts (cleanup test data)
+
+DB state (final):
+- 3 customers: Andas (E4), Jenni (E5), Hadi (E6) — all restored
+- Test duplicates (Budi Santoso F7 + F8) deleted
+
+Deploy: 1 commit pushed (ea02727) → Vercel auto-deploy successful
+
+Stage Summary:
+- Q1 (duplicate names): FIXED — DINA lists all matches, asks user to disambiguate
+  by blok or NIK. No more silent wrong-customer operations.
+- Q2 (file format): CLARIFIED — actual file sent (not link), format follows
+  original (JPG→image, PDF→document, Google Docs→exported as PDF)
+- Q3 (Baileys deploy): GUIDE READY — wa-bot/DEPLOY.md has everything needed
+  to deploy DINA to Railway. Owner can start deploy anytime.
+
+Next Steps for Owner:
+1. Baca wa-bot/DEPLOY.md (450+ lines, comprehensive)
+2. Siapkan SIM card baru khusus untuk DINA (JANGAN pakai nomor pribadi)
+3. Login Railway.app pakai GitHub
+4. Deploy wa-bot folder (Root Directory: wa-bot)
+5. Set env vars (VERCEL_API_URL, OWNER_WHATSAPP)
+6. Scan QR code di Railway logs pakai HP (nomor DINA)
+7. Buat grup WA, tambahkan DINA
+8. Set GROUP_JID di Railway variables
+9. Test: tag DINA di grup dengan "@Dina berapa konsumen kita?"
+10. Kalau ada masalah, baca troubleshooting section di DEPLOY.md
