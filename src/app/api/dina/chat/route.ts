@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
       response: aiResponse,
       model: modelUsed,
       toolsExecuted: intent.tools,
-      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER',
+      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE',
     })
   } catch (err: any) {
     console.error('DINA chat error:', err)
