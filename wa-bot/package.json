@@ -1,12 +1,17 @@
 {
   "name": "hadi-kaya-wa-bot",
-  "version": "1.0.0",
-  "description": "WhatsApp bot for Hadi Kaya Virtual Office (DINA AI Agent)",
-  "main": "src/index.js",
+  "version": "2.0.0",
+  "description": "Multi-agent WhatsApp bot for Hadi Kaya Virtual Office (DINA, RINA, MITRA, RATNA, RANGGA, 10 Marketing AI)",
+  "main": "src/main.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "start": "node src/main.js",
+    "start:dina": "node src/main.js DINA",
+    "start:rina": "node src/main.js RINA",
+    "start:mitra": "node src/main.js MITRA",
+    "start:3staff": "node src/main.js DINA RINA MITRA",
+    "status": "node src/main.js --status",
+    "dev": "node --watch src/main.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.0",
