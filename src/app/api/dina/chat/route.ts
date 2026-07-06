@@ -138,6 +138,40 @@ export async function POST(req: NextRequest) {
     const toolExecution = await executeTools(intent, customerId, message, executeContext)
     const toolResults = toolExecution.results
 
+    // === CONTEXT RECOVERY: If SEND_FILE has no customer name, look at recent messages ===
+    // User flow: "Dina minta berkas Hadi" → DINA lists files → user: "kirim yang nomor 1"
+    // The "kirim yang nomor 1" has no customer name — we need to recover it from context.
+    if (intent.action === 'SEND_FILE' && !intent.customerName && !customerId && conversationId) {
+      try {
+        const recentMsgs = await db.message.findMany({
+          where: { conversationId, role: 'user' },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        })
+        // Scan recent messages for customer names
+        const allCustomers = await db.customer.findMany({ select: { id: true, name: true } })
+        for (const msg of recentMsgs) {
+          const msgLower = msg.content.toLowerCase()
+          // Find first customer whose name (first token, ≥3 chars) appears in this recent message
+          const matched = allCustomers.find(c => {
+            const firstToken = (c.name || '').toLowerCase().split(/\s+/)[0]
+            return firstToken.length >= 3 && msgLower.includes(firstToken)
+          })
+          if (matched) {
+            console.log(`[DINA] Context recovery: found customer "${matched.name}" from recent message`)
+            // Re-run executeTools with recovered customerId
+            const retryExecution = await executeTools(intent, matched.id, message, executeContext)
+            // Replace toolExecution with retry
+            toolExecution.results = retryExecution.results
+            toolExecution.directResponse = retryExecution.directResponse
+            break
+          }
+        }
+      } catch (ctxErr) {
+        console.error('[DINA] Context recovery error (non-fatal):', ctxErr)
+      }
+    }
+
     // === FILE SENDING: If SEND_FILE was triggered, fetch files from Google Drive ===
     // The executeTools pushed `[sendFile:FILES_TO_SEND] [{...}]` to results.
     // We parse that, fetch each file from Drive, and include as base64 dataUrl in response.
