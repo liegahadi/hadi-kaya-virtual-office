@@ -15,17 +15,24 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
   updateValue?: string
-  // For CREATE_CUSTOMER
   newCustomerName?: string
   newCustomerPhone?: string
   newCustomerBlock?: string
   newCustomerBank?: string
 }
+
+// Pending action state — DINA remembers what it asked user to confirm
+// This persists across messages within the same conversation
+let pendingAction: { type: 'DELETE' | 'CREATE'; customerName?: string; customerId?: string; customerData?: any } | null = null
+
+export function getPendingAction() { return pendingAction }
+export function clearPendingAction() { pendingAction = null }
+export function setPendingAction(action: typeof pendingAction) { pendingAction = action }
 
 // ============================================================
 // Memory Categories — each agent has its own memory domain
@@ -184,6 +191,19 @@ export function detectIntent(message: string): IntentResult {
         }
         break
       }
+    }
+  }
+
+  // === CONFIRM PENDING ACTION ===
+  // If user says "ya", "iya", "konfirmasi", "lanjut", "eksekusi", "gas", "oke", "setuju"
+  // AND there's a pending action (DELETE/CREATE waiting for confirmation)
+  if (pendingAction && (msg.includes('ya') || msg.includes('iya') || msg.includes('konfirmasi') || msg.includes('lanjut') || msg.includes('eksekusi') || msg.includes('gas') || msg.includes('oke') || msg.includes('setuju') || msg.includes('yakin') || msg.includes('benar') || msg.includes('lakukan'))) {
+    if (pendingAction.type === 'DELETE') {
+      action = 'CONFIRM_DELETE'
+      tools.push('getAllCustomers')
+    } else if (pendingAction.type === 'CREATE') {
+      action = 'CONFIRM_CREATE'
+      tools.push('getAllCustomers')
     }
   }
 
@@ -802,15 +822,44 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     }
   }
 
+  // Handle CONFIRM_DELETE — user confirmed, now actually delete
+  if (intent.action === 'CONFIRM_DELETE' && pendingAction?.type === 'DELETE') {
+    const targetId = pendingAction.customerId
+    const targetName = pendingAction.customerName || ''
+    pendingAction = null // clear pending action
+
+    if (targetId) {
+      const result = await deleteCustomer(targetId, targetName)
+      results.push(`[deleteCustomer] ${result.summary}`)
+    } else {
+      results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (mungkin sudah dihapus).`)
+    }
+  }
+
+  // Handle CONFIRM_CREATE — user confirmed, now actually create
+  if (intent.action === 'CONFIRM_CREATE' && pendingAction?.type === 'CREATE') {
+    const data = pendingAction.customerData
+    pendingAction = null // clear pending action
+
+    if (data?.name) {
+      const result = await createCustomer(data)
+      results.push(`[createCustomer] ${result.summary}`)
+    } else {
+      results.push(`[createCustomer] ❌ Data konsumen tidak lengkap.`)
+    }
+  }
+
   // Handle CREATE_CUSTOMER
   if (intent.action === 'CREATE_CUSTOMER' && intent.newCustomerName) {
+    const customerData = {
+      name: intent.newCustomerName,
+      phone: intent.newCustomerPhone,
+      block: intent.newCustomerBlock,
+      bank: intent.newCustomerBank,
+    }
+    // For CREATE, execute directly (don't ask for confirmation — user already gave the command)
     try {
-      const result = await createCustomer({
-        name: intent.newCustomerName,
-        phone: intent.newCustomerPhone,
-        block: intent.newCustomerBlock,
-        bank: intent.newCustomerBank,
-      })
+      const result = await createCustomer(customerData)
       results.push(`[createCustomer] ${result.summary}`)
     } catch (err: any) {
       results.push(`[createCustomer] ❌ GAGAL: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
@@ -819,7 +868,7 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     results.push(`[createCustomer] ⚠️ User ingin tambah konsumen tapi nama tidak terdeteksi. Minta user sebutkan nama konsumen.`)
   }
 
-  // Handle DELETE_CUSTOMER
+  // Handle DELETE_CUSTOMER — set pending action for confirmation
   if (intent.action === 'DELETE_CUSTOMER') {
     let targetCustomer: any = null
     if (customerId) {
@@ -838,8 +887,10 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     }
 
     if (targetCustomer) {
-      const result = await deleteCustomer(targetCustomer.id, targetCustomer.name)
-      results.push(`[deleteCustomer] ${result.summary}`)
+      // Set pending action — DINA should ask for confirmation, then user says "ya/konfirmasi" to execute
+      pendingAction = { type: 'DELETE', customerId: targetCustomer.id, customerName: targetCustomer.name }
+      const block = targetCustomer.blockLetter + (targetCustomer.houseNumber || '') || '-'
+      results.push(`[deleteCustomer] ⏳ PENDING: Konsumen "${targetCustomer.name}" (Blok ${block}) akan dihapus PERMANEN. Semua data (berkas, unit, percakapan) akan hilang. Tanya user: "Yakin ingin hapus ${targetCustomer.name}? Ketik 'ya' untuk konfirmasi."`)
     } else {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
     }
