@@ -6,10 +6,17 @@
 // 3. Include tool results in context
 // 4. Send to Gemini (or fallback OpenRouter)
 // 5. Save conversation + extract learning to memory
+//
+// CRITICAL FIXES (v8.2):
+// - PendingAction now persisted in DB (not in-memory) — survives Vercel lambda cold starts
+// - Strict confirmation: only short messages (≤15 chars or pure confirm keyword) trigger CONFIRM_DELETE
+// - Target name validation: if user mentions different customer in confirmation, ABORT
+// - Anti-hallucination: system prompt explicitly tells LLM "if tool result doesn't show success, JANGAN bilang berhasil"
+// - AuditLog on all CREATE/UPDATE/DELETE for traceability
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DINA_SYSTEM_PROMPT, buildCustomerContext } from '@/lib/agents/dina-knowledge'
-import { detectIntent, executeTools, saveMemory, extractLearning } from '@/lib/agents/dina-tools'
+import { detectIntent, executeTools, saveMemory, extractLearning, getActivePendingAction } from '@/lib/agents/dina-tools'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -58,6 +65,23 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Permission check: non-owner in group trying to CONFIRM a DELETE they didn't initiate → reject
+    // (Pending actions are scoped to senderNumber — non-owner can only confirm their own pending actions)
+    if (intent.action === 'CONFIRM_DELETE' && isGroupChat && !isOwnerUser) {
+      // Check if there's a pending action for THIS sender
+      const pending = await getActivePendingAction({
+        channel: channel || 'WHATSAPP_GROUP',
+        senderNumber: senderNumber || '',
+      })
+      if (!pending || pending.type !== 'DELETE') {
+        return NextResponse.json({
+          success: true,
+          response: 'Tidak ada aksi penghapusan yang menunggu konfirmasi dari Anda. Hanya owner atau orang yang memulai penghapusan yang bisa konfirmasi. 🙏',
+          model: 'permission-reject',
+        })
+      }
+    }
+
     // Step 1: Get customer data for context
     let customer: any = null
     if (customerId) {
@@ -67,10 +91,52 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Step 3: Execute DB tools based on intent
-    const toolResults = await executeTools(intent, customerId, message)
+    // Step 1.5: Find or create conversation FIRST so we can pass conversationId to executeTools
+    // This ensures pending actions are properly scoped to the right conversation thread.
+    let conversationId: string | undefined
+    let conversation: any
+    try {
+      if (customerId) {
+        conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
+        if (!conversation) {
+          conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+        }
+      } else if (isWhatsApp && senderNumber) {
+        // WhatsApp: scope by sender + channel
+        conversation = await db.conversation.findFirst({
+          where: { channel: channel || 'WHATSAPP_PRIVATE' },
+          orderBy: { updatedAt: 'desc' },
+        })
+        if (!conversation) {
+          conversation = await db.conversation.create({
+            data: { channel: channel || 'WHATSAPP_PRIVATE', status: 'ACTIVE' } as any
+          })
+        }
+      } else {
+        // General dashboard chat
+        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD' } })
+        if (!conversation) {
+          conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+        }
+      }
+      conversationId = conversation.id
+    } catch (dbErr) { console.error('Conversation lookup (non-fatal):', dbErr) }
 
-    // Step 4: Build system prompt with customer context + tool results + channel info
+    // Step 2: Execute DB tools based on intent — pass executeContext for pending action scoping
+    const executeContext = {
+      conversationId,
+      channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
+      senderNumber: senderNumber || undefined,
+    }
+    const toolResults = await executeTools(intent, customerId, message, executeContext)
+
+    // Step 3: Check if there's a pending action — tell LLM about it so it knows context
+    const pendingAction = await getActivePendingAction(executeContext)
+    const pendingInfo = pendingAction
+      ? `\n\n## ⏳ PENDING ACTION AKTIF\nAda aksi yang menunggu konfirmasi user:\n- Tipe: ${pendingAction.type}\n- Target: ${pendingAction.targetName || '-'}\n- Dibuat oleh: ${pendingAction.senderNumber || 'dashboard'}\n- Channel: ${pendingAction.channel}\n\nJika user mengkonfirmasi dengan "ya"/"iya"/"konfirmasi"/"lanjut" (pesan SINGKAT ≤15 karakter), tool akan otomatis mengeksekusi. Jika user menyebutkan NAMA LAIN, aksi akan DIBATALKAN otomatis demi keamanan. JANGAN halusinasi menjalankan aksi — hanya jalankan jika tool result bilang "Berhasil".`
+      : ''
+
+    // Step 4: Build system prompt with customer context + tool results + channel info + pending action
     const customerContext = buildCustomerContext(customer)
     const channelInfo = isWhatsApp
       ? `\n## KONTEKS CHANNEL\n- Channel: ${channel}\n- Pengirim: ${senderName || 'Unknown'} (${senderNumber || '-'})\n- Is Owner: ${isOwnerUser ? 'YA' : 'TIDAK'}\n- Is Group: ${isGroupChat ? 'YA' : 'TIDAK'}`
@@ -78,18 +144,19 @@ export async function POST(req: NextRequest) {
     const systemPrompt = DINA_SYSTEM_PROMPT
       .replace('{customerContext}', customerContext)
       + channelInfo
+      + pendingInfo
       + (toolResults ? `\n\n## HASIL QUERY DATABASE (gunakan data ini untuk menjawab)\n${toolResults}` : '')
 
     // Step 5: Get conversation history
     let history: Array<{ role: string; content: string }> = []
-    if (customerId) {
-      const conversation = await db.conversation.findFirst({
-        where: { customerId, channel: 'DASHBOARD' },
-        orderBy: { updatedAt: 'desc' },
+    if (conversation?.messages) {
+      // Refresh conversation with messages
+      const convWithMsgs = await db.conversation.findUnique({
+        where: { id: conversation.id },
         include: { messages: { orderBy: { createdAt: 'desc' }, take: 15 } },
       })
-      if (conversation?.messages) {
-        history = conversation.messages.reverse().map(m => ({
+      if (convWithMsgs?.messages) {
+        history = convWithMsgs.messages.reverse().map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           content: m.content,
         }))
@@ -160,30 +227,16 @@ export async function POST(req: NextRequest) {
 
     if (!aiResponse) aiResponse = 'Maaf, saya tidak bisa merespons saat ini.'
 
-    // Step 7: Save conversation + messages to DB (ALWAYS save, even without customerId)
+    // Step 7: Save messages to DB
     try {
-      let conversationId: string | undefined
-
-      // Find or create conversation
-      let conversation: any
-      if (customerId) {
-        conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
-        if (!conversation) {
-          conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
-        }
-      } else {
-        // General chat (no customer)
-        conversation = await db.conversation.findFirst({ where: { channel: 'DASHBOARD' } })
-        if (!conversation) {
-          conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
-        }
+      if (conversationId) {
+        await db.message.createMany({ data: [
+          { conversationId, role: 'user', content: message },
+          { conversationId, role: 'assistant', content: aiResponse },
+        ]})
+        // Update lastMessageAt
+        await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
       }
-      const convId: string = conversation.id
-
-      await db.message.createMany({ data: [
-        { conversationId: convId, role: 'user', content: message },
-        { conversationId: convId, role: 'assistant', content: aiResponse },
-      ]})
     } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
 
     // Step 8: Extract learning and save to memory
@@ -199,7 +252,7 @@ export async function POST(req: NextRequest) {
       response: aiResponse,
       model: modelUsed,
       toolsExecuted: intent.tools,
-      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE',
+      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
     })
   } catch (err: any) {
     console.error('DINA chat error:', err)

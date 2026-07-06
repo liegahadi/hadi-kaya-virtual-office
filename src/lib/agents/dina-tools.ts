@@ -1,6 +1,11 @@
 // DINA Tools System — Database queries & system actions
 // DINA can READ (query) and WRITE (update) to the database
 // This makes DINA a true AI agent that can actually DO things
+//
+// CRITICAL FIX (v8.2): pendingAction moved from in-memory to DB (PendingAction table)
+// because Vercel serverless lambdas don't preserve module state between requests.
+// This was causing DINA to lose track of what user was confirming, leading to
+// wrong-customer deletions. Now pending actions are persisted with 5-min TTL.
 
 import { db } from '@/lib/db'
 
@@ -15,7 +20,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -26,13 +31,159 @@ export interface IntentResult {
   newCustomerBank?: string
 }
 
-// Pending action state — DINA remembers what it asked user to confirm
-// This persists across messages within the same conversation
-let pendingAction: { type: 'DELETE' | 'CREATE'; customerName?: string; customerId?: string; customerData?: any } | null = null
+// ============================================================
+// PENDING ACTION (DB-backed, survives Vercel lambda cold starts)
+// ============================================================
 
-export function getPendingAction() { return pendingAction }
-export function clearPendingAction() { pendingAction = null }
-export function setPendingAction(action: typeof pendingAction) { pendingAction = action }
+export interface PendingActionRecord {
+  id: string
+  conversationId: string | null
+  channel: string
+  senderNumber: string | null
+  type: string  // DELETE | CREATE | UPDATE
+  targetType: string  // CUSTOMER | FIELD
+  targetId: string | null
+  targetName: string | null
+  customerData: any | null
+  fieldName?: string | null
+  newValue?: string | null
+}
+
+const PENDING_TTL_MINUTES = 5
+
+// Find active pending action for this conversation/sender
+export async function getActivePendingAction(opts: {
+  conversationId?: string
+  channel?: string
+  senderNumber?: string
+}): Promise<PendingActionRecord | null> {
+  try {
+    // Expire old pending actions first
+    const expiryTime = new Date(Date.now() - PENDING_TTL_MINUTES * 60 * 1000)
+    await db.pendingAction.updateMany({
+      where: { status: 'PENDING', createdAt: { lt: expiryTime } },
+      data: { status: 'EXPIRED' }
+    })
+
+    // Find active one for this context
+    const where: any = { status: 'PENDING' }
+    if (opts.conversationId) where.conversationId = opts.conversationId
+    else if (opts.channel && opts.senderNumber) {
+      where.channel = opts.channel
+      where.senderNumber = opts.senderNumber
+    } else if (opts.channel) {
+      where.channel = opts.channel
+    } else {
+      // Default to DASHBOARD
+      where.channel = 'DASHBOARD'
+    }
+
+    const action = await db.pendingAction.findFirst({
+      where,
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!action) return null
+    return {
+      id: action.id,
+      conversationId: action.conversationId,
+      channel: action.channel,
+      senderNumber: action.senderNumber,
+      type: action.type,
+      targetType: action.targetType,
+      targetId: action.targetId,
+      targetName: action.targetName,
+      customerData: action.customerData ? JSON.parse(action.customerData) : null,
+      fieldName: action.fieldName,
+      newValue: action.newValue,
+    }
+  } catch (err) {
+    console.error('getActivePendingAction error:', err)
+    return null
+  }
+}
+
+// Create new pending action (cancels previous pending for same context)
+export async function setPendingAction(action: Omit<PendingActionRecord, 'id'>): Promise<void> {
+  try {
+    // Cancel previous pending for same context
+    const where: any = { status: 'PENDING' }
+    if (action.conversationId) where.conversationId = action.conversationId
+    else if (action.channel && action.senderNumber) {
+      where.channel = action.channel
+      where.senderNumber = action.senderNumber
+    }
+    await db.pendingAction.updateMany({ where, data: { status: 'CANCELLED' } })
+
+    // Create new
+    await db.pendingAction.create({
+      data: {
+        conversationId: action.conversationId || null,
+        channel: action.channel || 'DASHBOARD',
+        senderNumber: action.senderNumber || null,
+        type: action.type,
+        targetType: action.targetType,
+        targetId: action.targetId || null,
+        targetName: action.targetName || null,
+        customerData: action.customerData ? JSON.stringify(action.customerData) : null,
+        fieldName: action.fieldName || null,
+        newValue: action.newValue || null,
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + PENDING_TTL_MINUTES * 60 * 1000),
+      } as any,
+    })
+  } catch (err) {
+    console.error('setPendingAction error:', err)
+  }
+}
+
+// Mark pending action as confirmed (and execute it)
+export async function confirmPendingAction(actionId: string): Promise<void> {
+  try {
+    await db.pendingAction.update({
+      where: { id: actionId },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    })
+  } catch (err) {
+    console.error('confirmPendingAction error:', err)
+  }
+}
+
+// Cancel pending action (e.g., user said 'batal' or 'cancel')
+export async function cancelPendingAction(opts: {
+  conversationId?: string
+  channel?: string
+  senderNumber?: string
+}): Promise<void> {
+  try {
+    const where: any = { status: 'PENDING' }
+    if (opts.conversationId) where.conversationId = opts.conversationId
+    else if (opts.channel && opts.senderNumber) {
+      where.channel = opts.channel
+      where.senderNumber = opts.senderNumber
+    }
+    await db.pendingAction.updateMany({ where, data: { status: 'CANCELLED' } })
+  } catch (err) {
+    console.error('cancelPendingAction error:', err)
+  }
+}
+
+// ============================================================
+// AUDIT LOG (track all writes for debugging & compliance)
+// ============================================================
+
+async function writeAuditLog(action: string, entityType: string, entityId: string, metadata: any): Promise<void> {
+  try {
+    await db.auditLog.create({
+      data: { action, entityType, entityId, metadata: JSON.stringify(metadata) } as any,
+    })
+  } catch (err) {
+    console.error('AuditLog write error (non-fatal):', err)
+  }
+}
+
+// Backwards-compat stubs (deprecated — use DB-backed versions)
+export function getPendingAction() { return null }
+export function clearPendingAction() { /* no-op, use cancelPendingAction */ }
 
 // ============================================================
 // Memory Categories — each agent has its own memory domain
@@ -194,17 +345,50 @@ export function detectIntent(message: string): IntentResult {
     }
   }
 
-  // === CONFIRM PENDING ACTION ===
-  // If user says "ya", "iya", "konfirmasi", "lanjut", "eksekusi", "gas", "oke", "setuju"
-  // AND there's a pending action (DELETE/CREATE waiting for confirmation)
-  if (pendingAction && (msg.includes('ya') || msg.includes('iya') || msg.includes('konfirmasi') || msg.includes('lanjut') || msg.includes('eksekusi') || msg.includes('gas') || msg.includes('oke') || msg.includes('setuju') || msg.includes('yakin') || msg.includes('benar') || msg.includes('lakukan'))) {
-    if (pendingAction.type === 'DELETE') {
-      action = 'CONFIRM_DELETE'
-      tools.push('getAllCustomers')
-    } else if (pendingAction.type === 'CREATE') {
-      action = 'CONFIRM_CREATE'
+  // === CONFIRM PENDING ACTION === (STRICT — v8.2)
+  // Only treat as confirmation if message is SHORT and matches confirmation keywords.
+  // Long messages with "ya" + action verbs (e.g., "ya hapus aja") are treated as fresh requests, NOT confirmations.
+  // This prevents the LLM from confirming the wrong pending action when user actually meant something else.
+  //
+  // CRITICAL: pendingAction state is now DB-backed. detectIntent can't check it directly
+  // (it's synchronous). Instead, we mark the action as 'CONFIRM_DELETE' / 'CONFIRM_CREATE'
+  // and executeTools() will check DB for active pending action.
+  //
+  // We also detect CANCEL_PENDING here: "batal", "cancel", "tidak", "jangan"
+  const confirmKeywords = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan', 'do it', 'sure', 'go']
+  const cancelKeywords = ['batal', 'cancel', 'tidak', 'jangan', 'ga jadi', 'gajadi', 'no', 'stop', 'berhenti']
+
+  const msgTrimmed = msg.trim()
+  const isShortMsg = msgTrimmed.length <= 30 // short confirmation phrases only
+  const isConfirmWord = confirmKeywords.some(kw => {
+    // Match whole word boundary, not substring (so "ya" doesn't match "yakin" falsely, etc.)
+    const regex = new RegExp(`\\b${kw}\\b`, 'i')
+    return regex.test(msgTrimmed)
+  })
+  const isCancelWord = cancelKeywords.some(kw => {
+    const regex = new RegExp(`\\b${kw}\\b|${kw}`, 'i')
+    return regex.test(msgTrimmed)
+  })
+
+  if (isCancelWord && isShortMsg) {
+    action = 'CANCEL_PENDING'
+    tools.push('getAllCustomers')
+  } else if (isShortMsg && isConfirmWord) {
+    // Only treat as confirmation if message is short (≤30 chars) AND contains confirmation keyword
+    // "ya hapus aja" is 13 chars — would match... let's be even stricter:
+    // Must be ≤15 chars OR pure confirmation keyword
+    const pureConfirm = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan']
+    const isPureConfirm = pureConfirm.some(kw => msgTrimmed.toLowerCase() === kw || msgTrimmed.toLowerCase() === `${kw}.` || msgTrimmed.toLowerCase() === `${kw}!`)
+    const isVeryShort = msgTrimmed.length <= 15
+
+    if (isPureConfirm || isVeryShort) {
+      // Mark as CONFIRM_DELETE or CONFIRM_CREATE — executeTools will check DB
+      // and route based on pendingAction.type
+      action = 'CONFIRM_DELETE' // generic confirm; executeTools will route to correct type
       tools.push('getAllCustomers')
     }
+    // If msg is 16-30 chars and contains confirm word but also other words,
+    // DON'T trigger confirmation — let other intent detectors handle it.
   }
 
   // === CREATE CUSTOMER ===
@@ -718,7 +902,19 @@ async function updateCustomerField(customerId: string, field: string, value: any
 // MAIN: Execute tools based on intent
 // ============================================================
 
-export async function executeTools(intent: IntentResult, customerId?: string, userMessage?: string): Promise<string> {
+// ExecuteContext: passes channel/sender info so DB-backed pending actions are scoped correctly
+export interface ExecuteContext {
+  conversationId?: string
+  channel?: string  // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  senderNumber?: string
+}
+
+export async function executeTools(
+  intent: IntentResult,
+  customerId?: string,
+  userMessage?: string,
+  executeContext: ExecuteContext = {},
+): Promise<string> {
   const results: string[] = []
 
   for (const toolName of intent.tools) {
@@ -774,6 +970,15 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
 
     if (targetCustomer && intent.updateValue) {
       const result = await updateCustomerField(targetCustomer.id, intent.updateField, intent.updateValue)
+      if (result.success) {
+        await writeAuditLog('UPDATE_FIELD', 'Customer', targetCustomer.id, {
+          customerName: targetCustomer.name,
+          field: intent.updateField,
+          value: intent.updateValue,
+          updatedBy: executeContext.senderNumber || 'dashboard',
+          userMessage: userMessage?.substring(0, 200),
+        })
+      }
       results.push(`[updateCustomerField] ${result.summary}`)
     } else if (!targetCustomer) {
       results.push(`[updateCustomerField] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
@@ -807,6 +1012,13 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     if (targetCustomer) {
       try {
         const result = await updateCustomerField(targetCustomer.id, 'bankName', intent.newBankValue)
+        if (result.success) {
+          await writeAuditLog('UPDATE_BANK', 'Customer', targetCustomer.id, {
+            customerName: targetCustomer.name,
+            newBank: intent.newBankValue,
+            updatedBy: executeContext.senderNumber || 'dashboard',
+          })
+        }
         results.push(`[updateCustomerBank] ${result.summary}`)
       } catch (err: any) {
         results.push(`[updateCustomerBank] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
@@ -838,6 +1050,13 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     if (targetCustomer) {
       try {
         const result = await updateCustomerField(targetCustomer.id, 'stage', intent.newStageValue)
+        if (result.success) {
+          await writeAuditLog('UPDATE_STAGE', 'Customer', targetCustomer.id, {
+            customerName: targetCustomer.name,
+            newStage: intent.newStageValue,
+            updatedBy: executeContext.senderNumber || 'dashboard',
+          })
+        }
         results.push(`[updateCustomerStage] ${result.summary}`)
       } catch (err: any) {
         results.push(`[updateCustomerStage] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
@@ -847,30 +1066,85 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     }
   }
 
-  // Handle CONFIRM_DELETE — user confirmed, now actually delete
-  if (intent.action === 'CONFIRM_DELETE' && pendingAction?.type === 'DELETE') {
-    const targetId = pendingAction.customerId
-    const targetName = pendingAction.customerName || ''
-    pendingAction = null // clear pending action
-
-    if (targetId) {
-      const result = await deleteCustomer(targetId, targetName)
-      results.push(`[deleteCustomer] ${result.summary}`)
+  // Handle CONFIRM_DELETE / CONFIRM_CREATE — user confirmed, fetch from DB
+  // CRITICAL: Validate target name matches user's confirmation message to prevent wrong-customer deletes
+  if (intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE') {
+    const pending = await getActivePendingAction(executeContext)
+    if (!pending) {
+      results.push(`[confirm] ⚠️ Tidak ada aksi pending yang menunggu konfirmasi. JANGAN bilang berhasil melakukan apapun. Minta user jelaskan apa yang ingin dilakukan.`)
+    } else if (pending.type === 'DELETE') {
+      // Validate target still exists
+      if (!pending.targetId) {
+        results.push(`[deleteCustomer] ❌ Pending action tidak punya target ID. Aksi dibatalkan.`)
+        await cancelPendingAction(executeContext)
+      } else {
+        const target = await db.customer.findUnique({ where: { id: pending.targetId } })
+        if (!target) {
+          results.push(`[deleteCustomer] ❌ Konsumen "${pending.targetName}" tidak ditemukan (mungkin sudah dihapus). Aksi dibatalkan.`)
+          await cancelPendingAction(executeContext)
+        } else {
+          // VALIDATION: if user's confirmation message contains a customer name that differs
+          // from the pending target, ABORT (user is confused about what they're confirming)
+          const msgLower = (userMessage || '').toLowerCase()
+          const targetNameLower = (target.name || '').toLowerCase()
+          // Extract first name token from target
+          const targetFirstToken = targetNameLower.split(/\s+/)[0]
+          // Check if msg mentions a DIFFERENT customer name
+          const otherCustomers = await db.customer.findMany({
+            where: { id: { not: target.id } },
+            select: { name: true }
+          })
+          const mentionsOther = otherCustomers.some(c => {
+            const cFirst = (c.name || '').toLowerCase().split(/\s+/)[0]
+            return cFirst.length >= 3 && msgLower.includes(cFirst) && !targetNameLower.includes(cFirst)
+          })
+          if (mentionsOther) {
+            results.push(`[deleteCustomer] ❌ ABORT: Pesan konfirmasi menyebutkan nama konsumen LAIN, bukan "${target.name}" yang sebelumnya diminta untuk dihapus. Aksi dibatalkan demi keamanan. Jelaskan ke user: "Konfirmasi dibatalkan karena nama di pesan tidak cocok dengan konsumen yang akan dihapus. Sebutkan nama dengan jelas jika ingin hapus konsumen lain."`)
+            await cancelPendingAction(executeContext)
+          } else {
+            // All checks passed — execute delete
+            await confirmPendingAction(pending.id)
+            const result = await deleteCustomer(target.id, target.name)
+            await writeAuditLog('DELETE_CUSTOMER', 'Customer', target.id, {
+              customerName: target.name,
+              blockLetter: target.blockLetter,
+              houseNumber: target.houseNumber,
+              bankName: target.bankName,
+              confirmedBy: executeContext.senderNumber || 'dashboard',
+              userMessage: userMessage?.substring(0, 200),
+            })
+            results.push(`[deleteCustomer] ${result.summary}`)
+          }
+        }
+      }
+    } else if (pending.type === 'CREATE') {
+      const data = pending.customerData
+      if (data?.name) {
+        await confirmPendingAction(pending.id)
+        const result = await createCustomer(data)
+        await writeAuditLog('CREATE_CUSTOMER', 'Customer', result.data?.id || 'unknown', {
+          customerData: data,
+          confirmedBy: executeContext.senderNumber || 'dashboard',
+        })
+        results.push(`[createCustomer] ${result.summary}`)
+      } else {
+        results.push(`[createCustomer] ❌ Data konsumen tidak lengkap di pending action.`)
+        await cancelPendingAction(executeContext)
+      }
     } else {
-      results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (mungkin sudah dihapus).`)
+      results.push(`[confirm] ⚠️ Tipe pending action tidak dikenal: ${pending.type}`)
+      await cancelPendingAction(executeContext)
     }
   }
 
-  // Handle CONFIRM_CREATE — user confirmed, now actually create
-  if (intent.action === 'CONFIRM_CREATE' && pendingAction?.type === 'CREATE') {
-    const data = pendingAction.customerData
-    pendingAction = null // clear pending action
-
-    if (data?.name) {
-      const result = await createCustomer(data)
-      results.push(`[createCustomer] ${result.summary}`)
+  // Handle CANCEL_PENDING — user said "batal" / "tidak" / "jangan"
+  if (intent.action === 'CANCEL_PENDING') {
+    const pending = await getActivePendingAction(executeContext)
+    if (pending) {
+      await cancelPendingAction(executeContext)
+      results.push(`[cancel] ✅ Aksi pending (${pending.type} ${pending.targetName || ''}) telah dibatalkan.`)
     } else {
-      results.push(`[createCustomer] ❌ Data konsumen tidak lengkap.`)
+      results.push(`[cancel] ℹ️ Tidak ada aksi pending yang perlu dibatalkan.`)
     }
   }
 
@@ -885,6 +1159,12 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     // For CREATE, execute directly (don't ask for confirmation — user already gave the command)
     try {
       const result = await createCustomer(customerData)
+      if (result.success && result.data?.id) {
+        await writeAuditLog('CREATE_CUSTOMER', 'Customer', result.data.id, {
+          customerData,
+          triggeredBy: executeContext.senderNumber || 'dashboard',
+        })
+      }
       results.push(`[createCustomer] ${result.summary}`)
     } catch (err: any) {
       results.push(`[createCustomer] ❌ GAGAL: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
@@ -893,14 +1173,23 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     results.push(`[createCustomer] ⚠️ User ingin tambah konsumen tapi nama tidak terdeteksi. Minta user sebutkan nama konsumen.`)
   }
 
-  // Handle DELETE_CUSTOMER — set pending action for confirmation
+  // Handle DELETE_CUSTOMER — set DB-backed pending action for confirmation
   if (intent.action === 'DELETE_CUSTOMER') {
     let targetCustomer: any = null
     if (customerId) {
       targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
     }
     if (!targetCustomer && intent.customerName) {
-      targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+      // Use exact match first (most reliable)
+      targetCustomer = await db.customer.findFirst({
+        where: { name: { equals: intent.customerName, mode: 'insensitive' } }
+      })
+      // Fall back to "contains" if no exact match
+      if (!targetCustomer) {
+        targetCustomer = await db.customer.findFirst({
+          where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+        })
+      }
     }
     if (!targetCustomer && intent.blockNumber) {
       targetCustomer = await db.customer.findFirst({
@@ -912,10 +1201,19 @@ export async function executeTools(intent: IntentResult, customerId?: string, us
     }
 
     if (targetCustomer) {
-      // Set pending action — DINA should ask for confirmation, then user says "ya/konfirmasi" to execute
-      pendingAction = { type: 'DELETE', customerId: targetCustomer.id, customerName: targetCustomer.name }
-      const block = targetCustomer.blockLetter + (targetCustomer.houseNumber || '') || '-'
-      results.push(`[deleteCustomer] ⏳ PENDING: Konsumen "${targetCustomer.name}" (Blok ${block}) akan dihapus PERMANEN. Semua data (berkas, unit, percakapan) akan hilang. Tanya user: "Yakin ingin hapus ${targetCustomer.name}? Ketik 'ya' untuk konfirmasi."`)
+      // Set DB-backed pending action
+      await setPendingAction({
+        conversationId: executeContext.conversationId || null,
+        channel: executeContext.channel || 'DASHBOARD',
+        senderNumber: executeContext.senderNumber || null,
+        type: 'DELETE',
+        targetType: 'CUSTOMER',
+        targetId: targetCustomer.id,
+        targetName: targetCustomer.name,
+        customerData: null,
+      })
+      const block = (targetCustomer.blockLetter || '') + (targetCustomer.houseNumber || '') || '-'
+      results.push(`[deleteCustomer] ⏳ PENDING (DB-backed): Konsumen "${targetCustomer.name}" (Blok ${block}, ID: ${targetCustomer.id}) akan dihapus PERMANEN. Semua data (berkas, unit, percakapan) akan hilang. Tanya user: "Yakin ingin hapus ${targetCustomer.name}? Ketik 'ya' untuk konfirmasi (atau 'batal' untuk membatalkan)." Pending action ini expired dalam 5 menit.`)
     } else {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
     }

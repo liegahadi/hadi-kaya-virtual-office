@@ -710,6 +710,36 @@ model AuditLog {
 }
 
 // ============================================================
+// 13b. PENDING ACTIONS (DINA confirmation flow)
+// Critical: pendingAction was previously in-memory module-level state
+// which is BROKEN on Vercel serverless — each request may run in a
+// different lambda. Moving to DB for persistence + per-conversation isolation.
+// ============================================================
+
+model PendingAction {
+  id              String   @id @default(cuid())
+  conversationId  String?  // which conversation thread this belongs to
+  customerId      String?  // optional: which customer this is about
+  channel         String   @default("DASHBOARD") // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  senderNumber    String?  // for WA: who initiated
+  type            String   // DELETE | CREATE | UPDATE
+  targetType      String   // CUSTOMER | FIELD
+  targetId        String?  // customer id being deleted/updated
+  targetName      String?  // human-readable target name
+  fieldName       String?  // for UPDATE: which field
+  newValue        String?  // for UPDATE: new value
+  customerData    String?  // for CREATE: JSON of new customer data
+  status          String   @default("PENDING") // PENDING | CONFIRMED | CANCELLED | EXPIRED
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime // 5 minutes TTL
+  confirmedAt     DateTime?
+
+  @@index([conversationId, status])
+  @@index([channel, senderNumber, status])
+  @@index([expiresAt])
+}
+
+// ============================================================
 // 14. NOTIFICATIONS
 // ============================================================
 
