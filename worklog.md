@@ -202,3 +202,75 @@ Next Steps:
 - User test: refresh production page → expand customer → Entry stage → action bar shows 3 new buttons (SK Kerja, Slip Gaji, Lokasi Kerja)
 - Click SK Kerja → modal opens → pick template (e.g. "Bank / Keuangan") → form data fills → edit font/layout → Download .docx
 - Click Lokasi Kerja → modal opens → paste Google Maps link → map auto-loads → upload denah → drag denah on map
+
+---
+Task ID: dina-v8.1-wa-behavior
+Agent: Main (GLM)
+Task: Update DINA WhatsApp behavior — strict tag-only in groups + group-member-only DM + never share group link
+
+Work Log:
+- User added 2 new requirements for DINA on WhatsApp:
+  1. Di grup, DINA hanya respon jika di-tag (@Dina atau @[nomor HP DINA]). Tanpa tag → DINA diam.
+  2. "Hanya melayani di grup" bener, tapi:
+     - Non-owner DM yang SUDAH di grup → balas "hanya melayani di grup" (TANPA link)
+     - Non-owner DM yang BELUM di grup → silent ignore (diam total, no reply)
+     - JANGAN share link grup ke siapapun
+- Updated wa-bot/src/index.js:
+  * Removed `startsWithDina` fallback (was: also respond to "Dina ..." prefix)
+  * Strict @mention matching: check `mentionedJid` against bot's JID + base phone number
+  * Add `jid !== GROUP_JID` guard — DINA only responds in OUR group, not random groups
+  * New `refreshGroupParticipants(sock)` function — fetch group metadata, cache participant numbers
+  * New `isGroupMember(senderNumber)` helper — check against cached participants
+  * Auto-refresh cache every 5 min via setInterval
+  * Auto-refresh on `group-participants.update` event (join/leave)
+  * Auto-refresh on initial connection open
+  * DM logic for non-owner:
+    - If sender is group member → reply "hanya melayani di grup" (NO LINK shared)
+    - If sender is NOT group member → silent ignore (just console.log, no reply)
+  * Safe default: empty cache → treat as non-member (silent ignore)
+  * Strip @mention from text before sending to DINA API (cleaner context)
+  * Handle `silent: true` response from API — skip sending reply (defensive)
+- Updated src/app/api/dina/chat/route.ts:
+  * Removed old rejection message "Maaf, saya DINA hanya melayani di grup. Silakan join grup..." (was sharing fake link)
+  * New fallback: if non-owner DM somehow reaches API, return `{ success: false, silent: true, response: '', model: 'silent-ignore' }`
+  * Bot reads `silent` flag and skips reply
+  * Kept DELETE permission check (non-owner in group cannot delete)
+- Updated src/lib/agents/dina-knowledge.ts (DINA system prompt):
+  * Permission matrix updated to reflect new rules
+  * New "ATURAN PENTING — JANGAN DILANGGAR" section:
+    1. Never share group link to anyone (including owner). If asked → "hubungi owner untuk diundang"
+    2. DINA doesn't respond in groups unless tagged (bot-level rule)
+    3. DINA doesn't respond to non-owner DMs (bot-level rule)
+- Updated wa-bot/README.md:
+  * New "ATURAN PERILAKU DINA" section at top with 3 rules
+  * Updated setup: GROUP_JID env var now REQUIRED
+  * How to get GROUP_JID (from WA Web URL or log)
+  * Test scenarios: tag vs no-tag in group, DM from member vs non-member
+  * Permission matrix table
+  * Group participant cache explanation
+- Production verified:
+  * curl POST /api/dina/chat with WHATSAPP_PRIVATE + non-owner sender → returns `{"success":false,"silent":true}` (silent ignore)
+  * curl POST /api/dina/chat with normal dashboard message → DINA responds with customer list (nemotron fallback)
+  * Vercel deployment: HTTP 200, build successful
+
+Stage Summary:
+- DINA WhatsApp behavior sekarang STRICT:
+  - Grup: tag-only (no more "Dina ..." prefix trigger)
+  - DM non-owner: group-member check (member → reject msg, non-member → silent)
+  - Never share group link (bot + system prompt both enforce)
+- Files Modified:
+  * wa-bot/src/index.js (tag-only + group-member check + participant cache + silent flag handler)
+  * src/app/api/dina/chat/route.ts (silent flag fallback for non-owner DM)
+  * src/lib/agents/dina-knowledge.ts (system prompt rules: no link + tag-only)
+  * wa-bot/README.md (behavior documentation)
+- Deploy: pushed to GitHub main → Vercel auto-deploy → live at https://hadi-kaya-virtual-office.vercel.app
+- Commit: 6f90ee8 "feat: DINA v8.1 — strict tag-only in groups + group-member-only DM + no link sharing"
+
+Next Steps:
+- Owner needs to deploy wa-bot to Railway (if not already) with GROUP_JID env var set
+- Owner test scenarios:
+  1. In group: tag DINA → expect response
+  2. In group: type "Dina ..." without tag → expect NO response
+  3. DM DINA from owner number → expect normal response
+  4. DM DINA from number already in group (non-owner) → expect "hanya melayani di grup" (no link)
+  5. DM DINA from random number not in group → expect SILENT (no reply at all)
