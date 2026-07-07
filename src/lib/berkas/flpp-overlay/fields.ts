@@ -148,43 +148,43 @@ const PAGE_6_FIELDS: FlppField[] = [
 // PAGE 9: 10 annotations
 // ============================================================
 const PAGE_9_FIELDS: FlppField[] = [
-  { page: 8, x: 163.86, y: 633.22, width: 65.38, height: 12.04, source: 'applicant', field: 'fullName', bold: true },
-  { page: 8, x: 165.58, y: 616.57, width: 57.12, height: 12.04, source: 'applicant', field: 'ktpNumber' },
-  { page: 8, x: 163.97, y: 603.72, width: 131.57, height: 12.07, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
-  { page: 8, x: 167.08, y: 590.12, width: 84.13, height: 12.43, source: 'applicant', field: 'jobTitle' },
-  { page: 8, x: 167.92, y: 576.44, width: 92.75, height: 12.34, source: 'applicant', field: 'address' },
-  { page: 8, x: 164.78, y: 529.10, width: 115.10, height: 12.38, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
-  { page: 8, x: 164.32, y: 515.82, width: 107.40, height: 12.34, source: 'spouse', field: 'ktpNumber', showWhen: s => !!s.spouse?.fullName },
-  { page: 8, x: 162.94, y: 502.05, width: 180.41, height: 12.33, source: 'computed', field: 'spousePobDob', transform: (_v, s) => s.spouse ? `${s.spouse.pob}, ${formatDate(s.spouse.dob)}` : '', showWhen: s => !!s.spouse?.fullName },
-  { page: 8, x: 166.16, y: 487.81, width: 134.49, height: 12.34, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
-  { page: 8, x: 166.16, y: 473.70, width: 143.29, height: 12.67, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
+  { page: 9, x: 163.86, y: 633.22, width: 65.38, height: 12.04, source: 'applicant', field: 'fullName', bold: true },
+  { page: 9, x: 165.58, y: 616.57, width: 57.12, height: 12.04, source: 'applicant', field: 'ktpNumber' },
+  { page: 9, x: 163.97, y: 603.72, width: 131.57, height: 12.07, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
+  { page: 9, x: 167.08, y: 590.12, width: 84.13, height: 12.43, source: 'applicant', field: 'jobTitle' },
+  { page: 9, x: 167.92, y: 576.44, width: 92.75, height: 12.34, source: 'applicant', field: 'address' },
+  { page: 9, x: 164.78, y: 529.10, width: 115.10, height: 12.38, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
+  { page: 9, x: 164.32, y: 515.82, width: 107.40, height: 12.34, source: 'spouse', field: 'ktpNumber', showWhen: s => !!s.spouse?.fullName },
+  { page: 9, x: 162.94, y: 502.05, width: 180.41, height: 12.33, source: 'computed', field: 'spousePobDob', transform: (_v, s) => s.spouse ? `${s.spouse.pob}, ${formatDate(s.spouse.dob)}` : '', showWhen: s => !!s.spouse?.fullName },
+  { page: 9, x: 166.16, y: 487.81, width: 134.49, height: 12.34, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
+  { page: 9, x: 166.16, y: 473.70, width: 143.29, height: 12.67, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
 ]
 
 // ============================================================
 // PAGE 10: 3 annotations
 // ============================================================
 const PAGE_10_FIELDS: FlppField[] = [
-  { page: 9, x: 298.39, y: 758.53, width: 85.08, height: 12.38, source: 'computed', field: 'dateFull', transform: (_v, s) => {
+  { page: 10, x: 298.39, y: 758.53, width: 85.08, height: 12.38, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)
     return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
   }},
-  { page: 9, x: 367.27, y: 679.87, width: 65.02, height: 12.48, source: 'applicant', field: 'fullName', bold: true },
-  { page: 9, x: 98.44, y: 679.95, width: 116.39, height: 13.68, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
+  { page: 10, x: 367.27, y: 679.87, width: 65.02, height: 12.48, source: 'applicant', field: 'fullName', bold: true },
+  { page: 10, x: 98.44, y: 679.95, width: 116.39, height: 13.68, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
 ]
 
 // ============================================================
 // PAGE 11: 8 annotations (Surat Kuasa)
 // ============================================================
 const PAGE_11_FIELDS: FlppField[] = [
-  { page: 10, x: 174.75, y: 682.31, width: 65.33, height: 12.34, source: 'applicant', field: 'fullName', bold: true },
-  { page: 10, x: 174.75, y: 665.31, width: 73.47, height: 12.51, source: 'applicant', field: 'ktpNumber' },
-  { page: 10, x: 172.23, y: 653.00, width: 131.38, height: 12.44, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
-  { page: 10, x: 172.00, y: 629.44, width: 66.86, height: 12.41, source: 'applicant', field: 'phone' },
-  { page: 10, x: 171.33, y: 641.24, width: 84.08, height: 12.02, source: 'applicant', field: 'jobTitle' },
-  { page: 10, x: 169.93, y: 616.08, width: 126.19, height: 12.30, source: 'applicant', field: 'address' },
-  { page: 10, x: 365.42, y: 79.02, width: 65.02, height: 12.32, source: 'applicant', field: 'fullName', bold: true },
-  { page: 10, x: 296.58, y: 171.43, width: 85.67, height: 12.61, source: 'computed', field: 'dateFull', transform: (_v, s) => {
+  { page: 11, x: 174.75, y: 682.31, width: 65.33, height: 12.34, source: 'applicant', field: 'fullName', bold: true },
+  { page: 11, x: 174.75, y: 665.31, width: 73.47, height: 12.51, source: 'applicant', field: 'ktpNumber' },
+  { page: 11, x: 172.23, y: 653.00, width: 131.38, height: 12.44, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
+  { page: 11, x: 172.00, y: 629.44, width: 66.86, height: 12.41, source: 'applicant', field: 'phone' },
+  { page: 11, x: 171.33, y: 641.24, width: 84.08, height: 12.02, source: 'applicant', field: 'jobTitle' },
+  { page: 11, x: 169.93, y: 616.08, width: 126.19, height: 12.30, source: 'applicant', field: 'address' },
+  { page: 11, x: 365.42, y: 79.02, width: 65.02, height: 12.32, source: 'applicant', field: 'fullName', bold: true },
+  { page: 11, x: 296.58, y: 171.43, width: 85.67, height: 12.61, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)
     return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
@@ -195,37 +195,37 @@ const PAGE_11_FIELDS: FlppField[] = [
 // PAGE 12: 10 annotations
 // ============================================================
 const PAGE_12_FIELDS: FlppField[] = [
-  { page: 11, x: 167.26, y: 591.55, width: 64.98, height: 12.29, source: 'applicant', field: 'fullName', bold: true },
-  { page: 11, x: 170.46, y: 576.01, width: 131.38, height: 12.60, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
-  { page: 11, x: 171.26, y: 562.13, width: 84.39, height: 12.47, source: 'applicant', field: 'jobTitle' },
-  { page: 11, x: 172.14, y: 547.92, width: 73.42, height: 12.05, source: 'applicant', field: 'ktpNumber' },
-  { page: 11, x: 170.56, y: 532.76, width: 126.51, height: 12.31, source: 'applicant', field: 'address' },
-  { page: 11, x: 171.22, y: 465.57, width: 101.65, height: 12.58, source: 'company', field: 'name' },
-  { page: 11, x: 174.91, y: 444.63, width: 90.23, height: 12.02, source: 'property', field: 'houseAddress' },
-  { page: 11, x: 175.00, y: 421.49, width: 65.46, height: 12.38, source: 'computed', field: 'priceFmt', transform: (_v, s) => s.property.price ? `Rp. ${s.property.price.toLocaleString('id-ID')}` : '' },
+  { page: 12, x: 167.26, y: 591.55, width: 64.98, height: 12.29, source: 'applicant', field: 'fullName', bold: true },
+  { page: 12, x: 170.46, y: 576.01, width: 131.38, height: 12.60, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
+  { page: 12, x: 171.26, y: 562.13, width: 84.39, height: 12.47, source: 'applicant', field: 'jobTitle' },
+  { page: 12, x: 172.14, y: 547.92, width: 73.42, height: 12.05, source: 'applicant', field: 'ktpNumber' },
+  { page: 12, x: 170.56, y: 532.76, width: 126.51, height: 12.31, source: 'applicant', field: 'address' },
+  { page: 12, x: 171.22, y: 465.57, width: 101.65, height: 12.58, source: 'company', field: 'name' },
+  { page: 12, x: 174.91, y: 444.63, width: 90.23, height: 12.02, source: 'property', field: 'houseAddress' },
+  { page: 12, x: 175.00, y: 421.49, width: 65.46, height: 12.38, source: 'computed', field: 'priceFmt', transform: (_v, s) => s.property.price ? `Rp. ${s.property.price.toLocaleString('id-ID')}` : '' },
   // Issue 4d: Tambah [DP] di bawah [Harga rumah], X sama, Y-10
-  { page: 11, x: 175.00, y: 411.49, width: 65.46, height: 12.38, source: 'computed', field: 'dpFmt', transform: (_v, s) => s.property.downPayment ? `Rp. ${s.property.downPayment.toLocaleString('id-ID')}` : '' },
-  { page: 11, x: 284.28, y: 327.73, width: 85.72, height: 12.43, source: 'computed', field: 'dateFull', transform: (_v, s) => {
+  { page: 12, x: 175.00, y: 411.49, width: 65.46, height: 12.38, source: 'computed', field: 'dpFmt', transform: (_v, s) => s.property.downPayment ? `Rp. ${s.property.downPayment.toLocaleString('id-ID')}` : '' },
+  { page: 12, x: 284.28, y: 327.73, width: 85.72, height: 12.43, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)
     return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
   }},
-  { page: 11, x: 360.79, y: 231.83, width: 68.08, height: 12.43, source: 'applicant', field: 'fullName', bold: true },
+  { page: 12, x: 360.79, y: 231.83, width: 68.08, height: 12.43, source: 'applicant', field: 'fullName', bold: true },
 ]
 
 // ============================================================
 // PAGE 13: 8 annotations
 // ============================================================
 const PAGE_13_FIELDS: FlppField[] = [
-  { page: 12, x: 171.72, y: 689.41, width: 64.85, height: 12.01, source: 'applicant', field: 'fullName', bold: true },
-  { page: 12, x: 171.96, y: 672.98, width: 131.38, height: 12.60, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
-  { page: 12, x: 170.94, y: 659.81, width: 84.08, height: 12.02, source: 'applicant', field: 'jobTitle' },
-  { page: 12, x: 169.83, y: 644.93, width: 73.69, height: 12.73, source: 'applicant', field: 'ktpNumber' },
-  { page: 12, x: 169.81, y: 630.40, width: 126.52, height: 12.31, source: 'applicant', field: 'address' },
-  { page: 12, x: 173.27, y: 528.29, width: 89.89, height: 12.18, source: 'property', field: 'houseAddress' },
+  { page: 13, x: 171.72, y: 689.41, width: 64.85, height: 12.01, source: 'applicant', field: 'fullName', bold: true },
+  { page: 13, x: 171.96, y: 672.98, width: 131.38, height: 12.60, source: 'computed', field: 'pobDob', transform: (_v, s) => s.applicant.pob ? `${s.applicant.pob}, ${formatDate(s.applicant.dob)}` : '' },
+  { page: 13, x: 170.94, y: 659.81, width: 84.08, height: 12.02, source: 'applicant', field: 'jobTitle' },
+  { page: 13, x: 169.83, y: 644.93, width: 73.69, height: 12.73, source: 'applicant', field: 'ktpNumber' },
+  { page: 13, x: 169.81, y: 630.40, width: 126.52, height: 12.31, source: 'applicant', field: 'address' },
+  { page: 13, x: 173.27, y: 528.29, width: 89.89, height: 12.18, source: 'property', field: 'houseAddress' },
   // Issue 4f: was company.director → should be applicant.fullName (nama debitur, bukan direktur)
-  { page: 12, x: 370.88, y: 274.07, width: 64.85, height: 12.02, source: 'applicant', field: 'fullName', bold: true },
-  { page: 12, x: 292.03, y: 384.52, width: 85.43, height: 12.48, source: 'computed', field: 'dateFull', transform: (_v, s) => {
+  { page: 13, x: 370.88, y: 274.07, width: 64.85, height: 12.02, source: 'applicant', field: 'fullName', bold: true },
+  { page: 13, x: 292.03, y: 384.52, width: 85.43, height: 12.48, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)
     return `Pangkalpinang, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })} ${d.getFullYear()}`
