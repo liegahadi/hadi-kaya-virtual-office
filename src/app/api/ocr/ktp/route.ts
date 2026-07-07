@@ -1,8 +1,12 @@
-// API: OCR KTP - Uses Tesseract.js (100% free, no API key, works on Vercel)
-// Extracts text from KTP image, then parses fields with regex
+// API: OCR KTP - Uses z.ai VLM (free, high accuracy) with Tesseract fallback
+// VLM returns structured JSON directly — no regex parsing needed!
+//
+// Flow:
+// 1. Try z.ai VLM (vision model) — sends image + structured prompt
+// 2. If VLM fails, fallback to Tesseract.js + regex parsing (legacy)
+// 3. Return structured data to client
 
 import { NextRequest, NextResponse } from 'next/server'
-import Tesseract from 'tesseract.js'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -18,45 +22,97 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'PDF belum didukung. Upload sebagai foto (JPG/PNG).' }, { status: 400 })
     }
 
-    // Convert base64 data URL to buffer
+    // === PRIMARY: z.ai VLM (Vision Language Model) ===
+    try {
+      const ZAI = (await import('z-ai-web-dev-sdk')).default
+      const zai = await ZAI.create()
+
+      const prompt = `Anda adalah OCR engine untuk KTP Indonesia. Baca gambar KTP ini dan extract semua data dalam format JSON.
+
+Return HANYA JSON (tanpa markdown, tanpa penjelasan), dengan field berikut:
+{
+  "nik": "16 digit NIK",
+  "nama": "nama lengkap sesuai KTP",
+  "tempatLahir": "tempat lahir",
+  "tanggalLahir": "DD-MM-YYYY",
+  "jenisKelamin": "LAKI-LAKI atau PEREMPUAN",
+  "alamat": "alamat sesuai KTP",
+  "rtRw": "RT/RW format 000/000",
+  "kelurahan": "kelurahan/desa",
+  "kecamatan": "kecamatan",
+  "agama": "ISLAM/KRISTEN/KATOLIK/HINDU/BUDDHA/KONGHUCU",
+  "statusPerkawinan": "BELUM KAWIN/KAWIN/JANDA/DUDA/CERAI HIDUP/CERAI MATI",
+  "pekerjaan": "pekerjaan sesuai KTP",
+  "kewarganegaraan": "WNI atau WNA"
+}
+
+Jika field tidak terbaca, isi dengan string kosong "".`
+
+      const response = await zai.chat.completions.createVision({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: image } },
+            ],
+          },
+        ],
+        thinking: { type: 'disabled' },
+      })
+
+      const content = response.choices?.[0]?.message?.content || ''
+      console.log('VLM KTP response:', content.substring(0, 300))
+
+      // Parse JSON from VLM response (strip markdown if present)
+      let jsonStr = content.trim()
+      // Remove markdown code fences if present
+      jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '')
+      // Try to extract JSON object
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+      if (jsonMatch) jsonStr = jsonMatch[0]
+
+      const ocrData = JSON.parse(jsonStr)
+
+      return NextResponse.json({
+        success: true,
+        data: ocrData,
+        rawText: content.substring(0, 1000),
+        engine: 'vlm',
+      })
+    } catch (vlmErr) {
+      console.log('VLM failed, falling back to Tesseract:', vlmErr instanceof Error ? vlmErr.message : 'unknown')
+    }
+
+    // === FALLBACK: Tesseract.js (legacy) ===
+    const Tesseract = (await import('tesseract.js')).default
     const base64Data = image.split(',')[1]
     const buffer = Buffer.from(base64Data, 'base64')
 
-    // Run Tesseract OCR with Indonesian language
-    const result = await Tesseract.recognize(buffer, 'ind', {
-      logger: () => {},
-    })
-
+    const result = await Tesseract.recognize(buffer, 'ind', { logger: () => {} })
     const rawText = result.data.text
-    console.log('OCR raw text:', rawText.substring(0, 500))
-
-    // Parse KTP fields from raw text
     const ocrData = parseKtpText(rawText)
 
-    return NextResponse.json({ success: true, data: ocrData, rawText: rawText.substring(0, 1000) })
+    return NextResponse.json({
+      success: true,
+      data: ocrData,
+      rawText: rawText.substring(0, 1000),
+      engine: 'tesseract',
+    })
   } catch (error) {
     console.error('OCR KTP error:', error)
     return NextResponse.json({ success: false, error: String(error).substring(0, 300) }, { status: 500 })
   }
 }
 
-// Parse Indonesian KTP text to structured data
+// Legacy: Parse Indonesian KTP text to structured data (Tesseract fallback)
 function parseKtpText(text: string) {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l)
   const allText = lines.join(' ').toUpperCase()
 
-  // Helper: find value after a label
-  const findAfter = (label: string, stopPattern?: RegExp): string => {
-    const regex = new RegExp(label + '\\s*[:\\-]?\\s*(.+?)(?:' + (stopPattern?.source || '$') + ')', 'i')
-    const m = allText.match(regex)
-    return m ? m[1].trim() : ''
-  }
-
-  // NIK: 16 digits
   const nikMatch = allText.match(/(\d{16})/)
   const nik = nikMatch ? nikMatch[1] : ''
 
-  // Nama: after "NAMA" or "Nama" until next field
   let nama = ''
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/^NAMA\s*[:\-]?/)) {
@@ -66,7 +122,6 @@ function parseKtpText(text: string) {
     }
   }
 
-  // Tempat/Tgl Lahir: "PANGKALPINANG, 17-04-1990" or similar
   let tempatLahir = '', tanggalLahir = ''
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/TEMPAT.*LAHIR|TLAHIR|TGL.*LAHIR/)) {
@@ -80,11 +135,9 @@ function parseKtpText(text: string) {
     }
   }
 
-  // Jenis Kelamin
   const jkMatch = allText.match(/(LAKI[-\s]?LAKI|PEREMPUAN)/i)
   const jenisKelamin = jkMatch ? jkMatch[1].toUpperCase().replace(/\s+/g, ' ') : ''
 
-  // Alamat
   let alamat = ''
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/^ALAMAT\s*[:\-]?/)) {
@@ -93,41 +146,25 @@ function parseKtpText(text: string) {
     }
   }
 
-  // RT/RW
-  const rtrwMatch = allText.match(/RT\s*[:\/]?\s*RW|RT\/RW/i)
-  let rtRw = ''
-  if (rtrwMatch) {
-    const rtrwVal = allText.match(/(?:RT\s*[:\/]?\s*RW|RT\/RW)\s*[:\-]?\s*(\d{3}\s*\/\s*\d{3})/i)
-    rtRw = rtrwVal ? rtrwVal[1].replace(/\s/g, '') : ''
-  }
+  const rtrwVal = allText.match(/(?:RT\s*[:\/]?\s*RW|RT\/RW)\s*[:\-]?\s*(\d{3}\s*\/\s*\d{3})/i)
+  const rtRw = rtrwVal ? rtrwVal[1].replace(/\s/g, '') : ''
 
-  // Kelurahan/Desa
-  let kelurahan = ''
+  let kelurahan = '', kecamatan = ''
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/KEL(?:URAHAN)?\/?DESA|DESA\/KELURAHAN/i)) {
       kelurahan = lines[i].replace(/^.*(?:KEL|DESA)\s*[:\-]?\s*/i, '').trim()
-      break
     }
-  }
-
-  // Kecamatan
-  let kecamatan = ''
-  for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/^KECAMATAN\s*[:\-]?/)) {
       kecamatan = lines[i].replace(/^KECAMATAN\s*[:\-]?\s*/i, '').trim()
-      break
     }
   }
 
-  // Agama
   const agamaMatch = allText.match(/AGAMA\s*[:\-]?\s*(ISLAM|KRISTEN|KATOLIK|HINDU|BUDDHA|KONGHUCU)/i)
   const agama = agamaMatch ? agamaMatch[1].toUpperCase() : ''
 
-  // Status Perkawinan
   const statusMatch = allText.match(/STATUS\s*PERKAWINAN\s*[:\-]?\s*(KAWIN|BELUM\s*KAWIN|JANDA|DUDA|CERAI\s*HIDUP|CERAI\s*MATI)/i)
   const statusPerkawinan = statusMatch ? statusMatch[1].toUpperCase().replace(/\s+/g, ' ') : ''
 
-  // Pekerjaan
   let pekerjaan = ''
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toUpperCase().match(/^PEKERJAAN\s*[:\-]?/)) {
@@ -136,23 +173,8 @@ function parseKtpText(text: string) {
     }
   }
 
-  // Kewarganegaraan
   const kwnMatch = allText.match(/KEWARGANEGARAAN\s*[:\-]?\s*(WNI|WNA)/i)
   const kewarganegaraan = kwnMatch ? kwnMatch[1].toUpperCase() : 'WNI'
 
-  return {
-    nama,
-    nik,
-    tempatLahir,
-    tanggalLahir,
-    jenisKelamin,
-    alamat,
-    rtRw,
-    kelurahan,
-    kecamatan,
-    agama,
-    statusPerkawinan,
-    pekerjaan,
-    kewarganegaraan,
-  }
+  return { nama, nik, tempatLahir, tanggalLahir, jenisKelamin, alamat, rtRw, kelurahan, kecamatan, agama, statusPerkawinan, pekerjaan, kewarganegaraan }
 }

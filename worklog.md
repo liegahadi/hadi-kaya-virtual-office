@@ -772,3 +772,36 @@ Next Steps for Owner:
    - pm2 restart
    - Scan QR baru untuk agent tersebut
    - Test tag di grup
+
+---
+Task ID: ocr-vlm + bank-config-builder + dina-bank-management
+Agent: Main (GLM)
+Task: OCR VLM migration + Bank Config Builder + DINA bank management
+
+1. OCR VLM MIGRATION (DONE — was already migrated)
+   - KTP OCR: z.ai VLM primary (createVision), Tesseract fallback
+   - Sertifikat OCR: z.ai VLM primary, Tesseract fallback
+   - Test: KTP Jenni extracted perfectly (all 13 fields: NIK, nama, tempat lahir, dll)
+   - Free, no API key, no rate limit, ~5-10s per image
+   - Returns structured JSON directly (no regex parsing needed)
+
+2. BANK CONFIG BUILDER (Phase 1: DB + API + DINA — DONE)
+   A. Prisma model: BankConfig
+      - bankCode (unique), bankName, description, templatePath, documents (JSON)
+      - isActive (soft delete), createdBy
+   B. API: /api/bank-config (GET/POST/PUT/DELETE)
+   C. DINA Intent: LIST_BANKS, ADD_BANK, DELETE_BANK
+      - "list bank" → list all active banks
+      - "tambah bank BCA" → create BankConfig record + AuditLog
+      - "hapus bank BCA" → soft delete
+      - DINA system prompt updated with BANK CONFIG MANAGEMENT section
+   D. IntentResult type updated with newBankName, bankName fields
+
+   Phase 2 (NOT YET DONE — future):
+   - Bank Config Builder UI (visual PDF annotation tool)
+   - Dynamic bank PDF generator (reads config from DB)
+   - Migrate existing BTN/Mandiri/BSB to BankConfig DB records
+   - Update berkas-view dropdown to auto-populate from DB
+   - Seed initial banks (BTN, Mandiri, BSB Syariah) via migration script
+
+Commit: 8aa2e3b
