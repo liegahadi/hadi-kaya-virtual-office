@@ -20,7 +20,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -29,8 +29,10 @@ export interface IntentResult {
   newCustomerPhone?: string
   newCustomerBlock?: string
   newCustomerBank?: string
-  requestedFileIndex?: number  // For SEND_FILE: which file number user picked (1, 2, 3, ...)
-  requestedFileDocType?: string  // For SEND_FILE: user said "KTP" or "slip gaji" etc
+  requestedFileIndex?: number
+  requestedFileDocType?: string
+  newBankName?: string
+  bankName?: string
 }
 
 // ============================================================
@@ -246,6 +248,8 @@ export function detectIntent(message: string): IntentResult {
   let newCustomerBank: string | undefined
   let intent_requestedFileIndex: number | undefined
   let intent_requestedFileDocType: string | undefined
+  let intent_newBankName: string | undefined
+  let intent_bankName: string | undefined
 
   // === READ INTENTS ===
 
@@ -529,6 +533,31 @@ export function detectIntent(message: string): IntentResult {
     tools.push('getAllCustomers')
   }
 
+  // === BANK CONFIG MANAGEMENT ===
+  // DINA can manage bank configs via chat:
+  // "list bank" → list all banks
+  // "tambah bank BCA" → create new bank
+  // "hapus bank BCA" → delete bank
+  if (msg.includes('bank') && (msg.includes('list') || msg.includes('daftar') || msg.includes('berapa'))) {
+    if (!msg.includes('konsumen') && !msg.includes('debitur') && !msg.includes('nasabah') && !msg.includes('rekening') && !msg.includes('pindah') && !msg.includes('ubah') && !msg.includes('ganti')) {
+      action = 'LIST_BANKS' as any
+      tools.push('getAllCustomers')
+    }
+  }
+  if ((msg.includes('tambah') || msg.includes('daftarin') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input')) && msg.includes('bank') && !msg.includes('konsumen')) {
+    action = 'ADD_BANK' as any
+    // Extract bank code/name
+    const bankMatch = message.match(/bank\s+([A-Za-z][A-Za-z\s]+?)(?:\s+(?:baru|dengan|yang|,|$))/i)
+    if (bankMatch) intent_newBankName = bankMatch[1].trim()
+    tools.push('getAllCustomers')
+  }
+  if ((msg.includes('hapus') || msg.includes('apus') || msg.includes('delete') || msg.includes('hilangin')) && msg.includes('bank') && !msg.includes('konsumen') && !msg.includes('debitur')) {
+    action = 'DELETE_BANK' as any
+    const bankMatch = message.match(/bank\s+([A-Za-z][A-Za-z\s]+?)(?:\s+(?:dari|sistem|database|,|$))/i)
+    if (bankMatch) intent_bankName = bankMatch[1].trim()
+    tools.push('getAllCustomers')
+  }
+
   // === DELETE CUSTOMER ===
   // Detect: "hapus konsumen", "hapus jenni", "apus debitur", "delete konsumen", "hilangin konsumen"
   if ((msg.includes('hapus') || msg.includes('apus') || msg.includes('delete') || msg.includes('hilangin') || msg.includes('buang') || msg.includes('remove')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
@@ -582,7 +611,7 @@ export function detectIntent(message: string): IntentResult {
   const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType, newBankName: intent_newBankName, bankName: intent_bankName }
 }
 
 // ============================================================
@@ -1763,6 +1792,100 @@ _Pending action akan expired dalam 5 menit._`
     } else if (!directResponse) {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
       directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap atau blok yang benar. 🙏`
+    }
+  }
+
+  // === BANK CONFIG MANAGEMENT ===
+  if ((intent as any).action === 'LIST_BANKS') {
+    try {
+      const banks = await db.bankConfig.findMany({ where: { isActive: true }, orderBy: { bankName: 'asc' } })
+      if (banks.length === 0) {
+        directResponse = `📋 **Daftar Bank**
+
+Belum ada bank terdaftar di sistem. Untuk tambah bank baru:
+• "tambah bank BCA"
+• "tambah bank BRI"
+
+Setelah bank ditambahkan, Anda perlu upload PDF template + set annotation coordinates via Bank Config Builder UI di dashboard.`
+      } else {
+        const list = banks.map((b, i) => `${i + 1}. **${b.bankName}** (${b.bankCode})${b.description ? ` — ${b.description}` : ''}${b.templatePath ? ' ✅ template' : ' ⚠️ no template'}`).join('\n')
+        directResponse = `📋 **Daftar Bank** (${banks.length} bank aktif)
+
+${list}
+
+Untuk tambah bank baru: "tambah bank [Nama Bank]"
+Untuk hapus bank: "hapus bank [Nama Bank]"`
+      }
+      results.push(`[listBanks] Listed ${banks.length} banks`)
+    } catch (err: any) {
+      directResponse = `❌ Gagal mengambil daftar bank: ${err?.message || 'unknown error'}`
+    }
+  }
+
+  if ((intent as any).action === 'ADD_BANK' && intent.newBankName) {
+    try {
+      const bankName = intent.newBankName
+      const bankCode = bankName.toUpperCase().replace(/\s+/g, '_').substring(0, 20)
+      
+      const existing = await db.bankConfig.findUnique({ where: { bankCode } })
+      if (existing) {
+        directResponse = `ℹ️ Bank "${bankName}" (${bankCode}) sudah ada di sistem.`
+      } else {
+        const bank = await db.bankConfig.create({
+          data: {
+            bankCode,
+            bankName: bankName,
+            description: 'Added via DINA chat',
+            createdBy: executeContext.senderNumber || 'dina',
+          },
+        })
+        await writeAuditLog('CREATE_BANK', 'BankConfig', bank.id, {
+          bankCode, bankName, createdBy: executeContext.senderNumber || 'dina',
+        })
+        directResponse = `✅ **Bank baru ditambahkan!**
+
+• Nama: **${bankName}**
+• Kode: **${bankCode}**
+
+⚠️ **Langkah selanjutnya:**
+1. Upload PDF template kosongan via Bank Config Builder UI di dashboard
+2. Set annotation coordinates (klik di PDF → pilih field)
+3. Bank akan muncul di dropdown pilih bank
+
+Bank ini belum punya template/annotation — perlu setup via dashboard.`
+      }
+      results.push(`[addBank] ${bankName} (${bankCode})`)
+    } catch (err: any) {
+      directResponse = `❌ Gagal tambah bank: ${err?.message || 'unknown error'}`
+    }
+  }
+
+  if ((intent as any).action === 'DELETE_BANK' && intent.bankName) {
+    try {
+      const bankName = intent.bankName
+      const bank = await db.bankConfig.findFirst({
+        where: {
+          isActive: true,
+          OR: [
+            { bankName: { contains: bankName, mode: 'insensitive' } },
+            { bankCode: { contains: bankName.toUpperCase(), mode: 'insensitive' } },
+          ],
+        },
+      })
+      if (!bank) {
+        directResponse = `❌ Bank "${bankName}" tidak ditemukan. Ketik "list bank" untuk melihat daftar bank.`
+      } else {
+        await db.bankConfig.update({ where: { id: bank.id }, data: { isActive: false } })
+        await writeAuditLog('DELETE_BANK', 'BankConfig', bank.id, {
+          bankCode: bank.bankCode, bankName: bank.bankName,
+        })
+        directResponse = `✅ Bank **${bank.bankName}** (${bank.bankCode}) dihapus dari sistem.
+
+Konsumen yang sudah terdaftar dengan bank ini tetap ada datanya.`
+      }
+      results.push(`[deleteBank] ${bankName}`)
+    } catch (err: any) {
+      directResponse = `❌ Gagal hapus bank: ${err?.message || 'unknown error'}`
     }
   }
 

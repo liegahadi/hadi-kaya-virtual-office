@@ -740,8 +740,27 @@ model PendingAction {
 }
 
 // ============================================================
-// 14. NOTIFICATIONS
+// 13d. BANK CONFIG (Self-service bank template management)
+// User can add new banks without AI code changes.
+// Each bank has: name, templatePath, fields (JSON array of annotations)
+// DINA can manage banks via chat (list, add, update, delete)
 // ============================================================
+
+model BankConfig {
+  id            String   @id @default(cuid())
+  bankCode      String   @unique // BTN, MANDIRI, BSB_SYARIAH, BCA, etc.
+  bankName      String   // Display name: "BTN", "Mandiri", "BSB Syariah"
+  description   String?  // Optional description
+  templatePath  String?  // Path to PDF template (e.g. /templates/btn-flpp.pdf)
+  documents     String?  // JSON array of document configs: [{ id, name, templatePath, fields: [...] }]
+  isActive      Boolean  @default(true)
+  createdBy     String?  // 'system' (migration) or 'dina' (via chat) or 'owner' (UI)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([bankCode])
+}
 
 model NotarisSetting {
   id        String   @id @default(cuid())
