@@ -123,7 +123,7 @@ export function SPR_MANDIRI({ data }: { data: BerkasState }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
           <p style={{ margin: '0 0 5px 0' }}>Pangkalpinang, {formatDate(dateOfDocument)}</p>
-          <p style={{ margin: '0 0 60px 0' }}>Pemesan</p>
+          <p style={{ margin: '0 0 100px 0' }}>Pemesan</p>
           <p style={{ margin: '5px 0 0 0', fontWeight: 'bold', textDecoration: 'underline' }}><strong>{applicant.fullName || '...........................'}</strong></p>
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>

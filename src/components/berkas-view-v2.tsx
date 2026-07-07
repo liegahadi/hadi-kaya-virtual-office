@@ -173,7 +173,13 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
 function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: {
   customer: any; expanded: boolean; onToggle: () => void; onRefresh: () => void; projectId: string
 }) {
-  const blok = customer.units?.[0]?.blockNumber || '—'
+  // Issue 2: Display blok/unit from multiple sources:
+  // 1. customer.units[0].blockNumber (if linked via Unit table)
+  // 2. customer.blockLetter + customer.houseNumber (if set via DINA chat or form)
+  // 3. fallback '—'
+  const unitBlock = customer.units?.[0]?.blockNumber
+  const customerBlock = (customer.blockLetter || '') + (customer.houseNumber || '')
+  const blok = unitBlock || customerBlock || '—'
   const bankName = customer.bankName || customer.bankPipelines?.[0]?.bankName || ''
   const berkasStatus = getBerkasStatus(customer)
 
@@ -286,7 +292,7 @@ function DinaSidebar({ customer, onDbUpdate }: { customer: any; onDbUpdate?: () 
       {customer && (
         <div className="px-3 py-1.5 bg-violet-900/30 border-b border-violet-900/40">
           <div className="text-[9px] text-violet-300/70 uppercase tracking-wider">Konteks Aktif</div>
-          <div className="text-[11px] font-semibold text-violet-100 truncate">{customer.name} · Blok {customer.units?.[0]?.blockNumber || customer.blockLetter || '—'}</div>
+          <div className="text-[11px] font-semibold text-violet-100 truncate">{customer.name} · Blok {customer.units?.[0]?.blockNumber || (customer.blockLetter || '') + (customer.houseNumber || '') || '—'}</div>
         </div>
       )}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5" style={{ background: '#0f0d1a' }}>
@@ -431,7 +437,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [generatingLokasi, setGeneratingLokasi] = useState(false)
   // Global company settings (director info + per-bank accounts, shared across all customers)
   const [companySettings, setCompanySettings] = useState<{
-    companyName?: string; directorName?: string; directorNik?: string; city?: string
+    companyName?: string; directorName?: string; directorNik?: string; directorPhone?: string; directorAddress?: string; officeAddress?: string; city?: string
     btnAccount?: string; mandiriAccount?: string; bsbAccount?: string
     btnBranch?: string; mandiriBranch?: string; bsbBranch?: string
   }>({})
@@ -1150,6 +1156,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />
             <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />
             <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />
+            <FormField label="No. HP Owner (Global)" value={(companySettings as any).directorPhone || ''} onChange={v => updateCompanySetting('directorPhone', v)} />
+            <FormField label="Alamat KTP Direktur" value={(companySettings as any).directorAddress || ''} onChange={v => updateCompanySetting('directorAddress', v)} full />
+            <FormField label="Alamat Kantor (Global)" value={(companySettings as any).officeAddress || ''} onChange={v => updateCompanySetting('officeAddress', v)} full />
             <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />
             {/* Rekening per bank - hanya tampil yang sesuai bank yang dipilih */}
             {bank === 'BTN' && <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />}

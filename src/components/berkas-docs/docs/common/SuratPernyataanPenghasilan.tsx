@@ -69,11 +69,11 @@ export function SuratPernyataanPenghasilan({ data }: { data: BerkasState }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
           <p style={{ margin: '0 0 5px 0' }}>Mengetahui</p>
-          <p style={{ margin: '0 0 60px 0' }}>Pimpinan di instansi tempat bekerja</p>
+          <p style={{ margin: '0 0 100px 0' }}>Pimpinan di instansi tempat bekerja</p>
           <p style={{ margin: '20px 0 0 0', fontWeight: 'bold', textDecoration: 'underline' }}>( ............................. )</p>
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Yang Membuat Pernyataan</p>
+          <p style={{ margin: '0 0 100px 0' }}>Yang Membuat Pernyataan</p>
           <p style={{ margin: '20px 0 0 0', fontWeight: 'bold', textDecoration: 'underline' }}><strong>( {applicant.fullName || '...........................'} )</strong></p>
         </div>
       </div>

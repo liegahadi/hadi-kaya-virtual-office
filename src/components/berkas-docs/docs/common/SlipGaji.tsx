@@ -87,7 +87,7 @@ export function SlipGaji({ data, kopSurat, bulanKe }: { data: BerkasState; kopSu
           <p>Tanggal Terima: {slipDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Pangkalpinang, {slipDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+          <p style={{ margin: '0 0 100px 0' }}>Pangkalpinang, {slipDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
           <p style={{ margin: '0 0 5px 0' }}>Bagian Keuangan</p>
           <p style={{ margin: '20px 0 0 0', fontWeight: 'bold', textDecoration: 'underline' }}>( ............................. )</p>
         </div>

@@ -11,6 +11,33 @@ import { FLPP_FIELDS, FlppField } from '@/lib/berkas/flpp-overlay/fields'
 import { BerkasState } from '@/lib/berkas/types'
 import { COMPANY_INFO } from '@/lib/berkas/constants'
 
+// Get company settings from DB (or fallback to constants)
+// Includes directorPhone, directorAddress, officeAddress (global fields)
+async function getCompanySettings(): Promise<any> {
+  try {
+    const { db } = await import('@/lib/db')
+    const settings = await db.companySetting.findUnique({ where: { id: 'default' } })
+    if (settings) {
+      return {
+        ...COMPANY_INFO,  // fallback for any missing fields
+        name: settings.companyName || COMPANY_INFO.name,
+        director: settings.directorName || COMPANY_INFO.director,
+        directorName: settings.directorName || COMPANY_INFO.directorName,
+        directorNik: settings.directorNik || COMPANY_INFO.directorNik,
+        directorPhone: settings.directorPhone || '',
+        directorAddress: settings.directorAddress || '',
+        officeAddress: settings.officeAddress || '',
+        address: settings.officeAddress || COMPANY_INFO.address,  // officeAddress = company address
+        city: settings.city || COMPANY_INFO.city,
+        btnAccount: settings.btnAccount || '',
+        mandiriAccount: settings.mandiriAccount || '',
+        bsbAccount: settings.bsbAccount || '',
+      }
+    }
+  } catch {}
+  return COMPANY_INFO
+}
+
 /**
  * Generate FLPP BTN PDF with overlay text on top of template
  * @returns { buffer: Uint8Array, overlayCount: number }
@@ -30,17 +57,19 @@ export async function generateFlppPdf(state: BerkasState): Promise<{ buffer: Uin
 
   const pages = pdfDoc.getPages()
 
+  const company = await getCompanySettings()
+
   // Resolve field values from state
   function getFieldValue(field: FlppField): string {
     const { source, field: fieldName, transform } = field
     let rawVal: any
     if (source === 'applicant') rawVal = (state.applicant as any)[fieldName]
     else if (source === 'spouse') rawVal = (state.spouse as any)?.[fieldName]
-    else if (source === 'company') rawVal = (COMPANY_INFO as any)[fieldName]
+    else if (source === 'company') rawVal = (company as any)[fieldName]
     else if (source === 'property') rawVal = (state.property as any)[fieldName]
     else if (source === 'computed') rawVal = undefined
 
-    if (transform) return transform(rawVal, state, COMPANY_INFO)
+    if (transform) return transform(rawVal, state, company)
     return rawVal != null ? String(rawVal) : ''
   }
 

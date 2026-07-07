@@ -760,6 +760,9 @@ model CompanySetting {
   companyName     String?  // Nama PT (Marlindo Bangun Persada)
   directorName    String?  // Nama Direktur (Andrian Bong)
   directorNik     String?  // NIK Direktur
+  directorPhone   String?  // No. HP Direktur/Owner (global untuk semua tim Anjayo 16)
+  directorAddress String?  // Alamat KTP Direktur (global)
+  officeAddress   String?  // Alamat Kantor/Perusahaan (global)
   city            String?  // Kota (Pangkalpinang)
   btnAccount      String?  // No. Rekening BTN
   mandiriAccount  String?  // No. Rekening Mandiri

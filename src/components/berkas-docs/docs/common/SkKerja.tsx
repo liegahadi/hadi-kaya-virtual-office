@@ -56,7 +56,7 @@ export function SkKerja({ data, kopSurat }: { data: BerkasState; kopSurat?: stri
 
       <div style={{ textAlign: 'right', fontSize: '11pt' }}>
         <p style={{ margin: '0 60px 5px 0' }}>Pangkalpinang, {formatDate(dateOfDocument)}</p>
-        <p style={{ margin: '0 60px 60px 0' }}>Pimpinan Perusahaan</p>
+        <p style={{ margin: '0 60px 100px 0' }}>Pimpinan Perusahaan</p>
         <p style={{ margin: '0 60px 0 0', fontWeight: 'bold', textDecoration: 'underline' }}>( ............................. )</p>
       </div>
     </DocumentLayout>
