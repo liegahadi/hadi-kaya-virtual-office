@@ -13,16 +13,18 @@
 // 4. "Download .docx" button → GET /api/documents/google-docs/[id]/download
 //    → Server exports Google Doc as .docx via Drive API
 import React, { useState, useEffect } from 'react'
-import { X, Download, FileText, ChevronLeft, Search, ExternalLink, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { X, Download, FileText, ChevronLeft, Search, ExternalLink, Loader2, AlertCircle, RefreshCw, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { BerkasState } from '@/lib/berkas/types'
+import { BerkasState, ApplicantData } from '@/lib/berkas/types'
+import { LogoGenerator } from '@/components/berkas-docs/LogoGenerator'
 
 interface CombinedDocEditorModalProps {
   open: boolean
   onClose: () => void
   state: BerkasState
   customerId?: string
+  onUpdate?: (field: keyof ApplicantData, val: any) => void  // For Slip Gaji form edits
 }
 
 interface TemplateInfo {
@@ -66,7 +68,7 @@ const TEMPLATES: TemplateInfo[] = [
 
 const CATEGORIES = [...new Set(TEMPLATES.map(t => t.category))]
 
-export function CombinedDocEditorModal({ open, onClose, state, customerId }: CombinedDocEditorModalProps) {
+export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpdate }: CombinedDocEditorModalProps) {
   const [view, setView] = useState<'templates' | 'editor'>('templates')
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null)
   const [creating, setCreating] = useState(false)
@@ -177,6 +179,31 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId }: Com
   })
 
   if (!open) return null
+
+  // === SLIP GAJI FORM HELPERS (inline form within modal) ===
+  const a = state.applicant as any
+  const gajiPokok = a.gajiPokok || 0
+  const tunjanganTetap: Array<{ label: string; amount: number }> = a.tunjanganTetap || []
+  const tunjanganVariabel: Array<{ label: string; amount: number }> = a.tunjanganVariabel || []
+  const potongan: Array<{ label: string; amount: number }> = a.potongan || []
+
+  const addSlipItem = (field: string) => {
+    if (!onUpdate) return
+    const current = (a[field] || []) as Array<{ label: string; amount: number }>
+    onUpdate(field as keyof ApplicantData, [...current, { label: '', amount: 0 }] as any)
+  }
+  const updateSlipItem = (field: string, idx: number, key: 'label' | 'amount', val: any) => {
+    if (!onUpdate) return
+    const current = (a[field] || []) as Array<{ label: string; amount: number }>
+    const updated = [...current]
+    updated[idx] = { ...updated[idx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
+    onUpdate(field as keyof ApplicantData, updated as any)
+  }
+  const removeSlipItem = (field: string, idx: number) => {
+    if (!onUpdate) return
+    const current = (a[field] || []) as Array<{ label: string; amount: number }>
+    onUpdate(field as keyof ApplicantData, current.filter((_, i) => i !== idx) as any)
+  }
 
   // Show configuration warning if Google OAuth not set up yet
   if (googleStatus === 'oauth-not-configured') {
@@ -346,63 +373,213 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId }: Com
           </div>
         </div>
 
-        {/* Template Picker View */}
+        {/* Template Picker View — with Slip Gaji form on left side */}
         {view === 'templates' && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
-            <div className="p-4 border-b bg-white">
-              <div className="flex gap-3 items-center mb-3">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Cari template..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-cyan-500 text-slate-900"
-                  />
+          <div className="flex-1 overflow-hidden flex bg-slate-50">
+            {/* LEFT: Slip Gaji Form (always visible in template picker view) */}
+            <div className="w-[380px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
+              <div className="p-4 border-b bg-emerald-50 sticky top-0 z-10">
+                <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> Form Slip Gaji
+                </h3>
+                <p className="text-[10px] text-emerald-700 mt-0.5">Data ini otomatis dipakai saat generate Slip Gaji (7 bulan)</p>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Gaji Pokok + Tanggal Terima */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-600">Gaji Pokok</label>
+                    <input type="number" value={gajiPokok} disabled={!onUpdate}
+                      onChange={e => onUpdate?.('gajiPokok' as keyof ApplicantData, parseInt(e.target.value) || 0)}
+                      className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-600">Tanggal Terima (1-31)</label>
+                    <input type="number" min="1" max="31" value={a.tanggalTerimaGaji || '25'} disabled={!onUpdate}
+                      onChange={e => onUpdate?.('tanggalTerimaGaji' as keyof ApplicantData, e.target.value as any)}
+                      placeholder="25"
+                      className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                  </div>
                 </div>
-                <div className="text-sm text-slate-600">{filteredTemplates.length} dari {TEMPLATES.length} template</div>
+
+                {/* Tunjangan Tetap */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-700">Tunjangan Tetap</span>
+                    <button onClick={() => addSlipItem('tunjanganTetap')} disabled={!onUpdate}
+                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
+                      <Plus className="w-3 h-3" /> Tambah
+                    </button>
+                  </div>
+                  {tunjanganTetap.length === 0 ? (
+                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada tunjangan tetap</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {tunjanganTetap.map((t, i) => (
+                        <div key={i} className="flex gap-1">
+                          <input value={t.label} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('tunjanganTetap', i, 'label', e.target.value)}
+                            placeholder="Nama tunjangan"
+                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <input type="number" value={t.amount} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('tunjanganTetap', i, 'amount', e.target.value)}
+                            placeholder="Jumlah"
+                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <button onClick={() => removeSlipItem('tunjanganTetap', i)} disabled={!onUpdate}
+                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tunjangan Variabel */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-700">Tunjangan Variabel</span>
+                    <button onClick={() => addSlipItem('tunjanganVariabel')} disabled={!onUpdate}
+                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
+                      <Plus className="w-3 h-3" /> Tambah
+                    </button>
+                  </div>
+                  {tunjanganVariabel.length === 0 ? (
+                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada tunjangan variabel</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {tunjanganVariabel.map((t, i) => (
+                        <div key={i} className="flex gap-1">
+                          <input value={t.label} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('tunjanganVariabel', i, 'label', e.target.value)}
+                            placeholder="Nama tunjangan"
+                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <input type="number" value={t.amount} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('tunjanganVariabel', i, 'amount', e.target.value)}
+                            placeholder="Jumlah"
+                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <button onClick={() => removeSlipItem('tunjanganVariabel', i)} disabled={!onUpdate}
+                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Potongan */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-700">Potongan</span>
+                    <button onClick={() => addSlipItem('potongan')} disabled={!onUpdate}
+                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
+                      <Plus className="w-3 h-3" /> Tambah
+                    </button>
+                  </div>
+                  {potongan.length === 0 ? (
+                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada potongan (BPJS, Pajak, dll)</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {potongan.map((p, i) => (
+                        <div key={i} className="flex gap-1">
+                          <input value={p.label} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('potongan', i, 'label', e.target.value)}
+                            placeholder="Nama potongan (BPJS, Pajak, dll)"
+                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <input type="number" value={p.amount} disabled={!onUpdate}
+                            onChange={e => updateSlipItem('potongan', i, 'amount', e.target.value)}
+                            placeholder="Jumlah"
+                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                          <button onClick={() => removeSlipItem('potongan', i)} disabled={!onUpdate}
+                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Kop Surat */}
+                <div>
+                  <label className="text-[10px] font-medium text-slate-600">Kop Surat (paste dari Word/Google Docs)</label>
+                  <textarea value={a.kopSurat || ''} disabled={!onUpdate}
+                    onChange={e => onUpdate?.('kopSurat' as keyof ApplicantData, e.target.value as any)}
+                    placeholder="Paste kop surat perusahaan di sini (dari Word/Google Docs)..."
+                    className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs min-h-[80px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
+                  <p className="text-[9px] text-slate-500 mt-0.5">Tip: Copy dari Word/Google Docs → paste di sini. Logo & formatting akan ikut.</p>
+                </div>
+
+                {/* Logo Generator */}
+                <LogoGenerator
+                  companyName={state.applicant.companyName || ''}
+                  onInsertLogo={(logoHtml) => {
+                    const current = a.kopSurat || ''
+                    onUpdate?.('kopSurat' as keyof ApplicantData, current + (current ? '\n' : '') + logoHtml)
+                  }}
+                />
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredTemplates.map(template => (
-                  <button
-                    key={template.id}
-                    onClick={() => handleCreateDoc(template)}
-                    disabled={creating}
-                    className="group bg-white border border-slate-200 rounded-lg p-4 text-left hover:border-cyan-500 hover:shadow-md transition-all disabled:opacity-50"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-800 group-hover:text-cyan-600">{template.name}</h3>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{template.category}</span>
+            {/* RIGHT: Template Picker */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="p-4 border-b bg-white">
+                <div className="flex gap-3 items-center mb-3">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Cari template..."
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-cyan-500 text-slate-900"
+                    />
+                  </div>
+                  <div className="text-sm text-slate-600">{filteredTemplates.length} dari {TEMPLATES.length} template</div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredTemplates.map(template => (
+                    <button
+                      key={template.id}
+                      onClick={() => handleCreateDoc(template)}
+                      disabled={creating}
+                      className="group bg-white border border-slate-200 rounded-lg p-4 text-left hover:border-cyan-500 hover:shadow-md transition-all disabled:opacity-50"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800 group-hover:text-cyan-600">{template.name}</h3>
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">{template.category}</span>
+                        </div>
+                        {creating && selectedTemplate?.id === template.id ? (
+                          <Loader2 className="w-4 h-4 text-cyan-500 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-slate-300 group-hover:text-cyan-500" />
+                        )}
                       </div>
-                      {creating && selectedTemplate?.id === template.id ? (
-                        <Loader2 className="w-4 h-4 text-cyan-500 animate-spin" />
-                      ) : (
-                        <FileText className="w-4 h-4 text-slate-300 group-hover:text-cyan-500" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">{template.description}</p>
-                    <div className="mt-3 text-[10px] text-cyan-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      {creating && selectedTemplate?.id === template.id ? 'Membuat Google Doc...' : 'Klik untuk buat & edit di Google Docs →'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {filteredTemplates.length === 0 && (
-                <div className="text-center py-12 text-slate-500">
-                  <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm">Tidak ada template yang cocok.</p>
+                      <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">{template.description}</p>
+                      <div className="mt-3 text-[10px] text-cyan-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                        {creating && selectedTemplate?.id === template.id ? 'Membuat Google Doc...' : 'Klik untuk buat & edit di Google Docs →'}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+                {filteredTemplates.length === 0 && (
+                  <div className="text-center py-12 text-slate-500">
+                    <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+                    <p className="text-sm">Tidak ada template yang cocok.</p>
+                  </div>
+                )}
+              </div>
 
-            <div className="p-3 border-t bg-white text-[11px] text-slate-600 space-y-1">
-              <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
-              <p>🎨 Klik template → buka Google Doc baru (auto-isi data form) → edit langsung di Google Docs (font, ukuran, layout, paste logo) → download .docx</p>
+              <div className="p-3 border-t bg-white text-[11px] text-slate-600 space-y-1">
+                <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
+                <p>🎨 Klik template → buka Google Doc baru (auto-isi data form di kiri) → edit langsung di Google Docs → download .docx</p>
+              </div>
             </div>
           </div>
         )}

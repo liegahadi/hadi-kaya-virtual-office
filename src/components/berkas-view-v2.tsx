@@ -30,8 +30,7 @@ import { BastNotaris } from '@/components/berkas-docs/docs/notaris/BastNotaris'
 import { TandaTerimaNotaris } from '@/components/berkas-docs/docs/notaris/TandaTerimaNotaris'
 import { PernyataanPengecekanSHGB } from '@/components/berkas-docs/docs/notaris/PernyataanPengecekanSHGB'
 import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKuasaNotaris'
-import { LokasiTempatKerja } from '@/components/berkas-docs/docs/common/LokasiTempatKerja'
-import { SlipGajiForm } from '@/components/berkas-docs/docs/common/SlipGajiForm'
+// SlipGajiForm + LokasiTempatKerja removed from sidebar — now in modals (CombinedDocEditorModal + LokasiKerjaModal)
 import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
 import { CombinedDocEditorModal } from '@/components/berkas-docs/CombinedDocEditorModal'
 import { LokasiKerjaModal } from '@/components/berkas-docs/LokasiKerjaModal'
@@ -1251,7 +1250,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />
             <FormField label="Luas Bangunan (m²)" type="number" value={state.property.houseSize} onChange={v => updateProperty('houseSize', parseInt(v) || 0)} />
             <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
-            <FormField label="No. NIB" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
+            <FormField label="Kelurahan Sertipikat" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
             <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />
             {formMode === 'bank' && <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />}
             {formMode === 'bank' && <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />}
@@ -1304,21 +1303,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               </div>
             </div>
           )}
-          {/* Slip Gaji & SK Kerja Form + Lokasi Tempat Kerja - show in bank mode Entry */}
-          {/* NOTE: Template upload for SK Kerja & Slip Gaji is in the top action bar (TemplatePopover) */}
-          {formMode === 'bank' && docStage === 'entry' && (
-            <SlipGajiForm state={state} onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)} />
-          )}
-          {formMode === 'bank' && docStage === 'entry' && (
-            <LokasiTempatKerja state={state}
-              onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)}
-              onPhotoUpload={async (field, file) => {
-                const dataUrl = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = () => reject(new Error('fail')); reader.readAsDataURL(file)
-                })
-                updateApplicant(field as keyof ApplicantData, dataUrl)
-              }} />
-          )}
+          {/* Slip Gaji & Lokasi Kerja form REMOVED from sidebar.
+              These forms now live INSIDE the modals:
+              - Slip Gaji form → in CombinedDocEditorModal (SK Kerja + Slip Gaji)
+              - Lokasi Kerja form → in LokasiKerjaModal (accessed via action bar button)
+          */}
+
           {/* Upload sections - ONLY in bank mode */}
           {formMode === 'bank' && (
           <>
@@ -1368,7 +1358,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             <FormField label="Kelurahan" value={state.property.certKelurahan} onChange={v => updateProperty('certKelurahan', v)} />
             <FormField label="Kecamatan" value={state.property.certKecamatan} onChange={v => updateProperty('certKecamatan', v)} />
             <FormField label="Kota" value={state.property.certCity} onChange={v => updateProperty('certCity', v)} />
-            <FormField label="No. NIB" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
+            <FormField label="Kelurahan Sertipikat" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
           </FormSection>
           )}
 
@@ -1834,6 +1824,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         onClose={() => setCombinedDocModalOpen(false)}
         state={state}
         customerId={customer.id}
+        onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)}
       />
 
       {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}

@@ -68,10 +68,10 @@ export const SPR_MANDIRI_FIELDS: SprMandiriField[] = [
   { id: 'rumah_blok', label: 'Blok / Nomor Rumah', x: 219.1, y: 366.2, width: 87.1, height: 12.2, page: 1, source: 'custom', field: 'blokRumah', fontSize: 10,
     transform: (_v, state) => `${state.property.blockLetter || ''}${state.property.houseNumber || ''}`
   },
-  // #14 y=351.8 x=153.9 - No. Sertifikat part 1 (NIB)
-  { id: 'sertifikat_1', label: 'No. Sertifikat (NIB)', x: 153.9, y: 351.8, width: 60.2, height: 12.2, page: 1, source: 'property', field: 'nibNumber', fontSize: 10 },
-  // #15 y=352.8 x=279.8 - No. Sertifikat part 2 (after "/")
-  { id: 'sertifikat_2', label: 'No. Sertifikat (SHM)', x: 279.8, y: 352.8, width: 94.8, height: 12.2, page: 1, source: 'property', field: 'shmNumber', fontSize: 10 },
+  // #14 y=351.8 x=153.9 - No. Sertifikat part 1 (SHM) — LEFT side
+  { id: 'sertifikat_1', label: 'No. Sertifikat (SHM)', x: 153.9, y: 351.8, width: 60.2, height: 12.2, page: 1, source: 'property', field: 'shmNumber', fontSize: 10 },
+  // #15 y=352.8 x=279.8 - Kelurahan Sertipikat — RIGHT side
+  { id: 'sertifikat_2', label: 'Kelurahan Sertipikat', x: 279.8, y: 352.8, width: 94.8, height: 12.2, page: 1, source: 'property', field: 'nibNumber', fontSize: 10 },
   // #16 y=328.3 x=120.6 - LT/LB
   { id: 'lt_lb', label: 'LT/LB', x: 120.6, y: 328.3, width: 140.2, height: 12.1, page: 1, source: 'custom', field: 'ltlb', fontSize: 10,
     transform: (_v, state) => `${state.property.landSize || ''} / ${state.property.houseSize || ''} M²`
