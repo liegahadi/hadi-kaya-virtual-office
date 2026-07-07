@@ -118,7 +118,7 @@ const AJB_BANK: AjbDocConfig = {
     { page: 1, x: 263.3, y: 652.6, width: 56.0, height: 12.3, source: 'applicant', field: 'address' },
     { page: 1, x: 265.3, y: 633.5, width: 54.9, height: 12.3, source: 'applicant', field: 'ktpNumber' },
     { page: 1, x: 417.9, y: 243.0, width: 98.1, height: 12.0, source: 'computed', field: 'dateFull', transform: akadDateTransform },
-    { page: 1, x: 388.7, y: 119.8, width: 64.9, height: 12.1, source: 'applicant', field: 'fullName', bold: true },
+    // Issue 1a: REMOVED nama debitur annotation at y=119.8 (signature area page 1) per user request hapus
     // Page 2 - Data debitur + property + signatures
     { page: 2, x: 216.7, y: 690.9, width: 64.9, height: 12.1, source: 'applicant', field: 'fullName', bold: true },
     { page: 2, x: 217.2, y: 677.0, width: 73.4, height: 12.1, source: 'applicant', field: 'ktpNumber' },
@@ -193,7 +193,7 @@ const AJB_BANK: AjbDocConfig = {
     { page: 9, x: 110.0, y: 398.9, width: 53.6, height: 12.1, source: 'property', field: 'blockLetter' },     // Blok (huruf)
     { page: 9, x: 168.3, y: 398.4, width: 62.5, height: 12.1, source: 'property', field: 'houseNumber' },    // Nomor (angka)
     { page: 9, x: 457.9, y: 307.6, width: 92.8, height: 12.1, source: 'computed', field: 'dateFull', transform: lpaDateTransform },
-    { page: 9, x: 389.6, y: 199.5, width: 63.1, height: 12.1, source: 'applicant', field: 'fullName', bold: true },
+    // Issue 1b: REMOVED nama debitur annotation at y=199.5 (signature area page 9) per user request hapus
     // Page 10 - PSU page 3
     { page: 10, x: 280.6, y: 368.1, width: 106.3, height: 12.3, source: 'computed', field: 'blokKavling', transform: blokKavlingTransform }, // Blok (E6)
     { page: 10, x: 424.3, y: 225.2, width: 92.6, height: 12.1, source: 'computed', field: 'dateFull', transform: lpaDateTransform },

@@ -37,7 +37,7 @@ export function BastNotaris({ data, notarisName }: { data: BerkasState; notarisN
       <p style={{ marginBottom: '20px', fontSize: '11pt' }}>Demikian berita acara penyerahan sertifikat ini dibuat untuk dapat dipergunakan seperlunya.</p>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Pihak Notaris</p>
+          <p style={{ margin: '0 0 100px 0' }}>Pihak Notaris</p>
           <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{notarisName || '...'}</p>
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>

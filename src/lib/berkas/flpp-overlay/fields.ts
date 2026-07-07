@@ -39,7 +39,9 @@ const PAGE_1_FIELDS: FlppField[] = [
   { page: 1, x: 171.86, y: 552.19, width: 134.43, height: 12.11, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
   { page: 1, x: 172.88, y: 539.76, width: 178.07, height: 12.10, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
   { page: 1, x: 182.27, y: 438.75, width: 85.45, height: 12.11, source: 'property', field: 'projectName' },
-  { page: 1, x: 49.80, y: 425.05, width: 57.28, height: 12.11, source: 'property', field: 'kavlingNumber' },
+  // Issue 4e: [blok dan nomor rumah] X+5 (ke kanan, biar gak di luar garis isian)
+  // Also fixed: was kavlingNumber (stale) → now transform blockLetter+houseNumber
+  { page: 1, x: 54.80, y: 425.05, width: 57.28, height: 12.11, source: 'computed', field: 'blokRumah', transform: (_v, s) => `${s.property.blockLetter || ''}${s.property.houseNumber || ''}` },
   { page: 1, x: 221.60, y: 425.81, width: 101.44, height: 12.11, source: 'company', field: 'name' },
   { page: 1, x: 299.56, y: 283.54, width: 85.34, height: 12.13, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
@@ -60,7 +62,7 @@ const PAGE_2_FIELDS: FlppField[] = [
   { page: 2, x: 166.21, y: 679.90, width: 151.63, height: 12.17, source: 'company', field: 'directorKtp', transform: (_v, _s, c) => (c as any).directorKtp || '' },
   { page: 2, x: 168.35, y: 669.38, width: 36.89, height: 12.17, source: 'computed', field: 'jabatan', transform: () => 'Direktur' },
   { page: 2, x: 180.37, y: 656.39, width: 101.39, height: 12.11, source: 'company', field: 'name', bold: true },
-  { page: 2, x: 170.37, y: 643.80, width: 123.95, height: 12.25, source: 'company', field: 'address', transform: (_v, _s, c) => (c as any).address || c.city },
+  { page: 2, x: 170.37, y: 643.80, width: 123.95, height: 12.25, source: 'computed', field: 'officeAddress', transform: (_v, _s, c) => (c as any).officeAddress || (c as any).address || c.city || '' },
   { page: 2, x: 166.24, y: 594.52, width: 66.17, height: 12.25, source: 'applicant', field: 'fullName', bold: true },
   { page: 2, x: 169.33, y: 581.11, width: 73.40, height: 12.25, source: 'applicant', field: 'ktpNumber' },
   { page: 2, x: 170.37, y: 570.01, width: 89.90, height: 12.25, source: 'property', field: 'houseAddress' },
@@ -130,13 +132,16 @@ const PAGE_6_FIELDS: FlppField[] = [
   { page: 6, x: 209.49, y: 632.53, width: 128.35, height: 12.12, source: 'applicant', field: 'address' },
   { page: 6, x: 210.84, y: 621.14, width: 66.59, height: 12.03, source: 'applicant', field: 'phone' },
   { page: 6, x: 210.58, y: 581.94, width: 85.33, height: 12.08, source: 'property', field: 'projectName' },
-  { page: 6, x: 210.58, y: 568.98, width: 60.43, height: 12.14, source: 'property', field: 'kavlingNumber' },
+  { page: 6, x: 210.58, y: 568.98, width: 60.43, height: 12.14, source: 'computed', field: 'blokRumah', transform: (_v, s) => `${s.property.blockLetter || ''}${s.property.houseNumber || ''}` },
   { page: 6, x: 213.14, y: 557.86, width: 151.20, height: 12.13, source: 'computed', field: 'luas', transform: (_v, s) => s.property.landSize ? `${s.property.landSize} m²` : '' },
   { page: 6, x: 212.30, y: 546.64, width: 90.02, height: 12.14, source: 'property', field: 'houseAddress' },
-  { page: 6, x: 212.30, y: 535.64, width: 79.02, height: 12.13, source: 'computed', field: 'kota', transform: () => 'Pangkalpinang, KBB' },
+  // Issue 4b1: 'KBB' → 'Bangka Belitung' (jangan disingkat)
+  { page: 6, x: 212.30, y: 535.64, width: 79.02, height: 12.13, source: 'computed', field: 'kota', transform: () => 'Pangkalpinang, Bangka Belitung' },
   { page: 6, x: 375.93, y: 317.82, width: 65.27, height: 12.09, source: 'applicant', field: 'fullName', bold: true },
-  { page: 6, x: 103.45, y: 317.86, width: 125.01, height: 12.36, source: 'company', field: 'name', bold: true },
-  { page: 6, x: 115.54, y: 371.76, width: 101.51, height: 12.39, source: 'company', field: 'name' },
+  // Issue 4b3: was company.name (bold) → should be company.director (Nama Direktur)
+  { page: 6, x: 103.45, y: 317.86, width: 125.01, height: 12.36, source: 'company', field: 'director', bold: true },
+  // Issue 4b2: add 'PT.' prefix before nama PT perumahan (page 6 tanda tangan area)
+  { page: 6, x: 115.54, y: 371.76, width: 101.51, height: 12.39, source: 'computed', field: 'ptName', transform: (_v, _s, c) => c.name ? `PT. ${c.name}` : '' },
 ]
 
 // ============================================================
@@ -198,6 +203,8 @@ const PAGE_12_FIELDS: FlppField[] = [
   { page: 12, x: 171.22, y: 465.57, width: 101.65, height: 12.58, source: 'company', field: 'name' },
   { page: 12, x: 174.91, y: 444.63, width: 90.23, height: 12.02, source: 'property', field: 'houseAddress' },
   { page: 12, x: 175.00, y: 421.49, width: 65.46, height: 12.38, source: 'computed', field: 'priceFmt', transform: (_v, s) => s.property.price ? `Rp. ${s.property.price.toLocaleString('id-ID')}` : '' },
+  // Issue 4d: Tambah [DP] di bawah [Harga rumah], X sama, Y-10
+  { page: 12, x: 175.00, y: 411.49, width: 65.46, height: 12.38, source: 'computed', field: 'dpFmt', transform: (_v, s) => s.property.downPayment ? `Rp. ${s.property.downPayment.toLocaleString('id-ID')}` : '' },
   { page: 12, x: 284.28, y: 327.73, width: 85.72, height: 12.43, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)
@@ -216,7 +223,8 @@ const PAGE_13_FIELDS: FlppField[] = [
   { page: 13, x: 169.83, y: 644.93, width: 73.69, height: 12.73, source: 'applicant', field: 'ktpNumber' },
   { page: 13, x: 169.81, y: 630.40, width: 126.52, height: 12.31, source: 'applicant', field: 'address' },
   { page: 13, x: 173.27, y: 528.29, width: 89.89, height: 12.18, source: 'property', field: 'houseAddress' },
-  { page: 13, x: 370.88, y: 274.07, width: 64.85, height: 12.02, source: 'company', field: 'director', bold: true },
+  // Issue 4f: was company.director → should be applicant.fullName (nama debitur, bukan direktur)
+  { page: 13, x: 370.88, y: 274.07, width: 64.85, height: 12.02, source: 'applicant', field: 'fullName', bold: true },
   { page: 13, x: 292.03, y: 384.52, width: 85.43, height: 12.48, source: 'computed', field: 'dateFull', transform: (_v, s) => {
     if (!s.dateOfDocument) return ''
     const d = new Date(s.dateOfDocument)

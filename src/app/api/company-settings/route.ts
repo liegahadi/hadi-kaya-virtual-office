@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
 
     const allowedFields = [
-      'companyName', 'directorName', 'directorNik', 'city',
+      'companyName', 'directorName', 'directorNik', 'directorPhone', 'directorAddress', 'officeAddress', 'city',
       'btnAccount', 'mandiriAccount', 'bsbAccount',
       'btnBranch', 'mandiriBranch', 'bsbBranch',
     ]

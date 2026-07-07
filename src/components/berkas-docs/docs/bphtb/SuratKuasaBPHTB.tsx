@@ -92,7 +92,7 @@ export function SuratKuasaBPHTB({ data }: { data: BerkasState }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
           <p style={{ margin: '0 0 5px 0' }}>Pangkalpinang, {formatDate(dateOfDocument)}</p>
-          <p style={{ margin: '0 0 60px 0' }}>Yang Memberi Kuasa</p>
+          <p style={{ margin: '0 0 100px 0' }}>Yang Memberi Kuasa</p>
           <div style={{ border: '1px solid #999', padding: '8px 16px', fontSize: '9pt', color: '#999', display: 'inline-block', marginBottom: '5px' }}>
             Materai 10.000
           </div>
@@ -100,7 +100,7 @@ export function SuratKuasaBPHTB({ data }: { data: BerkasState }) {
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>
           <p style={{ margin: '0 0 5px 0' }}>&nbsp;</p>
-          <p style={{ margin: '0 0 60px 0' }}>Yang Menerima Kuasa</p>
+          <p style={{ margin: '0 0 100px 0' }}>Yang Menerima Kuasa</p>
           <div style={{ minHeight: '30px' }}></div>
           <p style={{ margin: '5px 0 0 0', fontWeight: 'bold', textDecoration: 'underline' }}><strong>{COMPANY_INFO.director}</strong></p>
         </div>

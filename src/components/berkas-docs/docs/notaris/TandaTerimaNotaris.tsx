@@ -30,11 +30,11 @@ export function TandaTerimaNotaris({ data, notarisName }: { data: BerkasState; n
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Diserahkan Oleh,</p>
+          <p style={{ margin: '0 0 100px 0' }}>Diserahkan Oleh,</p>
           <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}><strong>{COMPANY_INFO.director}</strong></p>
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Diterima Oleh,</p>
+          <p style={{ margin: '0 0 100px 0' }}>Diterima Oleh,</p>
           <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{notarisName || '...'}</p>
         </div>
       </div>

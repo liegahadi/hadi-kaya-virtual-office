@@ -43,11 +43,11 @@ export function SuratKuasaNotaris({ data, notarisName, notarisAddress }: { data:
       <p style={{ marginBottom: '20px', fontSize: '11pt' }}>Demikianlah surat kuasa ini diberikan pada hari ini, {formatDate(dateOfDocument)}</p>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11pt' }}>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Penerima Kuasa,</p>
+          <p style={{ margin: '0 0 100px 0' }}>Penerima Kuasa,</p>
           <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{notarisName || '...'}</p>
         </div>
         <div style={{ textAlign: 'center', width: '45%' }}>
-          <p style={{ margin: '0 0 60px 0' }}>Pemberi Kuasa,</p>
+          <p style={{ margin: '0 0 100px 0' }}>Pemberi Kuasa,</p>
           <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}><strong>{COMPANY_INFO.director}</strong></p>
           <p style={{ fontSize: '10pt' }}>QQ PT. {COMPANY_INFO.name}</p>
         </div>
