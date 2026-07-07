@@ -299,7 +299,8 @@ const BSB_SBUM: BsbDocConfig = {
     { page: 2, x: 200.9, y: 696.7, width: 129.8, height: 12.4, source: 'computed', field: 'pobDob', transform: pobDobTransform },
     { page: 2, x: 205.1, y: 685.2, width: 82.7, height: 12.2, source: 'applicant', field: 'jobTitle' },
     { page: 2, x: 205.2, y: 672.7, width: 136.1, height: 12.7, source: 'applicant', field: 'address' },
-    { page: 2, x: 379.2, y: 370.0, width: 63.7, height: 12.7, source: 'company', field: 'director', bold: true },
+    // Fix: was company.director (nama direktur) → should be applicant.fullName (nama debitur)
+    { page: 2, x: 379.2, y: 370.0, width: 63.7, height: 12.7, source: 'applicant', field: 'fullName', bold: true },
   ],
 }
 
