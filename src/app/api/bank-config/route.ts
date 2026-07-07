@@ -76,17 +76,11 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE — soft delete bank
+// DELETE — DISABLED PERMANENTLY. No one can delete banks, not even owner.
+// This is a hard rule: banks are permanent records in the system.
 export async function DELETE(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-    if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 })
-
-    await db.bankConfig.update({ where: { id }, data: { isActive: false } })
-    return NextResponse.json({ success: true, message: 'Bank dihapus (soft delete)' })
-  } catch (error) {
-    console.error('DELETE bank-config error:', error)
-    return NextResponse.json({ success: false, error: String(error).substring(0, 500) }, { status: 500 })
-  }
+  return NextResponse.json({
+    success: false,
+    error: '🚫 PENGGUNAAN DILARANG: Bank tidak dapat dihapus dari sistem. Bank adalah data permanen. Jika bank tidak lagi aktif, hubungi developer untuk menonaktifkannya.'
+  }, { status: 403 })
 }

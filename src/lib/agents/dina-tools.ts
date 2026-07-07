@@ -551,12 +551,9 @@ export function detectIntent(message: string): IntentResult {
     if (bankMatch) intent_newBankName = bankMatch[1].trim()
     tools.push('getAllCustomers')
   }
-  if ((msg.includes('hapus') || msg.includes('apus') || msg.includes('delete') || msg.includes('hilangin')) && msg.includes('bank') && !msg.includes('konsumen') && !msg.includes('debitur')) {
-    action = 'DELETE_BANK' as any
-    const bankMatch = message.match(/bank\s+([A-Za-z][A-Za-z\s]+?)(?:\s+(?:dari|sistem|database|,|$))/i)
-    if (bankMatch) intent_bankName = bankMatch[1].trim()
-    tools.push('getAllCustomers')
-  }
+  // NOTE: DELETE_BANK intent is DISABLED PERMANENTLY.
+  // No one can delete banks from the system — not even owner.
+  // Banks are permanent records. This is a hard rule.
 
   // === DELETE CUSTOMER ===
   // Detect: "hapus konsumen", "hapus jenni", "apus debitur", "delete konsumen", "hilangin konsumen"
@@ -1860,34 +1857,7 @@ Bank ini belum punya template/annotation — perlu setup via dashboard.`
     }
   }
 
-  if ((intent as any).action === 'DELETE_BANK' && intent.bankName) {
-    try {
-      const bankName = intent.bankName
-      const bank = await db.bankConfig.findFirst({
-        where: {
-          isActive: true,
-          OR: [
-            { bankName: { contains: bankName, mode: 'insensitive' } },
-            { bankCode: { contains: bankName.toUpperCase(), mode: 'insensitive' } },
-          ],
-        },
-      })
-      if (!bank) {
-        directResponse = `❌ Bank "${bankName}" tidak ditemukan. Ketik "list bank" untuk melihat daftar bank.`
-      } else {
-        await db.bankConfig.update({ where: { id: bank.id }, data: { isActive: false } })
-        await writeAuditLog('DELETE_BANK', 'BankConfig', bank.id, {
-          bankCode: bank.bankCode, bankName: bank.bankName,
-        })
-        directResponse = `✅ Bank **${bank.bankName}** (${bank.bankCode}) dihapus dari sistem.
-
-Konsumen yang sudah terdaftar dengan bank ini tetap ada datanya.`
-      }
-      results.push(`[deleteBank] ${bankName}`)
-    } catch (err: any) {
-      directResponse = `❌ Gagal hapus bank: ${err?.message || 'unknown error'}`
-    }
-  }
+  // DELETE_BANK handler DISABLED PERMANENTLY — banks cannot be deleted by anyone.
 
   return { results: results.join('\n\n'), directResponse }
 }

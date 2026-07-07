@@ -436,6 +436,17 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [lokasiDoc, setLokasiDoc] = useState<{ docId: string; editUrl: string; embedUrl: string; downloadUrl: string } | null>(null)
   const [generatingLokasi, setGeneratingLokasi] = useState(false)
   // Global company settings (director info + per-bank accounts, shared across all customers)
+  // Dynamic banks from BankConfig DB (added below hardcoded BTN/Mandiri/BSB)
+  const [dbBanks, setDbBanks] = useState<Array<{ id: string; bankCode: string; bankName: string }>>([])
+
+  // Fetch DB banks on mount
+  useEffect(() => {
+    fetch('/api/bank-config')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data) setDbBanks(d.data) })
+      .catch(() => {})
+  }, [])
+
   const [companySettings, setCompanySettings] = useState<{
     companyName?: string; directorName?: string; directorNik?: string; directorPhone?: string; directorAddress?: string; officeAddress?: string; city?: string
     btnAccount?: string; mandiriAccount?: string; bsbAccount?: string
@@ -1111,7 +1122,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         {/* Bank selector - only show in bank mode */}
         {formMode === 'bank' && (
           <select value={bank} onChange={e => setBank(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-border bg-background">
+            {/* Existing hardcoded banks — DO NOT TOUCH */}
             <option value="BTN">BTN</option><option value="MANDIRI">Mandiri</option><option value="BSB_SYARIAH">BSB Syariah</option>
+            {/* Dynamic banks from BankConfig DB — added below, never replace existing */}
+            {dbBanks.filter(b => !['BTN', 'MANDIRI', 'BSB_SYARIAH'].includes(b.bankCode)).map(b => (
+              <option key={b.id} value={b.bankCode}>{b.bankName}</option>
+            ))}
           </select>
         )}
         {/* Editor buttons for Combined Doc (SK+Slip) & Lokasi Kerja - only in bank mode Entry */}

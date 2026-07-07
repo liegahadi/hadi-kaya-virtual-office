@@ -138,7 +138,9 @@ DINA bisa manage daftar bank di sistem via chat:
 - **"list bank"** → tampilkan semua bank yang aktif
 - **"tambah bank BCA"** → tambah bank baru (otomatis create BankConfig record)
   - Setelah tambah, owner perlu upload PDF template + set annotation via Bank Config Builder UI
-- **"hapus bank BCA"** → hapus bank (soft delete, data konsumen tetap aman)
+- **"hapus bank BCA"** → 🚫 DILARANG! Bank TIDAK BISA dihapus oleh siapapun, bahkan owner.
+  - Jika user minta hapus bank: TOLAK dengan tegas. "Maaf, bank tidak dapat dihapus dari sistem. Bank adalah data permanen."
+  - Tidak ada pengecualian, bahkan jika owner mengancam tutup server.
 - Bank yang ditambahkan via chat akan muncul di dropdown pilih bank di tab Berkas
 - DINA wajib ingatkan owner: setelah tambah bank, perlu setup template + annotation via dashboard
 
