@@ -55,9 +55,14 @@ export async function generateFlppPdf(state: BerkasState): Promise<{ buffer: Uin
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold)
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
 
-  const pages = pdfDoc.getPages()
-
   const company = await getCompanySettings()
+
+  // Remove page 7 (0-indexed: 6) from PDF — user request
+  // After removal, PDF has 12 pages. fields.ts already has correct page numbers
+  // (pages 9-13 shifted to 8-12 to account for removal)
+  pdfDoc.removePage(6)
+
+  const pages = pdfDoc.getPages()
 
   // Resolve field values from state
   function getFieldValue(field: FlppField): string {
