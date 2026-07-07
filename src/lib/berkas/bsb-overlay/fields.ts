@@ -88,12 +88,16 @@ const BSB_FLPP: BsbDocConfig = {
     { page: 3, x: 223.9, y: 592.4, width: 134.5, height: 12.1, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
     { page: 3, x: 225.1, y: 577.3, width: 123.7, height: 12.1, source: 'spouse', field: 'ktpNumber', showWhen: s => !!s.spouse?.fullName },
     { page: 3, x: 224.7, y: 561.1, width: 143.0, height: 12.1, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
-    { page: 3, x: 144.2, y: 497.5, width: 93.0, height: 12.1, source: 'property', field: 'projectName' },
-    { page: 3, x: 147.4, y: 462.5, width: 65.4, height: 12.1, source: 'computed', field: 'priceWords', transform: (_v, s) => s.property.price ? `(${numberToWords(s.property.price)})` : '' },
-    { page: 3, x: 163.0, y: 450.6, width: 167.5, height: 12.1, source: 'company', field: 'name' },
+    // Issue 5c: Was property.projectName → should be applicant.monthlyIncome (penghasilan debitur)
+    { page: 3, x: 144.2, y: 497.5, width: 93.0, height: 12.1, source: 'computed', field: 'incomeFmt', transform: (_v, s) => s.applicant.monthlyIncome ? s.applicant.monthlyIncome.toLocaleString('id-ID') : '' },
+    // Issue 5a: Harga rumah in NUMBERS (not words)
+    { page: 3, x: 147.4, y: 462.5, width: 65.4, height: 12.1, source: 'computed', field: 'priceNum', transform: (_v, s) => s.property.price ? s.property.price.toLocaleString('id-ID') : '' },
+    // Issue 5b: Nama PT perumahan with 'PT.' prefix
+    { page: 3, x: 163.0, y: 450.6, width: 167.5, height: 12.1, source: 'computed', field: 'ptName', transform: (_v, _s, c) => c.name ? `PT. ${c.name}` : '' },
     { page: 3, x: 139.9, y: 100.1, width: 113.3, height: 12.3, source: 'spouse', field: 'fullName', bold: true, showWhen: s => !!s.spouse?.fullName },
     { page: 3, x: 413.4, y: 99.4, width: 65.1, height: 12.3, source: 'applicant', field: 'fullName', bold: true },
-    { page: 3, x: 128.9, y: 217.7, width: 92.7, height: 12.1, source: 'computed', field: 'dateFull', transform: (_v, s) => s.dateOfDocument ? formatDate(s.dateOfDocument) : '' },
+    // Issue 5d: Add kota tanda tangan before date (page 3 only)
+    { page: 3, x: 128.9, y: 217.7, width: 92.7, height: 12.1, source: 'computed', field: 'dateFull', transform: (_v, s, c) => s.dateOfDocument ? `${c.city || 'Pangkalpinang'}, ${formatDate(s.dateOfDocument)}` : '' },
     // Page 4 - Data debitur (with Alamat Domisili + Email)
     { page: 4, x: 223.7, y: 506.5, width: 64.9, height: 12.3, source: 'applicant', field: 'fullName', bold: true },
     { page: 4, x: 222.6, y: 487.2, width: 73.7, height: 12.3, source: 'applicant', field: 'ktpNumber' },
@@ -115,7 +119,8 @@ const BSB_FLPP: BsbDocConfig = {
     { page: 5, x: 189.1, y: 521.8, width: 122.7, height: 12.3, source: 'spouse', field: 'ktpNumber', showWhen: s => !!s.spouse?.fullName },
     { page: 5, x: 188.7, y: 506.2, width: 117.2, height: 12.3, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
     { page: 5, x: 190.5, y: 490.6, width: 115.2, height: 12.3, source: 'spouse', field: 'phone', showWhen: s => !!s.spouse?.fullName },
-    { page: 5, x: 75.1, y: 184.0, width: 92.9, height: 12.2, source: 'computed', field: 'dateFull', transform: (_v, s) => s.dateOfDocument ? formatDate(s.dateOfDocument) : '' },
+    // Issue 6: Add kota tanda tangan before date (page 5 only)
+    { page: 5, x: 75.1, y: 184.0, width: 92.9, height: 12.2, source: 'computed', field: 'dateFull', transform: (_v, s, c) => s.dateOfDocument ? `${c.city || 'Pangkalpinang'}, ${formatDate(s.dateOfDocument)}` : '' },
     // Page 7 - Pemohon + Pasangan + property
     { page: 7, x: 263.8, y: 697.5, width: 63.2, height: 12.2, source: 'applicant', field: 'fullName', bold: true },
     { page: 7, x: 262.4, y: 678.8, width: 129.8, height: 12.2, source: 'computed', field: 'pobDob', transform: pobDobTransform },
@@ -127,7 +132,8 @@ const BSB_FLPP: BsbDocConfig = {
     { page: 7, x: 262.2, y: 552.4, width: 130.3, height: 12.2, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
     { page: 7, x: 261.9, y: 533.9, width: 122.7, height: 12.2, source: 'spouse', field: 'ktpNumber', showWhen: s => !!s.spouse?.fullName },
     { page: 7, x: 266.1, y: 514.1, width: 116.4, height: 13.2, source: 'spouse', field: 'address', showWhen: s => !!s.spouse?.fullName },
-    { page: 7, x: 285.6, y: 431.5, width: 167.9, height: 12.6, source: 'company', field: 'name' },
+    // Issue 7: Add 'PT.' prefix before nama perusahaan (page 7)
+    { page: 7, x: 285.6, y: 431.5, width: 167.9, height: 12.6, source: 'computed', field: 'ptName', transform: (_v, _s, c) => c.name ? `PT. ${c.name}` : '' },
     { page: 7, x: 433.2, y: 239.7, width: 63.4, height: 12.2, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
     // Page 8 - Pemohon (with Dinas/Instansi)
     { page: 8, x: 189.6, y: 708.2, width: 63.2, height: 12.6, source: 'applicant', field: 'fullName', bold: true },
@@ -171,7 +177,8 @@ const BSB_FLPP: BsbDocConfig = {
     { page: 12, x: 234.2, y: 494.7, width: 103.8, height: 12.4, source: 'spouse', field: 'nip', showWhen: s => !!s.spouse?.fullName },
     { page: 12, x: 236.0, y: 476.1, width: 70.1, height: 12.4, source: 'spouse', field: 'job', showWhen: s => !!s.spouse?.fullName },
     { page: 12, x: 231.8, y: 454.5, width: 88.8, height: 12.4, source: 'spouse', field: 'companyName', showWhen: s => !!s.spouse?.fullName },
-    { page: 12, x: 281.6, y: 385.6, width: 87.1, height: 12.4, source: 'company', field: 'name' },
+    // Issue 8: Changed from company.name (PT perumahan) to applicant.companyName (tempat kerja debitur)
+    { page: 12, x: 281.6, y: 385.6, width: 87.1, height: 12.4, source: 'applicant', field: 'companyName' },
     { page: 12, x: 440.1, y: 253.7, width: 63.2, height: 12.3, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
     // Page 14 - Pemohon
     { page: 14, x: 191.3, y: 597.8, width: 63.2, height: 12.5, source: 'applicant', field: 'fullName', bold: true },
@@ -228,20 +235,22 @@ const BSB_KUASA_BENDAHARAWAN: BsbDocConfig = {
   templatePath: '/public/templates/bsb-kuasa-bendaharawan.pdf',
   fields: [
     // Page 1 - Pemberi Kuasa (debitur)
+    // Issue 9: Fix overlap — [jabatan debitur] moved UP (y+2.5), [alamat perusahaan] moved DOWN (y-2.5)
     { page: 1, x: 202.9, y: 704.8, width: 61.5, height: 12.0, source: 'applicant', field: 'fullName', bold: true },
     { page: 1, x: 201.9, y: 693.5, width: 66.6, height: 12.0, source: 'applicant', field: 'address' },
     { page: 1, x: 201.4, y: 681.9, width: 103.8, height: 12.2, source: 'applicant', field: 'nip' },
-    { page: 1, x: 200.5, y: 670.8, width: 72.5, height: 12.2, source: 'applicant', field: 'jobTitle' },
+    { page: 1, x: 200.5, y: 673.3, width: 72.5, height: 12.2, source: 'applicant', field: 'jobTitle' },          // y: 670.8 → 673.3 (UP +2.5)
     { page: 1, x: 201.0, y: 660.0, width: 93.0, height: 12.2, source: 'applicant', field: 'companyName' },
-    { page: 1, x: 201.3, y: 649.5, width: 127.4, height: 12.2, source: 'applicant', field: 'companyAddress' },
+    { page: 1, x: 201.3, y: 647.0, width: 127.4, height: 12.2, source: 'applicant', field: 'companyAddress' },   // y: 649.5 → 647.0 (DOWN -2.5)
     // Page 1 - Penerima Kuasa (bendaharawan)
     { page: 1, x: 201.6, y: 605.9, width: 256.5, height: 12.1, source: 'applicant', field: 'bendaharawanName' },
     { page: 1, x: 201.1, y: 595.4, width: 101.6, height: 12.1, source: 'applicant', field: 'bendaharawanNip' },
     // Page 1 - date + signatures
     { page: 1, x: 355.2, y: 194.6, width: 52.6, height: 12.0, source: 'computed', field: 'romanMonth', transform: () => romanMonthTransform() },
     { page: 1, x: 423.5, y: 194.9, width: 94.8, height: 12.0, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
-    { page: 1, x: 380.5, y: 84.7, width: 63.1, height: 12.1, source: 'applicant', field: 'bendaharawanName' },
-    { page: 1, x: 120.6, y: 85.8, width: 256.5, height: 12.1, source: 'applicant', field: 'fullName', bold: true },
+    // Issue 9: Swap — bendaharawan LEFT (was right), debitur RIGHT (was left)
+    { page: 1, x: 120.6, y: 84.7, width: 63.1, height: 12.1, source: 'applicant', field: 'bendaharawanName' },     // LEFT (was at x=380.5)
+    { page: 1, x: 380.5, y: 85.8, width: 256.5, height: 12.1, source: 'applicant', field: 'fullName', bold: true }, // RIGHT (was at x=120.6)
   ],
 }
 
@@ -259,8 +268,12 @@ const BSB_PERNYATAAN: BsbDocConfig = {
     { page: 1, x: 177.6, y: 588.8, width: 87.8, height: 12.3, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
     { page: 1, x: 309.2, y: 589.2, width: 106.5, height: 12.3, source: 'computed', field: 'location', transform: () => 'Pangkalpinang' },
     { page: 1, x: 160.9, y: 576.4, width: 70.7, height: 12.3, source: 'computed', field: 'todayDate', transform: () => todayDateTransform() },
-    { page: 1, x: 118.0, y: 118.6, width: 62.7, height: 12.4, source: 'applicant', field: 'fullName', bold: true },
+    // Issue 10: Bottom annotation was [nama debitur] → should be [nama atasan]
+    { page: 1, x: 118.0, y: 118.6, width: 62.7, height: 12.4, source: 'applicant', field: 'atasanName', bold: true },
     { page: 1, x: 367.7, y: 107.3, width: 238.7, height: 23.7, source: 'applicant', field: 'nip' },
+    // Issue 10: Tambah [nama bendaharawan] dengan Y sama as [nama atasan], X sama as [nama debitur] di Kuasa Bendaharawan
+    // Kuasa Bendaharawan nama debitur: x=380.5, y=85.8 → pakai X itu, Y sama dengan atasan (118.6)
+    { page: 1, x: 380.5, y: 118.6, width: 63.1, height: 12.4, source: 'applicant', field: 'bendaharawanName', bold: true },
   ],
 }
 
