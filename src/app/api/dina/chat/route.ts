@@ -142,6 +142,35 @@ export async function POST(req: NextRequest) {
     const toolExecution = await executeTools(intent, customerId, message, executeContext)
     const toolResults = toolExecution.results
 
+    // === CHAT COMMAND: "nah tambahin nih ke memory kamu" ===
+    // User can manually add memory via chat (from dashboard or WA)
+    if (message.toLowerCase().includes('tambahin nih ke memory') || message.toLowerCase().includes('tambahkan ke memory') || message.toLowerCase().includes('ingat ini')) {
+      const dinaAgent = await db.agent.findFirst({ where: { name: 'Dina' } }).catch(() => null)
+      // Extract what to remember (everything after the trigger phrase)
+      const memoryText = message.replace(/.*?(tambahin nih ke memory|tambahkan ke memory|ingat ini)\s*(kamu|nya)?\s*[:\-]?\s*/i, '').trim()
+      if (memoryText && memoryText.length > 5) {
+        await db.memory.create({
+          data: {
+            agentId: dinaAgent?.id || null,
+            category: 'BERKAS',
+            memoryType: 'long_term',
+            title: memoryText.substring(0, 50),
+            content: memoryText,
+            resolution: null,
+            importance: 0.7,
+            source: 'CONVERSATION',
+            version: 1,
+            isActive: true,
+          } as any,
+        })
+        toolExecution.directResponse = `✅ **Memory baru disimpan!**
+
+📝 "${memoryText.substring(0, 100)}${memoryText.length > 100 ? '...' : ''}"
+
+Memory ini tersimpan di Tab Memory. Kamu bisa edit Title, Description, dan Resolution di sana untuk struktur yang lebih baik.`
+      }
+    }
+
     // === CONTEXT RECOVERY: If SEND_FILE has no customer name, look at recent messages ===
     // User flow: "Dina minta berkas Hadi" → DINA lists files → user: "kirim yang nomor 1"
     // The "kirim yang nomor 1" has no customer name — we need to recover it from context.
