@@ -1,13 +1,12 @@
 'use client'
-// LogoGenerator — Generate company logo via AI (free z-ai-web-dev-sdk)
-// Two modes:
-// 1. Text-based logo (SVG from company name, no API needed)
-// 2. AI image generation (z-ai-web-dev-sdk, free)
+// LogoGenerator — 2 modes:
+// 1. AI Image by Upload: User uploads foto logo → AI recreate clean with white bg
+// 2. AI Image by Prompt: User prompts by text → AI creates new logo from scratch
 //
 // After generation, user can insert logo into Kop Surat textarea
 
-import React, { useState } from 'react'
-import { Sparkles, Image as ImageIcon, Loader2, Plus, RefreshCw, Type } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import { Sparkles, Image as ImageIcon, Loader2, Plus, RefreshCw, Upload, Type } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface LogoGeneratorProps {
@@ -25,27 +24,77 @@ const LOGO_STYLES = [
 ]
 
 export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps) {
-  const [mode, setMode] = useState<'text' | 'image'>('image')
+  const [mode, setMode] = useState<'upload' | 'prompt'>('prompt')
   const [selectedStyle, setSelectedStyle] = useState('modern')
+  const [promptText, setPromptText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [generatedLogo, setGeneratedLogo] = useState<string | null>(null)
-  const [textColor, setTextColor] = useState('#1a56db')
-  const [textBg, setTextBg] = useState('#ffffff')
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Generate AI image logo
-  async function handleGenerateImage() {
+  // Handle file upload
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus gambar (JPG/PNG)')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setUploadedImage(reader.result as string)
+      toast.success('Foto logo di-upload. Klik "Recreate Logo" untuk bersihkan.')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Mode 1: Recreate logo from uploaded image
+  async function handleRecreateLogo() {
+    if (!uploadedImage) {
+      toast.error('Upload foto logo dulu')
+      return
+    }
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/documents/edit-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: uploadedImage,
+          prompt: 'Recreate this company logo as a clean, professional version. White background. High contrast. Remove any noise, shadows, blur, or distractions. Keep the original design, shape, and colors as close as possible. Make it look like a high-quality vector logo suitable for letterhead/kop surat.',
+        }),
+      })
+      const data = await res.json()
+      if (!data.success) throw new Error(data.error || 'Failed')
+      setGeneratedLogo(data.dataUrl)
+      toast.success('Logo berhasil di-recreate! Klik "Insert ke Kop Surat"')
+    } catch (err) {
+      toast.error('Gagal recreate logo: ' + (err instanceof Error ? err.message : 'unknown'))
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  // Mode 2: Generate logo from prompt
+  async function handleGenerateFromPrompt() {
     if (!companyName?.trim()) {
       toast.error('Isi "Nama Perusahaan" dulu di form Pekerjaan')
       return
     }
     setGenerating(true)
     try {
+      const styleDesc = LOGO_STYLES.find(s => s.id === selectedStyle)?.desc || 'modern professional'
+      const fullPrompt = promptText
+        ? `${promptText} Style: ${styleDesc}. White background. No text in the image.`
+        : `Generate a clean, professional company logo for "${companyName}". Style: ${styleDesc}. Simple, high-contrast, suitable for letterhead. White background. No text in the image (just the logo symbol/icon).`
+
       const res = await fetch('/api/documents/generate-logo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyName,
-          style: LOGO_STYLES.find(s => s.id === selectedStyle)?.desc || 'modern professional',
+          style: styleDesc,
+          description: promptText,
         }),
       })
       const data = await res.json()
@@ -57,25 +106,6 @@ export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps)
     } finally {
       setGenerating(false)
     }
-  }
-
-  // Generate text-based SVG logo (no API needed)
-  function handleGenerateText() {
-    if (!companyName?.trim()) {
-      toast.error('Isi "Nama Perusahaan" dulu di form Pekerjaan')
-      return
-    }
-    const initials = companyName.split(' ').map(w => w[0]).join('').substring(0, 3).toUpperCase()
-    const svg = `<svg width="200" height="80" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="80" fill="${textBg}" rx="8"/>
-      <circle cx="40" cy="40" r="25" fill="${textColor}" opacity="0.15"/>
-      <text x="40" y="48" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="${textColor}" text-anchor="middle">${initials}</text>
-      <text x="75" y="35" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${textColor}">${companyName.substring(0, 20)}</text>
-      <text x="75" y="50" font-family="Arial, sans-serif" font-size="8" fill="#666">Perumahan • Properti</text>
-    </svg>`
-    const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`
-    setGeneratedLogo(dataUrl)
-    toast.success('Logo text berhasil dibuat! Klik "Insert ke Kop Surat"')
   }
 
   // Insert logo into Kop Surat
@@ -96,25 +126,25 @@ export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps)
       {/* Mode tabs */}
       <div className="flex gap-1">
         <button
-          onClick={() => setMode('image')}
+          onClick={() => setMode('prompt')}
           className={`flex-1 px-2 py-1 rounded text-[10px] font-medium border flex items-center justify-center gap-1 ${
-            mode === 'image' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-300'
+            mode === 'prompt' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-300'
           }`}
         >
-          <ImageIcon className="w-3 h-3" /> AI Image
+          <Sparkles className="w-3 h-3" /> Buat Baru (Prompt)
         </button>
         <button
-          onClick={() => setMode('text')}
+          onClick={() => setMode('upload')}
           className={`flex-1 px-2 py-1 rounded text-[10px] font-medium border flex items-center justify-center gap-1 ${
-            mode === 'text' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-300'
+            mode === 'upload' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-300'
           }`}
         >
-          <Type className="w-3 h-3" /> Text SVG
+          <Upload className="w-3 h-3" /> Recreate (Upload)
         </button>
       </div>
 
-      {/* Image mode */}
-      {mode === 'image' && (
+      {/* Mode 1: Prompt-based generation */}
+      {mode === 'prompt' && (
         <>
           <div>
             <label className="text-[9px] text-slate-600">Style Logo</label>
@@ -128,40 +158,64 @@ export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps)
               ))}
             </select>
           </div>
+          <div>
+            <label className="text-[9px] text-slate-600">Prompt (opsional — kosongkan untuk auto dari nama perusahaan)</label>
+            <textarea
+              value={promptText}
+              onChange={e => setPromptText(e.target.value)}
+              placeholder="contoh: Logo warung makan dengan gambar mangkuk dan sendok, warna merah kuning"
+              className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-900 min-h-[40px]"
+            />
+          </div>
           <button
-            onClick={handleGenerateImage}
+            onClick={handleGenerateFromPrompt}
             disabled={generating}
             className="w-full px-3 py-1.5 bg-purple-600 text-white rounded text-[10px] font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            {generating ? 'Generating...' : 'Generate Logo (AI)'}
+            {generating ? 'Generating...' : 'Generate Logo dari Prompt'}
           </button>
-          <p className="text-[8px] text-slate-500">Free via z-ai SDK. ~10-20 detik per generate.</p>
+          <p className="text-[8px] text-slate-500">AI buat logo baru dari prompt. ~10-20 detik.</p>
         </>
       )}
 
-      {/* Text mode */}
-      {mode === 'text' && (
+      {/* Mode 2: Upload-based recreation */}
+      {mode === 'upload' && (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] text-slate-600">Warna Text</label>
-              <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
-                className="w-full mt-0.5 h-7 border border-slate-300 rounded" />
+          <div>
+            <label className="text-[9px] text-slate-600">Upload Foto Logo (dari HP/kamera)</label>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1 border-2 border-dashed border-purple-300 rounded-lg p-3 text-center cursor-pointer hover:bg-purple-100"
+            >
+              {uploadedImage ? (
+                <img src={uploadedImage} alt="Uploaded logo" className="max-h-20 mx-auto rounded" />
+              ) : (
+                <div className="text-[10px] text-slate-500 py-3">
+                  <Upload className="w-5 h-5 mx-auto mb-1 text-purple-400" />
+                  Klik untuk upload foto logo
+                </div>
+              )}
             </div>
-            <div>
-              <label className="text-[9px] text-slate-600">Background</label>
-              <input type="color" value={textBg} onChange={e => setTextBg(e.target.value)}
-                className="w-full mt-0.5 h-7 border border-slate-300 rounded" />
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
           </div>
-          <button
-            onClick={handleGenerateText}
-            className="w-full px-3 py-1.5 bg-purple-600 text-white rounded text-[10px] font-medium hover:bg-purple-700 flex items-center justify-center gap-1.5"
-          >
-            <Type className="w-3 h-3" /> Generate Logo (Text)
-          </button>
-          <p className="text-[8px] text-slate-500">Logo SVG dari nama perusahaan. Instant, no API.</p>
+          {uploadedImage && (
+            <button
+              onClick={handleRecreateLogo}
+              disabled={generating}
+              className="w-full px-3 py-1.5 bg-purple-600 text-white rounded text-[10px] font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {generating ? 'Recreating...' : 'Recreate Logo (Clean)'}
+            </button>
+          )}
+          <p className="text-[8px] text-slate-500">Upload foto logo yang ada → AI recreate versi bersih (white bg, no noise). ~10-20 detik.</p>
         </>
       )}
 
@@ -179,7 +233,7 @@ export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps)
               <Plus className="w-3 h-3" /> Insert ke Kop Surat
             </button>
             <button
-              onClick={() => setGeneratedLogo(null)}
+              onClick={() => { setGeneratedLogo(null); setUploadedImage(null) }}
               className="px-2 py-1 bg-white text-slate-600 border border-slate-300 rounded text-[10px] hover:bg-slate-50 flex items-center gap-1"
             >
               <RefreshCw className="w-3 h-3" /> Ulang
@@ -188,7 +242,7 @@ export function LogoGenerator({ companyName, onInsertLogo }: LogoGeneratorProps)
         </div>
       )}
 
-      {!companyName?.trim() && (
+      {!companyName?.trim() && mode === 'prompt' && (
         <p className="text-[9px] text-amber-600 italic">⚠️ Isi "Nama Perusahaan" di form Pekerjaan dulu</p>
       )}
     </div>
