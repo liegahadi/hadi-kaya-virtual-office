@@ -294,13 +294,9 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
         }
       } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
 
-      // Extract learning (lightweight, no LLM needed)
-      try {
-        const learning = extractLearning(message, aiResponseDirect)
-        if (learning) {
-          await saveMemory(learning.content, learning.category, customerId, learning.importance)
-        }
-      } catch (memErr) { console.error('Memory save (non-fatal):', memErr) }
+      // Auto-save memory DISABLED — was creating low-quality "User bertanya:" memories
+      // Memory should be manually curated with Title + Description + Resolution
+      // Use chat command "nah tambahin nih ke memory kamu" or Tab Memory UI to add
 
       return NextResponse.json({
         success: true,
@@ -319,7 +315,7 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
         where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { memoryType: 'umum' }] },
         orderBy: { importance: 'desc' },
         take: 15,
-        select: { content: true, category: true, memoryType: true },
+        select: { title: true, content: true, resolution: true, category: true, memoryType: true },
       }).catch(() => []),
       db.skill.findMany({
         where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { agentId: null }] },
@@ -328,7 +324,7 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
     ])
 
     const memoryContext = relevantMemories.length > 0
-      ? `\n\n## 🧠 MEMORY DINA (pelajaran dari masa lalu)\n${relevantMemories.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
+      ? `\n\n## 🧠 MEMORY DINA (pelajaran dari masa lalu)\n${relevantMemories.map(m => `- **${m.title || m.content.substring(0, 40)}**: ${m.content}${m.resolution ? `\n  Resolusi: ${m.resolution.substring(0, 150)}` : ''}`).join('\n')}`
       : ''
     const skillContext = relevantSkills.length > 0
       ? `\n\n## ⚡ SKILLS DINA (kemampuan yang dimiliki)\n${relevantSkills.map(s => `- **${s.displayName}**: ${s.prompt.substring(0, 100)}...`).join('\n')}`
@@ -446,12 +442,7 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
     } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
 
     // Step 8: Extract learning and save to memory
-    try {
-      const learning = extractLearning(message, aiResponse)
-      if (learning) {
-        await saveMemory(learning.content, learning.category, customerId, learning.importance)
-      }
-    } catch (memErr) { console.error('Memory save (non-fatal):', memErr) }
+    // Auto-save memory DISABLED — use manual curation with Title + Description + Resolution
 
     return NextResponse.json({
       success: true,

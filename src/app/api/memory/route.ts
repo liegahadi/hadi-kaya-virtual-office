@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { agentId, customerId, category, memoryType, entityType, entityId, content, importance, source, attachmentUrl, changedBy } = body
+    const { agentId, customerId, category, memoryType, entityType, entityId, title, content, resolution, importance, source, attachmentUrl, changedBy } = body
 
     if (!content) return NextResponse.json({ success: false, error: 'content required' }, { status: 400 })
 
@@ -58,7 +58,9 @@ export async function POST(req: NextRequest) {
         memoryType: memoryType || 'long_term',
         entityType: entityType || null,
         entityId: entityId || null,
+        title: title || null,
         content,
+        resolution: resolution || null,
         importance: importance ?? 0.5,
         source: source || 'MANUAL',
         attachmentUrl: attachmentUrl || null,

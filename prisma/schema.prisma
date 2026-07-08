@@ -363,16 +363,18 @@ model Memory {
   id              String   @id @default(cuid())
   agentId         String?  // null = entity memory / umum
   customerId      String?  // customer-specific memory
-  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING | DECISION
+  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING
   memoryType      String   @default("long_term") // short_term | long_term | entity | umum
-  entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER (for entity memory)
-  entityId        String?  // ID of the entity (e.g. customer ID, bank code)
-  content         String
-  importance      Float    @default(0.5) // 0.0 - 1.0
-  source          String?  // CONVERSATION | MANUAL | INFERRED | AGENT_REPORT | RATNA_SIMULATION
-  attachmentUrl   String?  // optional: gambar, PDF, link
-  version         Int      @default(1) // versioning for tracking changes
-  isActive        Boolean  @default(true) // soft delete (keep history)
+  entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER
+  entityId        String?  // ID of the entity
+  title           String?  // Judul memory (like book title)
+  content         String   // Deskripsi: what happened / what's the rule
+  resolution      String?  // Action items: what to do about it
+  importance      Float    @default(0.5)
+  source          String?
+  attachmentUrl   String?
+  version         Int      @default(1)
+  isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

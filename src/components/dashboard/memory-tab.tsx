@@ -18,7 +18,9 @@ interface MemoryItem {
   memoryType: string
   entityType: string | null
   entityId: string | null
+  title: string | null
   content: string
+  resolution: string | null
   importance: number
   source: string | null
   attachmentUrl: string | null
@@ -180,7 +182,9 @@ export function MemoryTab() {
               <span className={cn('text-[8px] px-1 py-0.5 rounded font-medium', CATEGORY_COLORS[mem.category] || 'bg-gray-100 text-gray-600')}>{mem.category}</span>
               <span className={cn('text-[8px] px-1 py-0.5 rounded font-medium', TYPE_COLORS[mem.memoryType] || 'bg-gray-100 text-gray-600')}>{mem.memoryType}</span>
             </div>
-            <p className="text-xs text-foreground flex-1 line-clamp-3">{mem.content}</p>
+            <p className="text-xs font-bold text-foreground mb-1">{mem.title || mem.content.substring(0, 40)}</p>
+            <p className="text-[10px] text-muted-foreground flex-1 line-clamp-2">{mem.content}</p>
+            {mem.resolution && <p className="text-[9px] text-blue-600 mt-1 line-clamp-1 italic">📋 {mem.resolution.substring(0, 60)}...</p>}
             <div className="flex items-center justify-between mt-2 text-[9px] text-muted-foreground">
               <span>{mem.agent?.name || 'Umum'}</span>
               <div className="flex items-center gap-1">
@@ -228,10 +232,22 @@ export function MemoryTab() {
             </div>
             {'content' in selectedItem ? (
               <div className="space-y-3">
+                {selectedItem.title && (
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">Judul</label>
+                    <p className="text-sm font-bold mt-0.5">{selectedItem.title}</p>
+                  </div>
+                )}
                 <div>
-                  <label className="text-[10px] text-muted-foreground">Content</label>
+                  <label className="text-[10px] text-muted-foreground">Deskripsi</label>
                   <p className="text-sm mt-0.5">{selectedItem.content}</p>
                 </div>
+                {selectedItem.resolution && (
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">📋 Resolusi (Action Items)</label>
+                    <pre className="text-xs mt-0.5 bg-blue-50 dark:bg-blue-950/30 p-2 rounded whitespace-pre-wrap text-blue-800 dark:text-blue-200">{selectedItem.resolution}</pre>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div><span className="text-muted-foreground">Category:</span> {selectedItem.category}</div>
                   <div><span className="text-muted-foreground">Type:</span> {selectedItem.memoryType}</div>
@@ -240,7 +256,6 @@ export function MemoryTab() {
                   <div><span className="text-muted-foreground">Source:</span> {selectedItem.source}</div>
                   <div><span className="text-muted-foreground">Agent:</span> {selectedItem.agent?.name || 'Umum'}</div>
                 </div>
-                {selectedItem.entityType && <div><span className="text-muted-foreground">Entity:</span> {selectedItem.entityType} ({selectedItem.entityId})</div>}
                 <div><span className="text-muted-foreground">Created:</span> {new Date(selectedItem.createdAt).toLocaleString('id-ID')}</div>
               </div>
             ) : (
@@ -313,10 +328,9 @@ function AddModal({ type, onClose, onSaved }: { type: 'memory' | 'skill'; onClos
         <form onSubmit={handleSubmit} className="space-y-3">
           {isMemory ? (
             <>
-              <div>
-                <label className="text-[10px] text-muted-foreground">Content</label>
-                <textarea name="content" required className="w-full mt-0.5 text-sm border rounded p-2 bg-background min-h-[80px]" placeholder="Isi memory..." />
-              </div>
+              <input name="title" className="w-full text-sm border rounded p-2 bg-background" placeholder="Judul (e.g. 'Mandiri: Status Pekerjaan')" />
+              <textarea name="content" required className="w-full mt-0.5 text-sm border rounded p-2 bg-background min-h-[60px]" placeholder="Deskripsi: apa yang terjadi / apa aturannya" />
+              <textarea name="resolution" className="w-full text-sm border rounded p-2 bg-background min-h-[80px]" placeholder="Resolusi: action items (apa yang harus dilakukan)" />
               <div className="grid grid-cols-2 gap-2">
                 <select name="category" className="text-xs border rounded p-2 bg-background">
                   <option value="UTAMA">UTAMA</option>
@@ -324,13 +338,11 @@ function AddModal({ type, onClose, onSaved }: { type: 'memory' | 'skill'; onClos
                   <option value="FINANCE">FINANCE</option>
                   <option value="MATERIAL">MATERIAL</option>
                   <option value="MARKETING">MARKETING</option>
-                  <option value="DECISION">DECISION</option>
                 </select>
                 <select name="memoryType" className="text-xs border rounded p-2 bg-background">
                   <option value="long_term">Long-term</option>
                   <option value="entity">Entity</option>
                   <option value="umum">Umum (All Agents)</option>
-                  <option value="short_term">Short-term</option>
                 </select>
               </div>
               <input type="number" name="importance" step="0.1" min="0" max="1" defaultValue="0.5" className="w-full text-xs border rounded p-2 bg-background" placeholder="Importance (0.0-1.0)" />
