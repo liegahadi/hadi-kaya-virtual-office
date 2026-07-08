@@ -1,7 +1,7 @@
 # PRD — Hadi Kaya Virtual Office
 ## Product Requirements Document (Living Document)
 
-**Versi:** 1.1  
+**Versi:** 1.3  
 **Tanggal:** 8 Juli 2026  
 **Status:** Active Development  
 **Owner:** Andrian Bong (Hadi) — PT. Marlindo Bangun Persada  
@@ -295,10 +295,60 @@ Sistem memory terpusat untuk semua 15 AI agents, terinspirasi dari `rohitg00/age
 2. **Memory per Agent** — Filter memory utama sesuai role (DINA → berkas, RINA → finance, dll)
 3. **Skill** — Memory yang diklaim agent sebagai kemampuan mereka
 
-### 6.3 Memory vs Skill (Per User Clarification v1.1)
+### 6.3 Memory vs Skill (Per User Clarification v1.3)
 - **Memory** = Ingatan dari kejadian yang dialami agent. Pasif (disimpan, di-search saat butuh). Fungsi: hindari mengulang kejadian buruk, eksploitasi kejadian baik. Termasuk bahasa yang tidak dipahami (word/sentence/letter level).
 - **Skill** = Kemampuan dasar agent mengolah/proses/eksekusi suatu case. Aktif (dipanggil saat task). Mirip Claude Skills (prompt-based capability). Contoh: "Cara generate PDF FLPP BTN".
 - **Memory ≠ Skill** — dua hal berbeda yang disimpan terpisah.
+- **Prompt Engineer Skill** = skill umum untuk semua agents (prompting untuk generate dokumen, image generation, dll). Sumber: upload/Prompt_Engineer.md
+- **Business Doc Generator Skill** = skill untuk DINA (generate dokumen). Sumber: CavinHuang/claude-skills-hub
+
+### 6.3.1 Entity Memory Flow (v1.3)
+```
+Agent belajar hal baru →
+  Agent LEPAS seluruh memorynya ke Entity Memory →
+    RATNA konekin memory dari Entity ke agent yang sesuai
+
+Agent request memory →
+  RATNA lapor owner (WA) →
+    Owner ACC →
+      RATNA kasih memory ke agent
+
+Skills:
+- Created by: Owner + RATNA (dengan izin owner)
+- NOT created by: Agent (agent cuma pakai)
+```
+
+### 6.3.2 Memory Architecture (v1.3)
+```
+┌─────────────────────────────────────────────────────┐
+│              ENTITY MEMORY (Whole Thing)             │
+│  Semua memory + skill yang RATNA pelajari/simulasi  │
+│  + semua memory yang agent serahkan ke RATNA         │
+├─────────────────────────────────────────────────────┤
+│  ┌─────────────┐  konek   ┌──────────────────────┐ │
+│  │   RATNA     │─────────→│  DINA Memory+Skills  │ │
+│  │ (CAO/Hub)   │─────────→│  RINA Memory+Skills  │ │
+│  │             │─────────→│  MITRA Memory+Skills │ │
+│  │ Manage:     │─────────→│  RANGGA Memory+Skills│ │
+│  │ - Entity    │─────────→│  Marketing AI (×10)  │ │
+│  │ - Connect         │    │    Memory+Skills     │ │
+│  │ - Report to Owner │    └──────────────────────┘ │
+│  └─────────────┘                                   │
+│  ┌─────────────────────────────────────────────────┐│
+│  │        MEMORY UMUM (All Agents)                ││
+│  │  - Grup = tag-only                              ││
+│  │  - DM non-owner = silent/reject                 ││
+│  │  - Jangan share link grup                       ││
+│  │  - WA forbidden untuk bank config               ││
+│  └─────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────┘
+```
+
+### 6.3.3 Marketing AI Memory (v1.3)
+- 10 Marketing AI (Ayu, Bima, Citra, Dian, Eka, Fajar, Gita, Hadi, Indah, Joko)
+- Masing-masing punya memory + skills sendiri (di-konek oleh RATNA)
+- Skill khusus marketing: mengenal manusia (deteksi sarkas vs genuine, penolakan halus)
+- Memory dari interaksi dengan prospek (DM, komentar, dll)
 
 ### 6.4 Tab Memory (Dashboard) — Detail Spec v1.1
 - Section 1: Memory Utama (semua ingatan/skill dari semua agent)
@@ -748,6 +798,7 @@ VPS KVM 2 (4 cores, 8GB RAM) bisa handle SEMUA dalam 1 server:
 | 8 Jul 2026 | 1.0 | Initial PRD created. Covers all phases, features, plans, rules. |
 | 8 Jul 2026 | 1.1 | Updated with user answers: Bank Config Builder detail (Q1-Q7), Memory System detail (Q8-Q15), existing banks can be modified if bank changes requirements, Mandiri karyawan-only rule, mutasi rekening dependencies per bank, memory vs skill clarification, RATNA+Mirofish simulation-first approach, versioning + audit trail for memory. |
 | 8 Jul 2026 | 1.2 | Added: DO NOT DO list (developer lessons), Memory categorization per agent (DINA + All Agents), Mirofish alternatives (MiroFish-Offline, OpenClaw, MindBank, DashClaw), Hostinger VPS full stack capacity, updated priority order (Memory+Skills first), vercel-labs/skills analysis (CLI dev tool, not production), CavinHuang business-doc-generator skill. |
+| 8 Jul 2026 | 1.3 | Added: Entity Memory flow (agent lepas memory → RATNA konek balik), Marketing AI memory (10 agents with skills), Prompt Engineer skill (umum, untuk semua agents), MiroFish online (Gemini/Claude/GPT, bukan offline Ollama), n8n use cases (12 use cases beyond content creation), Loop concept (autonomous agent), smartphone emulator impractical (back to Baileys), Hostinger 30-day money-back guarantee, test plan for memory+skills verification. |
 
 ---
 
