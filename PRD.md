@@ -803,3 +803,31 @@ VPS KVM 2 (4 cores, 8GB RAM) bisa handle SEMUA dalam 1 server:
 ---
 
 *This PRD is a living document. Update when features are added, changed, or planned. Push to GitHub for persistence. When losing context, re-read this PRD to regain track.*
+
+---
+
+## 14. n8n + LOOP INTEGRATION (Future Plan — RATNA Phase)
+
+### 14.1 Konsep
+n8n + Loop = complementary automation system:
+- **n8n** = event-triggered workflow (visual, drag-and-drop, fixed logic)
+- **Loop** = AI-driven autonomous pattern (observe → think → act → reflect)
+- **Gabungan:** n8n trigger → Loop jalan → n8n eksekusi hasil
+
+### 14.2 Contoh Flow
+```
+n8n: "DM masuk FB → trigger Ayu"
+Ayu Loop: "Observe DM → Think: prospek nanya harga → Act: jawab + tanya kontak → Reflect: antusias, follow up besok"
+n8n: "Ayu selesai → log ke DB → schedule follow up besok"
+```
+
+### 14.3 Optimasi Ruang (Future)
+- n8n workflow bisa di-optimize berdasarkan Loop reflection (AI belarin pola yang efektif)
+- Loop pattern bisa di-update oleh RATNA berdasarkan simulasi MiroFish
+- n8n + Loop = self-improving automation system
+- Owner bisa monitor + adjust kapan saja
+
+### 14.4 Timing
+- n8n deploy: setelah Hostinger VPS ready (n8n butuh persistent process, Vercel = serverless)
+- Loop implementasi: setelah RATNA + Memory System jadi (Loop butuh memory untuk reflect)
+- Integrasi n8n + Loop: setelah keduanya jalan terpisah, baru gabung
