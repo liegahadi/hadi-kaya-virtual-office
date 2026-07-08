@@ -1,7 +1,7 @@
 # PRD — Hadi Kaya Virtual Office
 ## Product Requirements Document (Living Document)
 
-**Versi:** 1.0  
+**Versi:** 1.1  
 **Tanggal:** 8 Juli 2026  
 **Status:** Active Development  
 **Owner:** Andrian Bong (Hadi) — PT. Marlindo Bangun Persada  
@@ -236,19 +236,23 @@ Self-service system untuk tambah/edit bank baru tanpa AI code changes. Owner atu
 - ⏳ List berkas per bank (upload section berubah sesuai bank)
 - ⏳ Permission: bank config edit/tambah = DASHBOARD ONLY, WA forbidden
 
-### 5.4 Rules (Per User Requirements)
+### 5.4 Rules (Per User Requirements v1.1)
 - **Bank TIDAK BISA dihapus** oleh siapapun, bahkan owner, bahkan jika mengancam tutup server
 - **List berkas bisa diedit** oleh owner via dashboard only (tambah/hapus/ubah)
   - Tambah berkas = langsung eksekusi (no confirmation)
-  - Hapus berkas = perlu konfirmasi
+  - Hapus berkas = perlu konfirmasi (popup modal)
   - Hapus berkas dengan nama mirip/double = perlu konfirmasi ekstra
-- **Existing BTN/Mandiri/BSB** tidak diganggu — code tetap sama, hanya bank BARU yang pakai BankConfig DB
+- **Existing BTN/Mandiri/BSB** tidak diganggu — kecuali owner minta ubah karena perubahan requirement dari bank. Bank baru pakai BankConfig DB.
 - **WA forbidden** untuk bank config management (siapapun, termasuk owner)
-- **Berkas wajib (sama untuk semua bank):** KTP, KK, NPWP, Surat Menikah/Belum Menikah/Cerai, Sertifikat, IMB/PBG, PBB, SK Kerja/NIB, Slip Gaji/Laporan Keuangan
-- **Berkas tambahan** per bank = sesuai kebijakan bank masing-masing
-- **Kategori berkas:** Dokumen Identitas, Dokumen Pekerjaan, Dokumen Properti, Dokumen Bank-specific
-- **Dependencies per pekerjaan:** KARYAWAN → SK Kerja + Slip Gaji; WIRAUSAHA → NIB + Laporan Keuangan
-- **Mandiri special:** tiap jenis pekerjaan beda dependencies — DINA harus bisa analisa + kasih saran
+- **Template berkas default** (auto-apply ke bank baru): KTP, KK, NPWP, Surat Menikah/Belum Menikah/Cerai, Sertifikat, IMB/PBG, PBB, SK Kerja/NIB, Slip Gaji/Laporan Keuangan. Owner tinggal tambah/hapus sesuai kebijakan bank.
+- **Kategori berkas FLEKSIBEL** — tidak fixed 4 kategori. Bisa berubah sesuai bank. Default: Identitas, Pekerjaan, Properti, Bank-specific. Owner bisa buat kategori baru (misal "Dokumen Syariah").
+- **Dependencies per pekerjaan (per bank config):**
+  - Mandiri: KARYAWAN only (gaji fix income + gaji transfer). Wajib: Slip Gaji + Mutasi Rekening 3 bulan terakhir (bank apapun). Tidak terima wirausaha.
+  - BTN/BSB: KARYAWAN transfer (mutasi wajib), KARYAWAN non-transfer (mutasi opsional tapi jika ada wajib disertakan), WIRAUSAHA (mutasi 6 bulan opsional, bank apapun)
+- **1 BankConfig = multiple dokumen** (misal BCA: Form Permohonan + SPR + Checklist)
+- **Bank Config Builder = modal/popup** di tab Berkas (bukan halaman terpisah)
+- **Form fields per bank** bisa berbeda — dengan opsi pilih dari existing 3 banks + create new
+- **Upload berkas per bank** bisa berbeda — dengan opsi pilih nama berkas dari existing 3 banks + create new
 
 ### 5.5 BankConfig Structure (Planned)
 ```
@@ -291,33 +295,66 @@ Sistem memory terpusat untuk semua 15 AI agents, terinspirasi dari `rohitg00/age
 2. **Memory per Agent** — Filter memory utama sesuai role (DINA → berkas, RINA → finance, dll)
 3. **Skill** — Memory yang diklaim agent sebagai kemampuan mereka
 
-### 6.3 Tab Memory (Dashboard)
-- Section 1: Memory Utama (semua ingatan/skill)
-- Section 2: Memory & Skill per Agent (15 agents, masing-masing punya ingatan sendiri)
-- Highlight memory/skill baru (3 hari)
+### 6.3 Memory vs Skill (Per User Clarification v1.1)
+- **Memory** = Ingatan dari kejadian yang dialami agent. Pasif (disimpan, di-search saat butuh). Fungsi: hindari mengulang kejadian buruk, eksploitasi kejadian baik. Termasuk bahasa yang tidak dipahami (word/sentence/letter level).
+- **Skill** = Kemampuan dasar agent mengolah/proses/eksekusi suatu case. Aktif (dipanggil saat task). Mirip Claude Skills (prompt-based capability). Contoh: "Cara generate PDF FLPP BTN".
+- **Memory ≠ Skill** — dua hal berbeda yang disimpan terpisah.
+
+### 6.4 Tab Memory (Dashboard) — Detail Spec v1.1
+- Section 1: Memory Utama (semua ingatan/skill dari semua agent)
+- Section 2: Memory & Skill per Agent (15 agents, masing-masing punya ingatan sendiri yang diambil dari memory utama sesuai role)
+- Setiap memory diberikan **timestamp** (tanggal + jam diperoleh) — tidak pakai highlight 3 hari
+- Notifikasi di dashboard **sekali saja** saat memory baru diperoleh
 - Klik memory → lihat isi documentation
-- Edit, hapus, atau tambah memory/skill
+- Memory bisa berupa: text + attachment (gambar, PDF, link)
+- **Versioning:** v1, v2, v3 dengan timeline perubahan. History tetap disimpan meskipun sudah tidak digunakan.
+- **Edit memory:** Owner + RATNA (dengan izin owner via WA — RATNA kirim konteks, tujuan, output yang diinginkan)
+- **Hapus memory:** Owner only, dengan popup modal confirmation
+- **Audit trail:** Setiap edit/hapus dicatat (siapa, kapan, apa yang diubah)
+- **Tombol manual:** "Tambah Memory" (nama + penjelasan) dan "Tambah Skill" (nama + prompt)
+- **Chat command:** "nah tambahin nih ke memory kamu" (dari WA maupun dashboard)
 
-### 6.4 Learning by Doing
-- Agent otomatis belajar dari setiap percakapan (auto-extract insights)
-- Notifikasi saat agent pelajari memory baru
-- Highlight 3 hari untuk memory/skill baru
-- RATNA + Mirofish: RATNA swarming agents untuk dapat pengetahuan baru → simpan di memory utama → distribusi ke agent yang sesuai
-- Jika agent punya skill/memory baru yang sesuai tugasnya → kirim ke RATNA untuk disimpan
+### 6.5 Learning by Doing — Detail v1.1
+- Agent belajar dari:
+  1. Setiap percakapan (auto-extract insights)
+  2. Result dan reaksi atas output yang dihasilkan agent
+  3. Feedback dari owner
+  4. Feedback dari karyawan Anjayo
+  5. Feedback dari konsumen
+- **Marketing AI special:** Harus bisa mengenal manusia — text reaksi calon konsumen bisa "memuaskan" padahal sarkas atau penolakan halus. Agent harus belajar membedakan.
+- Manual add via:
+  1. Tombol di UI (nama memory + penjelasan, atau nama skill + prompt)
+  2. Chat command dari WA atau dashboard: "nah tambahin nih ke memory kamu"
 
-### 6.5 Memory Categories (Existing)
-- UTAMA — General knowledge, decisions
-- BERKAS — Documents, KPR, bank process
-- FINANCE — Budget, payments, invoices
-- MATERIAL — Stock, suppliers, PO
-- MARKETING — Leads, prospects, campaigns
-- DECISION — User decisions/actions logged
+### 6.6 Memory Claim System
+- Agent tidak otomatis klaim memory sebagai skill
+- Agent harus **izin ke owner via WA** untuk klaim memory
+- Izin mencakup: konteks memory, tujuan penggunaan, output yang diinginkan
+- Owner yang decide: approve/reject
 
-### 6.6 Implementation Plan
-- Build from scratch (custom Prisma + Neon DB, adaptasi konsep AgentMemory)
+### 6.7 RATNA + Mirofish Integration (Foundation Only — Not Implemented Yet)
+- RATNA bisa cari knowledge baru dari internet/API
+- **SEBELUM** menambahkan knowledge: RATNA harus lakukan **simulasi** dengan kondisi nyata team Anjayo
+- Output simulasi: laporan PDF → kirim ke owner
+- Laporan mencakup: output, usecase, what can this memory/skill do, future use, apakah bisa dipakai atau tidak
+- Owner yang **ACC** (approve) berdasarkan laporan simulasi
+- Mirofish = **simulasi dulu**, kemudian baru decide
+- Mirofish boleh memutuskan memory/skills mana yang berguna/tidak (tapi **jangan hapus dulu**)
+- Mirofish kirim laporan ke owner → owner decide:
+  - Buang (berdasarkan future case)
+  - Implementasikan untuk agents
+  - Implementasikan untuk pengetahuan umum semua agents
+  - Simpan dulu, baru bisa gunakan nanti
+- **Status:** Buat pondasi code base untuk memory system. RATNA+Mirofish tidak diimplementasikan sekarang, tapi code base harus siap untuk integrasi nanti.
+
+### 6.8 Implementation Plan
+- Build from scratch (custom Prisma + Neon DB, adaptasi konsep AgentMemory Python → TypeScript)
+- Memory table sudah ada (sudah dipakai DINA sekarang) — perlu extend
+- Skill table baru (perlu buat Prisma model)
 - Tab baru "Memory" di dashboard
-- Memory table sudah ada (sudah dipakai DINA sekarang)
-- Perlu: UI untuk browse/edit/hapus memory, highlight system, agent-skill mapping, RATNA integration
+- Keyword search dulu (vector search optional, nanti kalau perlu)
+- Audit trail untuk semua edit/hapus
+- Versioning untuk memory/skill changes
 
 ---
 
@@ -482,7 +519,7 @@ Sistem memory terpusat untuk semua 15 AI agents, terinspirasi dari `rohitg00/age
 5. **Bank config management = dashboard only** — WA forbidden untuk siapapun (termasuk owner)
 6. **Delete konsumen = perlu konfirmasi** — dengan target name validation
 7. **Google Drive files preserved** saat hapus konsumen — hanya DB yang dihapus
-8. **Existing BTN/Mandiri/BSB code TIDAK DIGANGGU** — bank baru pakai BankConfig DB
+8. **Existing BTN/Mandiri/BSB code tidak diganggu** — kecuali owner minta ubah karena perubahan requirement dari bank. Bank baru pakai BankConfig DB.
 
 ### 10.2 Key Technical Decisions
 - **DINA model:** Gemini 2.0 Flash (primary, free) → Nemotron Nano 30B (fallback via OpenRouter)
@@ -619,6 +656,7 @@ src/
 | Date | Version | Change |
 |------|---------|--------|
 | 8 Jul 2026 | 1.0 | Initial PRD created. Covers all phases, features, plans, rules. |
+| 8 Jul 2026 | 1.1 | Updated with user answers: Bank Config Builder detail (Q1-Q7), Memory System detail (Q8-Q15), existing banks can be modified if bank changes requirements, Mandiri karyawan-only rule, mutasi rekening dependencies per bank, memory vs skill clarification, RATNA+Mirofish simulation-first approach, versioning + audit trail for memory. |
 
 ---
 
