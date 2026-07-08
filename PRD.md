@@ -521,7 +521,74 @@ Sistem memory terpusat untuk semua 15 AI agents, terinspirasi dari `rohitg00/age
 7. **Google Drive files preserved** saat hapus konsumen — hanya DB yang dihapus
 8. **Existing BTN/Mandiri/BSB code tidak diganggu** — kecuali owner minta ubah karena perubahan requirement dari bank. Bank baru pakai BankConfig DB.
 
-### 10.2 Key Technical Decisions
+### 10.2 DO NOT DO List (AI Developer Lessons Learned)
+Kesalahan yang sudah pernah terjadi dan TIDAK BOLEH diulang oleh AI developer:
+
+**Berkas Annotation Mistakes:**
+- JANGAN tulis harga rumah dengan kata-kata (numberToWords) → gunakan angka (toLocaleString)
+- JANGAN isi annotation penghasilan debitur dengan nama perumahan → gunakan applicant.monthlyIncome
+- JANGAN isi nama PT perumahan tanpa "PT." prefix → "PT. Marlindo Bangun Persada"
+- JANGAN singkat provinsi → "Bangka Belitung" bukan "KBB"
+- JANGAN isi nama direktur di annotation yang harusnya nama debitur
+- JANGAN isi nama debitur di annotation yang harusnya nama atasan/bendaharawan
+- JANGAN biarkan annotation overlap → sesuaikan y-coordinate
+- JANGAN pakai kavlingNumber (stale) → gunakan transform blockLetter+houseNumber
+- JANGAN buat signature space terlalu kecil → minimal 100px (5 line breaks)
+- JANGAN lupa kota sebelum tanggal di area tanda tangan ("Pangkalpinang, 7 Juli 2026")
+- JANGAN ganggu existing BTN/Mandiri/BSB code kecuali owner minta ubah
+
+**DINA AI Mistakes:**
+- JANGAN pakai in-memory pendingAction (Vercel lambda gak persist) → selalu DB-backed
+- JANGAN biarkan LLM halusinasi "Berhasil" → gunakan directResponse bypass LLM untuk critical ops
+- JANGAN terima "ya hapus aja" sebagai konfirmasi valid → strict confirmation (≤15 chars atau pure keyword)
+- JANGAN biarkan DINA delete wrong customer → target name validation sebelum execute
+- JANGAN lupa clear setInterval saat WA disconnect → memory leak
+
+**Deployment Mistakes:**
+- JANGAN deploy WA bot ke cloud provider (Railway/AWS/Alibaba) → WA blok IP cloud, butuh IP Indonesia
+- JANGAN lupa re-fetch pages setelah removePage (pdf-lib) → stale reference
+- JANGAN pakai sed untuk shift page numbers → cascade bug, gunakan Python dengan placeholder
+- JANGAN lupa git tag sebelum major changes → buat fallback point
+- JANGAN lupa push tag ke GitHub untuk persistence
+
+**Form/UI Mistakes:**
+- JANGAN taruh Slip Gaji form di sidebar → pindah ke modal (CombinedDocEditorModal)
+- JANGAN taruh Lokasi Kerja form di sidebar → pindah ke modal (LokasiKerjaModal)
+- JANGAN pakai label "No. NIB" → ganti jadi "Kelurahan Sertipikat"
+- JANGAN lupa SPR Mandiri annotation swap: kiri=SHM, kanan=Kelurahan
+- JANGAN lupa tambah field "Alamat KTP Direktur" + "Alamat Kantor" di Data Perusahaan
+- JANGAN lupa dashboard blok/unit display fallback (blockLetter+houseNumber, bukan kavlingNumber saja)
+
+**OCR:**
+- JANGAN pakai Tesseract sebagai primary OCR → gunakan z.ai VLM (primary) + Tesseract (fallback)
+
+### 10.3 Memory Categorization (Per Agent)
+
+**DINA Memories (Document AI):**
+- Memory: Wrong customer delete → DB-backed PendingAction
+- Memory: "ya hapus aja" bukan konfirmasi valid → strict confirmation
+- Memory: Block/house number stale → transform
+- Memory: Bank tidak bisa dihapus (aturan permanen)
+- Memory: Berkas wajib semua bank (KTP, KK, NPWP, dll)
+- Memory: Mandiri karyawan only + mutasi rekening 3 bulan
+- Memory: BTN/BSB fleksibel (karyawan + wirausaha)
+- Memory: Kategori berkas fleksibel (tidak fixed 4)
+- Skill: Smart fallback (kasih hint, bukan halusinasi)
+- Skill: Custom command learning ("ajar: trigger | response")
+- Skill: Bulk delete (multiple customers)
+- Skill: Disambiguation (nama duplikat → tanya blok/NIK)
+- Skill: Send berkas via WA (fetch from Drive → send)
+- Skill: Generate SK Kerja via DINA (data → Gemini → .docx → Drive → link)
+- Skill: Generate Slip Gaji via DINA (sama, 7 lembar auto-generate)
+- Skill: Generate Laporan Keuangan Wirausaha via DINA (Laba Rugi formal)
+
+**All Agents Memories (Umum):**
+- Memory: Grup = tag-only (@Dina, bukan "Dina ..." prefix)
+- Memory: DM non-owner = silent/reject (sesuai grup membership)
+- Memory: Jangan share link grup (PERMANENT)
+- Memory: WA forbidden untuk bank config management
+
+### 10.4 Key Technical Decisions
 - **DINA model:** Gemini 2.0 Flash (primary, free) → Nemotron Nano 30B (fallback via OpenRouter)
 - **Memory categories:** UTAMA, BERKAS, FINANCE, MATERIAL, MARKETING, DECISION
 - **SK+Slip overwrite:** 1 file per customer in Drive (delete existing before create)
@@ -640,14 +707,37 @@ src/
 
 ---
 
-## 13. NEXT IMMEDIATE TASKS (Priority Order)
+## 13. NEXT IMMEDIATE TASKS (Priority Order v1.1)
 
-1. **Wirausaha Laporan Keuangan via DINA** — DINA generate via Gemini → .docx → Drive → link
-2. **Bank Config Builder Phase 2** — Visual UI + dynamic generator + migrate existing banks
-3. **Memory System** — Tab "Memory" + learning by doing + RATNA/Mirofish integration
-4. **Financial Tab (RINA)** — Budget, invoice, RAB, supplier payments
-5. **WhatsApp Bot Deployment** — VPS Hostinger + 15 SIM cards
-6. **n8n + Mirofish** — Automation + decision making
+1. **Implementasi Memory + Skills** — DB schema (Memory + Skill tables), adaptasi konsep AgentMemory + MindBank (graph-based), CavinHuang business-doc-generator skill untuk DINA, tab "Memory" di dashboard
+2. **Wirausaha Laporan Keuangan via DINA** — DINA generate via Gemini → .docx → Drive → link
+3. **Memory System Full** — Tab Memory UI (browse, edit, hapus, tambah), versioning, audit trail, learning by doing, RATNA+Mirofish foundation
+4. **WhatsApp Bot Deployment** — VPS Hostinger (web + DB + n8n + Mirofish/alternatif) — semua dalam 1 VPS
+5. **RINA (Financial Tab)** — Budget, invoice, RAB, supplier payments
+6. **n8n + Mirofish** — Automation + simulation + decision making
+
+### 13.1 Mirofish Alternatives (Untuk Simulasi RATNA)
+| Tool | Type | Status | Cocok untuk |
+|------|------|--------|-------------|
+| **MiroFish-Offline** | Multi-agent simulation + prediction (Neo4j + Ollama) | Free, self-hosted | ✅ Simulasi RATNA, prediksi scenario, bisa jalan di Hostinger VPS |
+| **OpenClaw** | Strategic choice simulation, 3D NPC visualization | Open source | ⚠️ Overkill untuk sekarang, konsep simulasi strategis menarik |
+| **MindBank** (Hermes) | Graph-based permanent memory untuk AI agents | Open source | ✅ Sangat relevan untuk memory system (relationship-aware memory) |
+| **DashClaw** (Hermes) | Governance runtime, audit trails, action interception | Open source | ✅ Cocok untuk permission system + audit trail |
+
+**Rekomendasi:**
+- Memory system: Adaptasi konsep MindBank (graph-based) + AgentMemory (3 jenis memory)
+- Simulasi RATNA: MiroFish-Offline (Neo4j + Ollama, jalan di VPS tanpa internet)
+- Permission/audit: DashClaw concept (intercept actions + audit trails)
+
+### 13.2 Hostinger VPS — Full Stack Capacity
+VPS KVM 2 (4 cores, 8GB RAM) bisa handle SEMUA dalam 1 server:
+- Next.js app (port 3000) — ~500MB RAM
+- PostgreSQL (local) — ~500MB RAM
+- WhatsApp bot (Baileys, 15 agents) — ~3GB RAM
+- n8n (Docker, port 5678) — ~500MB RAM
+- MiroFish-Offline (Neo4j + Ollama) — ~2GB RAM
+- Nginx reverse proxy + SSL — ~50MB RAM
+- **Total: ~6.5GB RAM** (within 8GB) ✅
 
 ---
 
@@ -657,6 +747,7 @@ src/
 |------|---------|--------|
 | 8 Jul 2026 | 1.0 | Initial PRD created. Covers all phases, features, plans, rules. |
 | 8 Jul 2026 | 1.1 | Updated with user answers: Bank Config Builder detail (Q1-Q7), Memory System detail (Q8-Q15), existing banks can be modified if bank changes requirements, Mandiri karyawan-only rule, mutasi rekening dependencies per bank, memory vs skill clarification, RATNA+Mirofish simulation-first approach, versioning + audit trail for memory. |
+| 8 Jul 2026 | 1.2 | Added: DO NOT DO list (developer lessons), Memory categorization per agent (DINA + All Agents), Mirofish alternatives (MiroFish-Offline, OpenClaw, MindBank, DashClaw), Hostinger VPS full stack capacity, updated priority order (Memory+Skills first), vercel-labs/skills analysis (CLI dev tool, not production), CavinHuang business-doc-generator skill. |
 
 ---
 
