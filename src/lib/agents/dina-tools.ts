@@ -1814,12 +1814,16 @@ _Pending action akan expired dalam 5 menit._`
       if (!companyName) {
         directResponse = `⚠️ Untuk generate logo, sebutkan nama perusahaan. Contoh: "generate logo untuk Warung Bu Tini"`
       } else {
-        const logoRes = await fetch(`https://hadi-kaya-virtual-office.vercel.app/api/documents/generate-logo`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyName, style: 'modern professional' }),
-        })
-        const logoData = await logoRes.json()
-        if (logoData.success && logoData.dataUrl) {
+        // Call z-ai SDK directly (avoid HTTP fetch timeout)
+        try {
+          const ZAI = (await import('z-ai-web-dev-sdk')).default
+          const zai = await ZAI.create()
+          const logoPrompt = `Generate a clean, professional company logo for "${companyName}". Style: modern professional. Simple, high-contrast, suitable for letterhead. White background. No text in the image.`
+          const logoResponse = await zai.images.generations.create({ prompt: logoPrompt, size: '1024x1024' as any })
+          const logoBase64 = (logoResponse as any)?.data?.[0]?.base64
+          if (!logoBase64) throw new Error('No image data returned')
+          const logoDataUrl = `data:image/png;base64,${logoBase64}`
+
           let driveLink = ''
           try {
             const { getDriveClientOAuth } = await import('@/lib/google/auth')
@@ -1827,7 +1831,7 @@ _Pending action akan expired dalam 5 menit._`
             const drive = await getDriveClientOAuth()
             if (drive && targetCustomer) {
               const folderId = await ensureCustomerFolder({ customer: targetCustomer, projectName: 'ANJAYO 16' }, targetCustomer.id)
-              const buffer = Buffer.from(logoData.dataUrl.split(',')[1], 'base64')
+              const buffer = Buffer.from(logoDataUrl.split(',')[1], 'base64')
               const fileRes = await (drive as any).files.create({ requestBody: { name: `Logo_${companyName.substring(0, 30)}.png`, parents: [folderId] }, media: { mimeType: 'image/png', body: buffer } })
               await (drive as any).permissions.create({ fileId: fileRes.data.id, requestBody: { role: 'reader', type: 'anyone' } })
               driveLink = `https://drive.google.com/file/d/${fileRes.data.id}/view`
@@ -1843,8 +1847,8 @@ _Pending action akan expired dalam 5 menit._`
 ${driveLink ? `• Google Drive: ${driveLink}` : '• Logo tersimpan di sistem (Drive belum terhubung)'}
 
 Logo bisa diakses di modal SK Kerja + Slip Gaji → Logo Generator.`
-        } else {
-          directResponse = `❌ Gagal generate logo: ${logoData.error || 'unknown error'}`
+        } catch (logoErr: any) {
+          directResponse = `❌ Gagal generate logo: ${logoErr?.message || 'unknown error'}`
         }
       }
       results.push(`[generateLogo] ${intent.logoPrompt}`)
