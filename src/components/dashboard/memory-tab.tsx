@@ -172,47 +172,46 @@ export function MemoryTab() {
         )}
       </div>
 
-      {/* List */}
-      <div className="space-y-2">
+      {/* List — Grid Layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {view === 'memories' && filteredMemories.map(mem => (
-          <div key={mem.id} className="border rounded-lg p-3 hover:bg-accent/30 cursor-pointer" onClick={() => setSelectedItem(mem)}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-foreground">{mem.content}</p>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', CATEGORY_COLORS[mem.category] || 'bg-gray-100 text-gray-600')}>{mem.category}</span>
-                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', TYPE_COLORS[mem.memoryType] || 'bg-gray-100 text-gray-600')}>{mem.memoryType}</span>
-                  {mem.agent?.name && <span className="text-[9px] text-muted-foreground">🤖 {mem.agent.name}</span>}
-                  {mem.importance >= 0.8 && <span className="text-[9px] text-red-500">⭐ High</span>}
-                  <span className="text-[9px] text-muted-foreground flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{new Date(mem.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                  {mem.version > 1 && <span className="text-[9px] text-blue-500">v{mem.version}</span>}
-                </div>
+          <div key={mem.id} className="border rounded-lg p-3 hover:bg-accent/30 cursor-pointer flex flex-col" onClick={() => setSelectedItem(mem)} style={{ minHeight: '120px' }}>
+            <div className="flex items-center gap-1 mb-1 flex-wrap">
+              <span className={cn('text-[8px] px-1 py-0.5 rounded font-medium', CATEGORY_COLORS[mem.category] || 'bg-gray-100 text-gray-600')}>{mem.category}</span>
+              <span className={cn('text-[8px] px-1 py-0.5 rounded font-medium', TYPE_COLORS[mem.memoryType] || 'bg-gray-100 text-gray-600')}>{mem.memoryType}</span>
+            </div>
+            <p className="text-xs text-foreground flex-1 line-clamp-3">{mem.content}</p>
+            <div className="flex items-center justify-between mt-2 text-[9px] text-muted-foreground">
+              <span>{mem.agent?.name || 'Umum'}</span>
+              <div className="flex items-center gap-1">
+                {mem.importance >= 0.8 && <span className="text-red-500">⭐</span>}
+                {mem.version > 1 && <span className="text-blue-500">v{mem.version}</span>}
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(mem.id, 'memory') }} className="text-red-400 hover:bg-red-50 rounded p-0.5"><Trash2 className="w-3 h-3" /></button>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(mem.id, 'memory') }} className="text-red-400 hover:bg-red-50 rounded p-1"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           </div>
         ))}
 
         {view === 'skills' && filteredSkills.map(skill => (
-          <div key={skill.id} className="border rounded-lg p-3 hover:bg-accent/30 cursor-pointer" onClick={() => setSelectedItem(skill)}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{skill.displayName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{skill.description || skill.prompt.substring(0, 100)}</p>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">{skill.category}</span>
-                  {skill.agent?.name && <span className="text-[9px] text-muted-foreground">🤖 {skill.agent.name}</span>}
-                  <span className="text-[9px] text-muted-foreground">{skill.source}</span>
-                  {skill.version > 1 && <span className="text-[9px] text-blue-500">v{skill.version}</span>}
-                </div>
+          <div key={skill.id} className="border rounded-lg p-3 hover:bg-accent/30 cursor-pointer flex flex-col" onClick={() => setSelectedItem(skill)} style={{ minHeight: '120px' }}>
+            <div className="flex items-center gap-1 mb-1">
+              <span className="text-[8px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">{skill.category}</span>
+              <span className="text-[8px] text-muted-foreground">{skill.source}</span>
+            </div>
+            <p className="text-xs font-medium text-foreground">{skill.displayName}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 flex-1 line-clamp-3">{skill.description || skill.prompt.substring(0, 80)}</p>
+            <div className="flex items-center justify-between mt-2 text-[9px] text-muted-foreground">
+              <span>{skill.agent?.name || 'Umum'}</span>
+              <div className="flex items-center gap-1">
+                {skill.version > 1 && <span className="text-blue-500">v{skill.version}</span>}
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(skill.id, 'skill') }} className="text-red-400 hover:bg-red-50 rounded p-0.5"><Trash2 className="w-3 h-3" /></button>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(skill.id, 'skill') }} className="text-red-400 hover:bg-red-50 rounded p-1"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           </div>
         ))}
 
         {((view === 'memories' && filteredMemories.length === 0) || (view === 'skills' && filteredSkills.length === 0)) && (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="col-span-full text-center py-12 text-muted-foreground">
             <Brain className="w-12 h-12 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Belum ada {view} yang tersimpan.</p>
           </div>

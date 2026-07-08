@@ -312,13 +312,35 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
       })
     }
 
-    // Step 3: Check if there's a pending action — tell LLM about it so it knows context
+    // Step 3: Auto-query memory + skills for context (inject into system prompt)
+    const dinaAgent = await db.agent.findFirst({ where: { name: 'Dina' } }).catch(() => null)
+    const [relevantMemories, relevantSkills] = await Promise.all([
+      db.memory.findMany({
+        where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { memoryType: 'umum' }] },
+        orderBy: { importance: 'desc' },
+        take: 15,
+        select: { content: true, category: true, memoryType: true },
+      }).catch(() => []),
+      db.skill.findMany({
+        where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { agentId: null }] },
+        select: { displayName: true, prompt: true, category: true },
+      }).catch(() => []),
+    ])
+
+    const memoryContext = relevantMemories.length > 0
+      ? `\n\n## 🧠 MEMORY DINA (pelajaran dari masa lalu)\n${relevantMemories.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
+      : ''
+    const skillContext = relevantSkills.length > 0
+      ? `\n\n## ⚡ SKILLS DINA (kemampuan yang dimiliki)\n${relevantSkills.map(s => `- **${s.displayName}**: ${s.prompt.substring(0, 100)}...`).join('\n')}`
+      : ''
+
+    // Step 3b: Check if there's a pending action — tell LLM about it so it knows context
     const pendingAction = await getActivePendingAction(executeContext)
     const pendingInfo = pendingAction
       ? `\n\n## ⏳ PENDING ACTION AKTIF\nAda aksi yang menunggu konfirmasi user:\n- Tipe: ${pendingAction.type}\n- Target: ${pendingAction.targetName || '-'}\n- Dibuat oleh: ${pendingAction.senderNumber || 'dashboard'}\n- Channel: ${pendingAction.channel}\n\nJika user mengkonfirmasi dengan "ya"/"iya"/"konfirmasi"/"lanjut" (pesan SINGKAT ≤15 karakter), tool akan otomatis mengeksekusi. Jika user menyebutkan NAMA LAIN, aksi akan DIBATALKAN otomatis demi keamanan. JANGAN halusinasi menjalankan aksi — hanya jalankan jika tool result bilang "Berhasil".`
       : ''
 
-    // Step 4: Build system prompt with customer context + tool results + channel info + pending action
+    // Step 4: Build system prompt with customer context + tool results + channel info + pending action + memory + skills
     const customerContext = buildCustomerContext(customer)
     const channelInfo = isWhatsApp
       ? `\n## KONTEKS CHANNEL\n- Channel: ${channel}\n- Pengirim: ${senderName || 'Unknown'} (${senderNumber || '-'})\n- Is Owner: ${isOwnerUser ? 'YA' : 'TIDAK'}\n- Is Group: ${isGroupChat ? 'YA' : 'TIDAK'}`
@@ -326,6 +348,8 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
     const systemPrompt = DINA_SYSTEM_PROMPT
       .replace('{customerContext}', customerContext)
       + channelInfo
+      + memoryContext
+      + skillContext
       + pendingInfo
       + (toolResults ? `\n\n## HASIL QUERY DATABASE (gunakan data ini untuk menjawab)\n${toolResults}` : '')
 

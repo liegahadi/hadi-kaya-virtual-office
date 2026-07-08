@@ -20,7 +20,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -33,6 +33,7 @@ export interface IntentResult {
   requestedFileDocType?: string
   newBankName?: string
   bankName?: string
+  logoPrompt?: string
 }
 
 // ============================================================
@@ -250,6 +251,7 @@ export function detectIntent(message: string): IntentResult {
   let intent_requestedFileDocType: string | undefined
   let intent_newBankName: string | undefined
   let intent_bankName: string | undefined
+  let intent_logoPrompt: string | undefined
 
   // === READ INTENTS ===
 
@@ -533,6 +535,16 @@ export function detectIntent(message: string): IntentResult {
     tools.push('getAllCustomers')
   }
 
+  // === LOGO GENERATION ===
+  // "generate logo [nama perusahaan]" → AI generate logo from prompt
+  // "recreate logo [nama perusahaan]" → recreate from uploaded image
+  if ((msg.includes('logo') || msg.includes('generate logo') || msg.includes('buat logo') || msg.includes('bikin logo') || msg.includes('recreate logo')) && !msg.includes('logout')) {
+    action = 'GENERATE_LOGO' as any
+    const logoMatch = message.match(/(?:generate|buat|bikin|recreate)\s+logo\s+(?:untuk\s+|perusahaan\s+|usaha\s+)?(.+)/i)
+    if (logoMatch) intent_logoPrompt = logoMatch[1].trim()
+    tools.push('getAllCustomers')
+  }
+
   // === BANK CONFIG MANAGEMENT ===
   // DINA can manage bank configs via chat:
   // "list bank" → list all banks
@@ -608,7 +620,7 @@ export function detectIntent(message: string): IntentResult {
   const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
   if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
 
-  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType, newBankName: intent_newBankName, bankName: intent_bankName }
+  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType, newBankName: intent_newBankName, bankName: intent_bankName, logoPrompt: intent_logoPrompt }
 }
 
 // ============================================================
@@ -1789,6 +1801,55 @@ _Pending action akan expired dalam 5 menit._`
     } else if (!directResponse) {
       results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
       directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap atau blok yang benar. 🙏`
+    }
+  }
+
+  // === LOGO GENERATION ===
+  if (intent.action === 'GENERATE_LOGO' && intent.logoPrompt) {
+    try {
+      let targetCustomer: any = null
+      if (customerId) targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+      if (!targetCustomer && intent.customerName) targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+      const companyName = intent.logoPrompt || targetCustomer?.companyName || ''
+      if (!companyName) {
+        directResponse = `⚠️ Untuk generate logo, sebutkan nama perusahaan. Contoh: "generate logo untuk Warung Bu Tini"`
+      } else {
+        const logoRes = await fetch(`https://hadi-kaya-virtual-office.vercel.app/api/documents/generate-logo`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyName, style: 'modern professional' }),
+        })
+        const logoData = await logoRes.json()
+        if (logoData.success && logoData.dataUrl) {
+          let driveLink = ''
+          try {
+            const { getDriveClientOAuth } = await import('@/lib/google/auth')
+            const { ensureCustomerFolder } = await import('@/lib/google/folders')
+            const drive = await getDriveClientOAuth()
+            if (drive && targetCustomer) {
+              const folderId = await ensureCustomerFolder({ customer: targetCustomer, projectName: 'ANJAYO 16' }, targetCustomer.id)
+              const buffer = Buffer.from(logoData.dataUrl.split(',')[1], 'base64')
+              const fileRes = await (drive as any).files.create({ requestBody: { name: `Logo_${companyName.substring(0, 30)}.png`, parents: [folderId] }, media: { mimeType: 'image/png', body: buffer } })
+              await (drive as any).permissions.create({ fileId: fileRes.data.id, requestBody: { role: 'reader', type: 'anyone' } })
+              driveLink = `https://drive.google.com/file/d/${fileRes.data.id}/view`
+            }
+          } catch (driveErr) { console.log('Drive upload skipped:', (driveErr as any)?.message) }
+          if (targetCustomer) {
+            await db.googleDoc.create({ data: { docId: 'logo-' + Date.now(), customerId: targetCustomer.id, fileName: `Logo_${companyName.substring(0, 30)}.png`, folderId: null, docType: 'logo', editUrl: driveLink || '' } as any })
+          }
+          directResponse = `✅ **Logo berhasil di-generate!**
+
+• Perusahaan: **${companyName}**
+• Style: Modern Professional
+${driveLink ? `• Google Drive: ${driveLink}` : '• Logo tersimpan di sistem (Drive belum terhubung)'}
+
+Logo bisa diakses di modal SK Kerja + Slip Gaji → Logo Generator.`
+        } else {
+          directResponse = `❌ Gagal generate logo: ${logoData.error || 'unknown error'}`
+        }
+      }
+      results.push(`[generateLogo] ${intent.logoPrompt}`)
+    } catch (err: any) {
+      directResponse = `❌ Gagal generate logo: ${err?.message || 'unknown error'}`
     }
   }
 
