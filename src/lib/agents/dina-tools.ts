@@ -1814,42 +1814,23 @@ _Pending action akan expired dalam 5 menit._`
       if (!companyName) {
         directResponse = `⚠️ Untuk generate logo, sebutkan nama perusahaan. Contoh: "generate logo untuk Warung Bu Tini"`
       } else {
-        // Call z-ai SDK directly (avoid HTTP fetch timeout)
-        try {
-          const ZAI = (await import('z-ai-web-dev-sdk')).default
-          const zai = await ZAI.create()
-          const logoPrompt = `Generate a clean, professional company logo for "${companyName}". Style: modern professional. Simple, high-contrast, suitable for letterhead. White background. No text in the image.`
-          const logoResponse = await zai.images.generations.create({ prompt: logoPrompt, size: '1024x1024' as any })
-          const logoBase64 = (logoResponse as any)?.data?.[0]?.base64
-          if (!logoBase64) throw new Error('No image data returned')
-          const logoDataUrl = `data:image/png;base64,${logoBase64}`
+        // DINA can't generate logo directly (z-ai SDK config not available on Vercel)
+        // But DINA can instruct user to use Logo Generator in modal
+        directResponse = `🎨 **Generate Logo: ${companyName}**
 
-          let driveLink = ''
-          try {
-            const { getDriveClientOAuth } = await import('@/lib/google/auth')
-            const { ensureCustomerFolder } = await import('@/lib/google/folders')
-            const drive = await getDriveClientOAuth()
-            if (drive && targetCustomer) {
-              const folderId = await ensureCustomerFolder({ customer: targetCustomer, projectName: 'ANJAYO 16' }, targetCustomer.id)
-              const buffer = Buffer.from(logoDataUrl.split(',')[1], 'base64')
-              const fileRes = await (drive as any).files.create({ requestBody: { name: `Logo_${companyName.substring(0, 30)}.png`, parents: [folderId] }, media: { mimeType: 'image/png', body: buffer } })
-              await (drive as any).permissions.create({ fileId: fileRes.data.id, requestBody: { role: 'reader', type: 'anyone' } })
-              driveLink = `https://drive.google.com/file/d/${fileRes.data.id}/view`
-            }
-          } catch (driveErr) { console.log('Drive upload skipped:', (driveErr as any)?.message) }
-          if (targetCustomer) {
-            await db.googleDoc.create({ data: { docId: 'logo-' + Date.now(), customerId: targetCustomer.id, fileName: `Logo_${companyName.substring(0, 30)}.png`, folderId: null, docType: 'logo', editUrl: driveLink || '' } as any })
-          }
-          directResponse = `✅ **Logo berhasil di-generate!**
+Untuk generate logo, gunakan Logo Generator di dashboard:
 
-• Perusahaan: **${companyName}**
-• Style: Modern Professional
-${driveLink ? `• Google Drive: ${driveLink}` : '• Logo tersimpan di sistem (Drive belum terhubung)'}
+1. Buka tab **Berkas** → expand konsumen
+2. Klik tombol **SK Kerja** atau **Slip Gaji** (buka modal)
+3. Scroll ke bawah di panel kiri → **Generator Logo Perusahaan**
+4. Pilih mode:
+   - **Prompt Generate**: ketik prompt → AI create logo baru
+   - **Upload Recreate**: upload foto logo → AI recreate versi bersih
+5. Klik **Generate** → preview → **Insert ke Kop Surat**
 
-Logo bisa diakses di modal SK Kerja + Slip Gaji → Logo Generator.`
-        } catch (logoErr: any) {
-          directResponse = `❌ Gagal generate logo: ${logoErr?.message || 'unknown error'}`
-        }
+Logo akan otomatis tersimpan di Google Drive konsumen (jika terhubung).
+
+Atau, upload foto logo tempat usaha via sidebar kiri (Upload Dokumen), lalu ketik "recreate logo" — saya akan bantu proses.`
       }
       results.push(`[generateLogo] ${intent.logoPrompt}`)
     } catch (err: any) {
