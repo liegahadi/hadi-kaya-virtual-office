@@ -166,6 +166,7 @@ model Agent {
 
   conversations      Conversation[]
   memories           Memory[]
+  skillRecords       Skill[]
   knowledgeItems     KnowledgeItem[]
   agentTeams         AgentTeamMember[]
   pos                PO[]
@@ -359,22 +360,96 @@ model Message {
 // ============================================================
 
 model Memory {
-  id          String   @id @default(cuid())
-  agentId     String?  // null = shared central brain
-  customerId  String?  // customer-specific memory (per-customer personality lock)
-  category    String   // FACT | PREFERENCE | INTERACTION | DECISION | CONTEXT
-  content     String
-  importance  Float    @default(0.5) // 0.0 - 1.0
-  embedding   String?  // vector embedding (will use pgvector on Postgres)
-  source      String?  // CONVERSATION | MANUAL | INFERRED
-  expiresAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  agentId         String?  // null = entity memory / umum
+  customerId      String?  // customer-specific memory
+  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING | DECISION
+  memoryType      String   @default("long_term") // short_term | long_term | entity | umum
+  entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER (for entity memory)
+  entityId        String?  // ID of the entity (e.g. customer ID, bank code)
+  content         String
+  importance      Float    @default(0.5) // 0.0 - 1.0
+  source          String?  // CONVERSATION | MANUAL | INFERRED | AGENT_REPORT | RATNA_SIMULATION
+  attachmentUrl   String?  // optional: gambar, PDF, link
+  version         Int      @default(1) // versioning for tracking changes
+  isActive        Boolean  @default(true) // soft delete (keep history)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  versions MemoryVersion[]
 
   @@index([agentId, category])
   @@index([customerId])
+  @@index([memoryType, entityType])
+  @@index([isActive])
+}
+
+// Memory versioning — track every change (v1, v2, v3...)
+model MemoryVersion {
+  id          String   @id @default(cuid())
+  memoryId    String
+  version     Int
+  content     String   // snapshot of content at this version
+  changedBy   String?  // owner | ratna | agent_name
+  changeNote  String?  // why was it changed?
+  createdAt   DateTime @default(now())
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@index([memoryId, version])
+}
+
+// Skill — kemampuan agent (prompt-based, like Claude Skills)
+model Skill {
+  id              String   @id @default(cuid())
+  name            String   // e.g. "generate-laporan-keuangan"
+  displayName     String   // e.g. "Generate Laporan Keuangan"
+  description     String?  // what this skill does
+  prompt          String   // the actual prompt/instruction
+  category        String   @default("UMUM") // UMUM | DINA | RINA | MITRA | RATNA | RANGGA | MARKETING
+  agentId         String?  // null = umum (all agents), specific = that agent only
+  source          String?  // MANUAL | CAVINHUANG | PROMPT_ENGINEER | RATNA_CREATED
+  isActive        Boolean  @default(true)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  versions SkillVersion[]
+
+  @@index([agentId, category])
+  @@index([isActive])
+}
+
+// Skill versioning — track every change
+model SkillVersion {
+  id          String   @id @default(cuid())
+  skillId     String
+  version     Int
+  prompt      String   // snapshot of prompt at this version
+  changedBy   String?  // owner | ratna
+  changeNote  String?  // why was it changed?
+  createdAt   DateTime @default(now())
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId, version])
+}
+
+// MemoryAudit — audit trail for all memory/skill changes
+model MemoryAudit {
+  id          String   @id @default(cuid())
+  action      String   // CREATE | EDIT | DELETE | CONNECT | DISCONNECT
+  entityType  String   // MEMORY | SKILL
+  entityId    String   // ID of memory or skill
+  agentId     String?  // which agent (if applicable)
+  changedBy   String?  // owner | ratna | system
+  details     String?  // JSON: what changed, old value, new value
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 // ============================================================
