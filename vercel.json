@@ -1,0 +1,25 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "bun run build",
+  "installCommand": "bun install",
+  "functions": {
+    "src/app/api/agents/[id]/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/agents/[id]/analyze/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/finance/po/[id]/compile-pdf/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/finance/weekly-report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/document-templates/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/document-templates/checklist/[id]/upload/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

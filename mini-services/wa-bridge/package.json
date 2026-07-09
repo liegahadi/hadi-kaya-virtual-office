@@ -1,0 +1,13 @@
+{
+  "name": "wa-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -1,0 +1,1496 @@
+[
+  {
+    "page": 1,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 165,
+    "y": 680,
+    "width": 405.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 1,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 165,
+    "y": 668,
+    "width": 405.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 1,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 148,
+    "y": 656,
+    "width": 422.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 1,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 165,
+    "y": 644,
+    "width": 405.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 1,
+    "label": "Alamat",
+    "type": "text",
+    "x": 165,
+    "y": 632,
+    "width": 405.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 1,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 165,
+    "y": 591,
+    "width": 405.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 1,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 165,
+    "y": 579,
+    "width": 405.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 1,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 165,
+    "y": 567,
+    "width": 405.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 1,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 165,
+    "y": 554,
+    "width": 405.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 1,
+    "label": "Alamat",
+    "type": "text",
+    "x": 165,
+    "y": 542,
+    "width": 405.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 1,
+    "label": "FLPP yang Saya dan istri/suami* ajukan maka Saya dan istri/suami*",
+    "type": "text",
+    "x": 301,
+    "y": 473,
+    "width": 269.32000000000005,
+    "line": "FLPP yang Saya dan istri/suami* ajukan maka Saya dan istri/suami*:"
+  },
+  {
+    "page": 1,
+    "label": "proyek perumahan",
+    "type": "dots",
+    "x": 141,
+    "y": 440,
+    "width": 46,
+    "line": "proyek perumahan …………………………....………………….. Cluster ……………………………………… Blok/No ……..………"
+  },
+  {
+    "page": 1,
+    "label": "…………………………....………………….. Cluster",
+    "type": "dots",
+    "x": 332,
+    "y": 440,
+    "width": 30,
+    "line": "proyek perumahan …………………………....………………….. Cluster ……………………………………… Blok/No ……..………"
+  },
+  {
+    "page": 1,
+    "label": "……………………………………… Blok/No",
+    "type": "dots",
+    "x": 468,
+    "y": 440,
+    "width": 14,
+    "line": "proyek perumahan …………………………....………………….. Cluster ……………………………………… Blok/No ……..………"
+  },
+  {
+    "page": 1,
+    "label": "oleh PT.",
+    "type": "dots",
+    "x": 171,
+    "y": 426,
+    "width": 160,
+    "line": "yang dikembangkan oleh PT. ....................................................."
+  },
+  {
+    "page": 1,
+    "label": "Nomor Rekening:",
+    "type": "dots",
+    "x": 431,
+    "y": 386,
+    "width": 18,
+    "line": "atas dana tersebut ke Rekening Developer dengan Nomor Rekening: ……………………… atas"
+  },
+  {
+    "page": 1,
+    "label": "nama",
+    "type": "dots",
+    "x": 68,
+    "y": 374,
+    "width": 34,
+    "line": "nama…………………………………………… sebagai pengganti Dana SBUM apabila fasilitas SBUM tidak d"
+  },
+  {
+    "page": 1,
+    "label": "Menyetujui",
+    "type": "dots",
+    "x": 333,
+    "y": 284,
+    "width": 14,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 1,
+    "label": "Menyetujui …………………",
+    "type": "dots",
+    "x": 395,
+    "y": 284,
+    "width": 20,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 1,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 358,
+    "y": 208,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 1,
+    "label": "Pengembang PT.",
+    "type": "dots",
+    "x": 270,
+    "y": 174,
+    "width": 26,
+    "line": "Pengembang PT. ………………………………."
+  },
+  {
+    "page": 2,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 165,
+    "y": 695,
+    "width": 405.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 2,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 165,
+    "y": 683,
+    "width": 405.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 2,
+    "label": "Jabatan",
+    "type": "text",
+    "x": 165,
+    "y": 671,
+    "width": 405.32000000000005,
+    "line": "Jabatan :"
+  },
+  {
+    "page": 2,
+    "label": "Alamat",
+    "type": "text",
+    "x": 165,
+    "y": 647,
+    "width": 405.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 2,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 165,
+    "y": 597,
+    "width": 405.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 2,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 165,
+    "y": 585,
+    "width": 405.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 2,
+    "label": "Alamat Perumahan",
+    "type": "text",
+    "x": 165,
+    "y": 572,
+    "width": 405.32000000000005,
+    "line": "Alamat Perumahan :"
+  },
+  {
+    "page": 2,
+    "label": "Menyetujui",
+    "type": "dots",
+    "x": 333,
+    "y": 492,
+    "width": 14,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 2,
+    "label": "Menyetujui …………………",
+    "type": "dots",
+    "x": 395,
+    "y": 492,
+    "width": 20,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 2,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 358,
+    "y": 382,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 3,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 166,
+    "y": 651,
+    "width": 404.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 3,
+    "label": "Tempat/Tanggal Lahir",
+    "type": "text",
+    "x": 166,
+    "y": 637,
+    "width": 404.32000000000005,
+    "line": "Tempat/Tanggal Lahir :"
+  },
+  {
+    "page": 3,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 166,
+    "y": 622,
+    "width": 404.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 3,
+    "label": "No. KTP/NIK",
+    "type": "text",
+    "x": 166,
+    "y": 608,
+    "width": 404.32000000000005,
+    "line": "No. KTP/NIK :"
+  },
+  {
+    "page": 3,
+    "label": "Alamat",
+    "type": "text",
+    "x": 166,
+    "y": 593,
+    "width": 404.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 3,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 166,
+    "y": 550,
+    "width": 404.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 3,
+    "label": "Tempat/Tanggal Lahir",
+    "type": "text",
+    "x": 166,
+    "y": 535,
+    "width": 404.32000000000005,
+    "line": "Tempat/Tanggal Lahir :"
+  },
+  {
+    "page": 3,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 166,
+    "y": 521,
+    "width": 404.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 3,
+    "label": "No. KTP/NIK",
+    "type": "text",
+    "x": 166,
+    "y": 506,
+    "width": 404.32000000000005,
+    "line": "No. KTP/NIK :"
+  },
+  {
+    "page": 3,
+    "label": "Alamat",
+    "type": "text",
+    "x": 166,
+    "y": 492,
+    "width": 404.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 3,
+    "label": "sebesar Rp.",
+    "type": "dots",
+    "x": 347,
+    "y": 434,
+    "width": 22,
+    "line": "1. Saya memiliki gaji/upah pokok/penghasilan bersih/upah rata – rata *) per bula"
+  },
+  {
+    "page": 3,
+    "label": "harga Rp.",
+    "type": "dots",
+    "x": 413,
+    "y": 346,
+    "width": 86,
+    "line": "4. Saya membeli Rumah Umum Tapak/Sarusun Umum dengan harga Rp. ................."
+  },
+  {
+    "page": 3,
+    "label": "dari PT",
+    "type": "dots",
+    "x": 234,
+    "y": 332,
+    "width": 18,
+    "line": "(........................................................) dari PT………………………"
+  },
+  {
+    "page": 4,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 333,
+    "y": 762,
+    "width": 14,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 4,
+    "label": "…………………",
+    "type": "dots",
+    "x": 395,
+    "y": 762,
+    "width": 20,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 4,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 358,
+    "y": 652,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 4,
+    "label": "Bekerja/Kepala Desa/Lurah*",
+    "type": "dots",
+    "x": 323,
+    "y": 614,
+    "width": 26,
+    "line": "Pimpinan Tempat Bekerja/Kepala Desa/Lurah* ………………………………."
+  },
+  {
+    "page": 5,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 166,
+    "y": 674,
+    "width": 404.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 5,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 166,
+    "y": 661,
+    "width": 404.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 5,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 166,
+    "y": 648,
+    "width": 404.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 5,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 166,
+    "y": 635,
+    "width": 404.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 5,
+    "label": "Alamat",
+    "type": "text",
+    "x": 166,
+    "y": 621,
+    "width": 404.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 5,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 334,
+    "y": 426,
+    "width": 14,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 5,
+    "label": "…………………",
+    "type": "dots",
+    "x": 395,
+    "y": 426,
+    "width": 20,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 6,
+    "label": "Berdasarkan PPJB/AJBNo.",
+    "type": "dots",
+    "x": 153,
+    "y": 698,
+    "width": 22,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "Tanggal :",
+    "type": "dots",
+    "x": 216,
+    "y": 698,
+    "width": 14,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": ": .......",
+    "type": "dots",
+    "x": 234,
+    "y": 698,
+    "width": 42,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "..................... 20",
+    "type": "dots",
+    "x": 285,
+    "y": 698,
+    "width": 6,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "pada tanggal",
+    "type": "dots",
+    "x": 459,
+    "y": 698,
+    "width": 14,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "tanggal .......",
+    "type": "dots",
+    "x": 477,
+    "y": 698,
+    "width": 42,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "..................... 20",
+    "type": "dots",
+    "x": 529,
+    "y": 698,
+    "width": 6,
+    "line": "Berdasarkan PPJB/AJBNo. ........... Tanggal : ....... ..................... 20…."
+  },
+  {
+    "page": 6,
+    "label": "dari Pengembang",
+    "type": "dots",
+    "x": 113,
+    "y": 688,
+    "width": 26,
+    "line": "dari Pengembang ............. (diisi nama Pengembang) , selanjutnya disebut “Pih"
+  },
+  {
+    "page": 6,
+    "label": "1. Nama",
+    "type": "text",
+    "x": 208,
+    "y": 658,
+    "width": 362.32000000000005,
+    "line": "1. Nama :"
+  },
+  {
+    "page": 6,
+    "label": "2. NIK",
+    "type": "text",
+    "x": 208,
+    "y": 647,
+    "width": 362.32000000000005,
+    "line": "2. NIK :"
+  },
+  {
+    "page": 6,
+    "label": "3. Alamat",
+    "type": "text",
+    "x": 208,
+    "y": 636,
+    "width": 362.32000000000005,
+    "line": "3. Alamat :"
+  },
+  {
+    "page": 6,
+    "label": "4. Nomor Telp./HP",
+    "type": "text",
+    "x": 208,
+    "y": 624,
+    "width": 362.32000000000005,
+    "line": "4. Nomor Telp./HP :"
+  },
+  {
+    "page": 6,
+    "label": "1. Nama Perumahan",
+    "type": "text",
+    "x": 208,
+    "y": 584,
+    "width": 362.32000000000005,
+    "line": "1. Nama Perumahan :"
+  },
+  {
+    "page": 6,
+    "label": "2. No. Rumah",
+    "type": "text",
+    "x": 208,
+    "y": 573,
+    "width": 362.32000000000005,
+    "line": "2. No. Rumah :"
+  },
+  {
+    "page": 6,
+    "label": "3. Luas Tanah dan Lantai Rumah",
+    "type": "text",
+    "x": 208,
+    "y": 561,
+    "width": 362.32000000000005,
+    "line": "3. Luas Tanah dan Lantai Rumah :"
+  },
+  {
+    "page": 6,
+    "label": "4. Alamat",
+    "type": "text",
+    "x": 208,
+    "y": 550,
+    "width": 362.32000000000005,
+    "line": "4. Alamat :"
+  },
+  {
+    "page": 6,
+    "label": "5. Kota/Kabupaten/Provinsi",
+    "type": "text",
+    "x": 208,
+    "y": 538,
+    "width": 362.32000000000005,
+    "line": "5. Kota/Kabupaten/Provinsi :"
+  },
+  {
+    "page": 6,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 91,
+    "y": 376,
+    "width": 10,
+    "line": "…….……(diisi nama Pengembang) …………"
+  },
+  {
+    "page": 6,
+    "label": "nama Pengembang)",
+    "type": "dots",
+    "x": 211,
+    "y": 376,
+    "width": 8,
+    "line": "…….……(diisi nama Pengembang) …………"
+  },
+  {
+    "page": 6,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 358,
+    "y": 318,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 7,
+    "label": "Nomor :",
+    "type": "dots",
+    "x": 223,
+    "y": 722,
+    "width": 154,
+    "line": "Nomor : ........................................................................"
+  },
+  {
+    "page": 7,
+    "label": "PPJB/AJB*) No.",
+    "type": "dots",
+    "x": 155,
+    "y": 698,
+    "width": 22,
+    "line": "Berdasarkan PPJB/AJB*) No. ........... tanggal : ....... ..................... 2"
+  },
+  {
+    "page": 7,
+    "label": "tanggal :",
+    "type": "dots",
+    "x": 215,
+    "y": 698,
+    "width": 14,
+    "line": "Berdasarkan PPJB/AJB*) No. ........... tanggal : ....... ..................... 2"
+  },
+  {
+    "page": 7,
+    "label": ": .......",
+    "type": "dots",
+    "x": 233,
+    "y": 698,
+    "width": 42,
+    "line": "Berdasarkan PPJB/AJB*) No. ........... tanggal : ....... ..................... 2"
+  },
+  {
+    "page": 7,
+    "label": "..................... 20",
+    "type": "dots",
+    "x": 285,
+    "y": 698,
+    "width": 6,
+    "line": "Berdasarkan PPJB/AJB*) No. ........... tanggal : ....... ..................... 2"
+  },
+  {
+    "page": 7,
+    "label": "tanggal",
+    "type": "dots",
+    "x": 75,
+    "y": 688,
+    "width": 14,
+    "line": "tanggal ....... ..................... 20….. dari Pengembang ............. (diisi"
+  },
+  {
+    "page": 7,
+    "label": "tanggal .......",
+    "type": "dots",
+    "x": 93,
+    "y": 688,
+    "width": 42,
+    "line": "tanggal ....... ..................... 20….. dari Pengembang ............. (diisi"
+  },
+  {
+    "page": 7,
+    "label": "..................... 20",
+    "type": "dots",
+    "x": 145,
+    "y": 688,
+    "width": 6,
+    "line": "tanggal ....... ..................... 20….. dari Pengembang ............. (diisi"
+  },
+  {
+    "page": 7,
+    "label": "dari Pengembang",
+    "type": "dots",
+    "x": 233,
+    "y": 688,
+    "width": 26,
+    "line": "tanggal ....... ..................... 20….. dari Pengembang ............. (diisi"
+  },
+  {
+    "page": 7,
+    "label": "nama Pengembang)",
+    "type": "dots",
+    "x": 349,
+    "y": 688,
+    "width": 28,
+    "line": "tanggal ....... ..................... 20….. dari Pengembang ............. (diisi"
+  },
+  {
+    "page": 7,
+    "label": "1. Nama",
+    "type": "text",
+    "x": 208,
+    "y": 658,
+    "width": 362.32000000000005,
+    "line": "1. Nama :"
+  },
+  {
+    "page": 7,
+    "label": "2. NIK",
+    "type": "text",
+    "x": 208,
+    "y": 647,
+    "width": 362.32000000000005,
+    "line": "2. NIK :"
+  },
+  {
+    "page": 7,
+    "label": "3. Alamat",
+    "type": "text",
+    "x": 208,
+    "y": 635,
+    "width": 362.32000000000005,
+    "line": "3. Alamat :"
+  },
+  {
+    "page": 7,
+    "label": "4. Nomor Telp./HP",
+    "type": "text",
+    "x": 212,
+    "y": 624,
+    "width": 358.32000000000005,
+    "line": "4. Nomor Telp./HP :"
+  },
+  {
+    "page": 7,
+    "label": "1. Nama Perumahan",
+    "type": "text",
+    "x": 208,
+    "y": 584,
+    "width": 362.32000000000005,
+    "line": "1. Nama Perumahan :"
+  },
+  {
+    "page": 7,
+    "label": "2. No. Rumah",
+    "type": "text",
+    "x": 208,
+    "y": 572,
+    "width": 362.32000000000005,
+    "line": "2. No. Rumah :"
+  },
+  {
+    "page": 7,
+    "label": "3. Luas Tanah dan Lantai Rumah",
+    "type": "text",
+    "x": 208,
+    "y": 561,
+    "width": 362.32000000000005,
+    "line": "3. Luas Tanah dan Lantai Rumah :"
+  },
+  {
+    "page": 7,
+    "label": "4. Alamat",
+    "type": "text",
+    "x": 208,
+    "y": 549,
+    "width": 362.32000000000005,
+    "line": "4. Alamat :"
+  },
+  {
+    "page": 7,
+    "label": "5. Kota/Kabupaten/Provinsi",
+    "type": "text",
+    "x": 208,
+    "y": 538,
+    "width": 362.32000000000005,
+    "line": "5. Kota/Kabupaten/Provinsi :"
+  },
+  {
+    "page": 7,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 91,
+    "y": 364,
+    "width": 10,
+    "line": "…….……(diisi nama Pengembang) …………"
+  },
+  {
+    "page": 7,
+    "label": "nama Pengembang)",
+    "type": "dots",
+    "x": 211,
+    "y": 364,
+    "width": 8,
+    "line": "…….……(diisi nama Pengembang) …………"
+  },
+  {
+    "page": 7,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 358,
+    "y": 306,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 8,
+    "label": "Nama",
+    "type": "text",
+    "x": 140,
+    "y": 680,
+    "width": 430.32000000000005,
+    "line": "Nama :"
+  },
+  {
+    "page": 8,
+    "label": "NIK",
+    "type": "text",
+    "x": 140,
+    "y": 668,
+    "width": 430.32000000000005,
+    "line": "NIK :"
+  },
+  {
+    "page": 8,
+    "label": "NIP",
+    "type": "text",
+    "x": 140,
+    "y": 656,
+    "width": 430.32000000000005,
+    "line": "NIP :"
+  },
+  {
+    "page": 8,
+    "label": "Jabatan",
+    "type": "text",
+    "x": 140,
+    "y": 644,
+    "width": 430.32000000000005,
+    "line": "Jabatan :"
+  },
+  {
+    "page": 8,
+    "label": "Alamat Kantor",
+    "type": "text",
+    "x": 140,
+    "y": 632,
+    "width": 430.32000000000005,
+    "line": "Alamat Kantor :"
+  },
+  {
+    "page": 8,
+    "label": "No. Telp./Fax.",
+    "type": "text",
+    "x": 140,
+    "y": 620,
+    "width": 430.32000000000005,
+    "line": "No. Telp./Fax. :"
+  },
+  {
+    "page": 8,
+    "label": "Email",
+    "type": "text",
+    "x": 140,
+    "y": 608,
+    "width": 430.32000000000005,
+    "line": "Email :"
+  },
+  {
+    "page": 8,
+    "label": "Sejahtera sebanyak",
+    "type": "dots",
+    "x": 139,
+    "y": 566,
+    "width": 14,
+    "line": "1. Telah melaksanakan verifikasi dokumen Kelompok Sasaran KPR Sejahtera sebanyak"
+  },
+  {
+    "page": 8,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 333,
+    "y": 262,
+    "width": 14,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 8,
+    "label": "…………………",
+    "type": "dots",
+    "x": 395,
+    "y": 262,
+    "width": 20,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 8,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 331,
+    "y": 228,
+    "width": 38,
+    "line": "…………………………………………………"
+  },
+  {
+    "page": 9,
+    "label": "(SP3K) No",
+    "type": "dots",
+    "x": 117,
+    "y": 668,
+    "width": 14,
+    "line": "(Persero) Tbk (Bank BTN) melalui Surat Persetujuan Pemberian Kredit (SP3K) No………"
+  },
+  {
+    "page": 9,
+    "label": "No………………. tanggal",
+    "type": "dots",
+    "x": 415,
+    "y": 668,
+    "width": 20,
+    "line": "(Persero) Tbk (Bank BTN) melalui Surat Persetujuan Pemberian Kredit (SP3K) No………"
+  },
+  {
+    "page": 9,
+    "label": "• Alamat",
+    "type": "text",
+    "x": 166,
+    "y": 580,
+    "width": 404.32000000000005,
+    "line": "• Alamat :"
+  },
+  {
+    "page": 9,
+    "label": "• Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 166,
+    "y": 506,
+    "width": 404.32000000000005,
+    "line": "• Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 9,
+    "label": "• Pekerjaan",
+    "type": "text",
+    "x": 166,
+    "y": 493,
+    "width": 404.32000000000005,
+    "line": "• Pekerjaan :"
+  },
+  {
+    "page": 9,
+    "label": "• Alamat",
+    "type": "text",
+    "x": 166,
+    "y": 479,
+    "width": 404.32000000000005,
+    "line": "• Alamat :"
+  },
+  {
+    "page": 10,
+    "label": "Menyetujui",
+    "type": "dots",
+    "x": 332,
+    "y": 778,
+    "width": 14,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 10,
+    "label": "Menyetujui …………………",
+    "type": "dots",
+    "x": 341,
+    "y": 778,
+    "width": 20,
+    "line": "Menyetujui, …………………, …………………….. 20…"
+  },
+  {
+    "page": 10,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 354,
+    "y": 698,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 10,
+    "label": "Bekerja/Kepala Desa/Lurah*",
+    "type": "dots",
+    "x": 194,
+    "y": 660,
+    "width": 26,
+    "line": "Pimpinan Tempat Bekerja/Kepala Desa/Lurah* ………………………………."
+  },
+  {
+    "page": 11,
+    "label": "Nama Lengkap",
+    "type": "text",
+    "x": 174,
+    "y": 683,
+    "width": 396.32000000000005,
+    "line": "Nama Lengkap :"
+  },
+  {
+    "page": 11,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 174,
+    "y": 671,
+    "width": 396.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 11,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 174,
+    "y": 659,
+    "width": 396.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 11,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 174,
+    "y": 646,
+    "width": 396.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 11,
+    "label": "No. Telepon/HP",
+    "type": "text",
+    "x": 174,
+    "y": 634,
+    "width": 396.32000000000005,
+    "line": "No. Telepon/HP :"
+  },
+  {
+    "page": 11,
+    "label": "Alamat",
+    "type": "text",
+    "x": 174,
+    "y": 622,
+    "width": 396.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 11,
+    "label": "Nomor Rekening Tabungan",
+    "type": "text",
+    "x": 174,
+    "y": 597,
+    "width": 396.32000000000005,
+    "line": "Nomor Rekening Tabungan :"
+  },
+  {
+    "page": 11,
+    "label": "No. SP3K",
+    "type": "text",
+    "x": 174,
+    "y": 584,
+    "width": 396.32000000000005,
+    "line": "No. SP3K :"
+  },
+  {
+    "page": 11,
+    "label": "Tanggal Akad KPR Bersubsidi",
+    "type": "text",
+    "x": 174,
+    "y": 572,
+    "width": 396.32000000000005,
+    "line": "Tanggal Akad KPR Bersubsidi :"
+  },
+  {
+    "page": 11,
+    "label": "Nomor Rekening KPR Bersubsidi",
+    "type": "text",
+    "x": 174,
+    "y": 560,
+    "width": 396.32000000000005,
+    "line": "Nomor Rekening KPR Bersubsidi :"
+  },
+  {
+    "page": 11,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 40,
+    "y": 512,
+    "width": 26,
+    "line": "………………………………… selaku ………………………….di PT. Bank Tabungan Negara (Persero) Tbk. Kanto"
+  },
+  {
+    "page": 11,
+    "label": "………………………………… selaku",
+    "type": "dots",
+    "x": 61,
+    "y": 512,
+    "width": 22,
+    "line": "………………………………… selaku ………………………….di PT. Bank Tabungan Negara (Persero) Tbk. Kanto"
+  },
+  {
+    "page": 11,
+    "label": "Kantor Cabang",
+    "type": "dots",
+    "x": 129,
+    "y": 512,
+    "width": 24,
+    "line": "………………………………… selaku ………………………….di PT. Bank Tabungan Negara (Persero) Tbk. Kanto"
+  },
+  {
+    "page": 11,
+    "label": "senilai Rp",
+    "type": "dots",
+    "x": 81,
+    "y": 416,
+    "width": 32,
+    "line": "tersebut di atas senilai Rp……………………………………..(…………………………………………………………….) untuk digu"
+  },
+  {
+    "page": 11,
+    "label": "senilai Rp……………………………………..(",
+    "type": "dots",
+    "x": 98,
+    "y": 416,
+    "width": 48,
+    "line": "tersebut di atas senilai Rp……………………………………..(…………………………………………………………….) untuk digu"
+  },
+  {
+    "page": 11,
+    "label": "Nama Pengembang",
+    "type": "text",
+    "x": 146,
+    "y": 365,
+    "width": 424.32000000000005,
+    "line": "Nama Pengembang :"
+  },
+  {
+    "page": 11,
+    "label": "Nomor Rekening",
+    "type": "text",
+    "x": 146,
+    "y": 352,
+    "width": 424.32000000000005,
+    "line": "Nomor Rekening :"
+  },
+  {
+    "page": 11,
+    "label": "Rekening Atas Nama",
+    "type": "text",
+    "x": 146,
+    "y": 340,
+    "width": 424.32000000000005,
+    "line": "Rekening Atas Nama :"
+  },
+  {
+    "page": 11,
+    "label": "Kantor Kas",
+    "type": "dots",
+    "x": 211,
+    "y": 328,
+    "width": 18,
+    "line": "Pada Bank : Bank BTN Kantor Cabang/Kantor Cabang Pembantu/ Kantor Kas ………………………"
+  },
+  {
+    "page": 11,
+    "label": "PENERIMA KUASA",
+    "type": "dots",
+    "x": 336,
+    "y": 172,
+    "width": 14,
+    "line": "PENERIMA KUASA…………………, …………………….. 20…"
+  },
+  {
+    "page": 11,
+    "label": "PENERIMA KUASA…………………",
+    "type": "dots",
+    "x": 345,
+    "y": 172,
+    "width": 20,
+    "line": "PENERIMA KUASA…………………, …………………….. 20…"
+  },
+  {
+    "page": 11,
+    "label": "KANTOR CABANG",
+    "type": "dots",
+    "x": 106,
+    "y": 148,
+    "width": 22,
+    "line": "KANTOR CABANG …………………………."
+  },
+  {
+    "page": 11,
+    "label": "………………………………. )(",
+    "type": "dots",
+    "x": 357,
+    "y": 80,
+    "width": 26,
+    "line": "( ………………………………. )( ………………………………. )"
+  },
+  {
+    "page": 12,
+    "label": "Nama",
+    "type": "text",
+    "x": 174,
+    "y": 594,
+    "width": 396.32000000000005,
+    "line": "Nama :"
+  },
+  {
+    "page": 12,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 174,
+    "y": 579,
+    "width": 396.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 12,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 174,
+    "y": 565,
+    "width": 396.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 12,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 174,
+    "y": 551,
+    "width": 396.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 12,
+    "label": "Alamat",
+    "type": "text",
+    "x": 174,
+    "y": 536,
+    "width": 396.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 12,
+    "label": "Nama Pengembang",
+    "type": "text",
+    "x": 174,
+    "y": 467,
+    "width": 396.32000000000005,
+    "line": "Nama Pengembang :"
+  },
+  {
+    "page": 12,
+    "label": "Harga Jual Rumah",
+    "type": "text",
+    "x": 174,
+    "y": 424,
+    "width": 396.32000000000005,
+    "line": "Harga Jual Rumah :"
+  },
+  {
+    "page": 12,
+    "label": "Besaran Uang Muka",
+    "type": "text",
+    "x": 174,
+    "y": 410,
+    "width": 396.32000000000005,
+    "line": "Besaran Uang Muka :"
+  },
+  {
+    "page": 12,
+    "label": "disetujui oleh",
+    "type": "dots",
+    "x": 282,
+    "y": 368,
+    "width": 50,
+    "line": "pembelian Rumah Sejahtera Tapak yang disetujui oleh ……………………………………….………………………*)"
+  },
+  {
+    "page": 12,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 310,
+    "y": 326,
+    "width": 14,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 12,
+    "label": "…………………",
+    "type": "dots",
+    "x": 319,
+    "y": 326,
+    "width": 20,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 13,
+    "label": "Nama",
+    "type": "text",
+    "x": 174,
+    "y": 692,
+    "width": 396.32000000000005,
+    "line": "Nama :"
+  },
+  {
+    "page": 13,
+    "label": "Tempat, Tanggal Lahir",
+    "type": "text",
+    "x": 174,
+    "y": 678,
+    "width": 396.32000000000005,
+    "line": "Tempat, Tanggal Lahir :"
+  },
+  {
+    "page": 13,
+    "label": "Pekerjaan",
+    "type": "text",
+    "x": 174,
+    "y": 664,
+    "width": 396.32000000000005,
+    "line": "Pekerjaan :"
+  },
+  {
+    "page": 13,
+    "label": "No. KTP",
+    "type": "text",
+    "x": 174,
+    "y": 650,
+    "width": 396.32000000000005,
+    "line": "No. KTP :"
+  },
+  {
+    "page": 13,
+    "label": "Alamat",
+    "type": "text",
+    "x": 174,
+    "y": 635,
+    "width": 396.32000000000005,
+    "line": "Alamat :"
+  },
+  {
+    "page": 13,
+    "label": "Rp…..……….............................. (",
+    "type": "dots",
+    "x": 80,
+    "y": 592,
+    "width": 40,
+    "line": "Rp…..……….............................. (..…………………………………………..) dan masih memiliki"
+  },
+  {
+    "page": 13,
+    "label": "sebesar Rp",
+    "type": "dots",
+    "x": 55,
+    "y": 580,
+    "width": 20,
+    "line": "muka sebesar Rp…….………….…."
+  },
+  {
+    "page": 13,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 40,
+    "y": 566,
+    "width": 36,
+    "line": ".………………………………………….) untuk pembelian Rumah Sejahtera Tapak kepada:"
+  },
+  {
+    "page": 13,
+    "label": "Harga Jual Rumah",
+    "type": "text",
+    "x": 174,
+    "y": 509,
+    "width": 396.32000000000005,
+    "line": "Harga Jual Rumah :"
+  },
+  {
+    "page": 13,
+    "label": "Besaran Uang Muka",
+    "type": "text",
+    "x": 174,
+    "y": 495,
+    "width": 396.32000000000005,
+    "line": "Besaran Uang Muka :"
+  },
+  {
+    "page": 13,
+    "label": "Bank Pelaksana",
+    "type": "text",
+    "x": 174,
+    "y": 481,
+    "width": 396.32000000000005,
+    "line": "Bank Pelaksana :"
+  },
+  {
+    "page": 13,
+    "label": "(unnamed)",
+    "type": "dots",
+    "x": 318,
+    "y": 384,
+    "width": 14,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 13,
+    "label": "…………………",
+    "type": "dots",
+    "x": 327,
+    "y": 384,
+    "width": 20,
+    "line": "…………………, …………………….. 20…"
+  },
+  {
+    "page": 13,
+    "label": ") (",
+    "type": "dots",
+    "x": 345,
+    "y": 274,
+    "width": 26,
+    "line": "( ………………………………. ) ( ………………………………. )"
+  }
+]

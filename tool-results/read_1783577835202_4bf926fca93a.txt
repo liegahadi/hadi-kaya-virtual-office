@@ -1,0 +1,912 @@
+     1→// ============================================================
+     2→// Virtual Office "Menuju Hadi Kaya" - Multi-Agent System
+     3→// Database Schema (SQLite for dev, PostgreSQL/Supabase for prod)
+     4→// ============================================================
+     5→// Notes:
+     6→// - DEV: SQLite (local) — fast iteration
+     7→// - PROD: PostgreSQL via Supabase (deploy to Vercel)
+     8→// - All timestamps in UTC
+     9→// ============================================================
+    10→
+    11→generator client {
+    12→  provider = "prisma-client-js"
+    13→}
+    14→
+    15→datasource db {
+    16→  provider = "postgresql"
+    17→  url      = env("DATABASE_URL")
+    18→}
+    19→
+    20→// ============================================================
+    21→// 1. AUTH & USERS
+    22→// ============================================================
+    23→
+    24→model AppUser {
+    25→  id           String   @id @default(cuid())
+    26→  email        String   @unique
+    27→  name         String
+    28→  passwordHash String
+    29→  role         String   @default("OWNER") // OWNER | ADMIN | VIEWER
+    30→  phone        String?
+    31→  avatar       String?
+    32→  isActive     Boolean  @default(true)
+    33→  lastLoginAt  DateTime?
+    34→  createdAt    DateTime @default(now())
+    35→  updatedAt    DateTime @updatedAt
+    36→
+    37→  approvals      Approval[]
+    38→  fundRequests   FundRequest[]
+    39→  documents      Document[]
+    40→  auditLogs      AuditLog[]
+    41→  settings       UserSetting[]
+    42→}
+    43→
+    44→// Google OAuth tokens - untuk akses Google Drive & Docs API sebagai user (bukan Service Account)
+    45→// Owner login sekali → refresh_token disimpan → sistem bisa akses Drive kapan saja
+    46→// Untuk MVP: 1 token global (single owner, app belum ada login system)
+    47→model GoogleToken {
+    48→  id              String   @id @default("owner") // hardcoded "owner" for MVP single-user
+    49→  accessToken     String
+    50→  refreshToken    String
+    51→  expiryDate      DateTime? // when access token expires
+    52→  tokenType       String   @default("Bearer")
+    53→  scope           String
+    54→  email           String?  // email Google account yang login
+    55→  createdAt       DateTime @default(now())
+    56→  updatedAt       DateTime @updatedAt
+    57→}
+    58→
+    59→// Track Google Docs created per customer
+    60→// Setiap doc yang dibuat via sistem disimpan di sini + di Google Drive folder customer
+    61→model GoogleDoc {
+    62→  id          String   @id @default(cuid())
+    63→  docId       String   @unique // Google Doc ID (from Drive)
+    64→  customerId  String?  // link to Customer
+    65→  fileName    String
+    66→  folderId    String?  // Google Drive folder ID (customer folder)
+    67→  docType     String   @default("sk-slip-gaji") // sk-slip-gaji | spr | flpp | etc
+    68→  editUrl     String
+    69→  templateId  String?  // which template was used
+    70→  createdAt   DateTime @default(now())
+    71→
+    72→  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+    73→}
+    74→
+    75→model UserSetting {
+    76→  id        String   @id @default(cuid())
+    77→  userId    String
+    78→  key       String
+    79→  value     String
+    80→  createdAt DateTime @default(now())
+    81→  updatedAt DateTime @updatedAt
+    82→
+    83→  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+    84→
+    85→  @@unique([userId, key])
+    86→}
+    87→
+    88→// ============================================================
+    89→// 2. PROJECTS & UNITS (Real Estate)
+    90→// ============================================================
+    91→
+    92→model Project {
+    93→  id          String   @id @default(cuid())
+    94→  name        String   // e.g. "Anjayo 16"
+    95→  brandName   String   // e.g. "Anjayo"
+    96→  code        String?  // e.g. "A16"
+    97→  location    String   // e.g. "Jerambah Gantung, Pangkalpinang"
+    98→  address     String?
+    99→  totalUnits  Int      @default(0)
+   100→  sitePlanUrl String?  // image URL (jpg/png/pdf)
+   101→  status      String   @default("ACTIVE") // ACTIVE | COMPLETED | PAUSED
+   102→  createdAt   DateTime @default(now())
+   103→  updatedAt   DateTime @updatedAt
+   104→
+   105→  units        Unit[]
+   106→  rabs         RAB[]
+   107→  rabLines     RABLine[]
+   108→  materialStock MaterialStock[]
+   109→  agentTeams   AgentTeam[]
+   110→  customers    Customer[]
+   111→
+   112→  @@unique([name])
+   113→}
+   114→
+   115→model Unit {
+   116→  id           String   @id @default(cuid())
+   117→  projectId    String
+   118→  blockNumber  String   // e.g. "A1", "B12"
+   119→  unitType     String   @default("36") // type 36, etc
+   120→  landSize     Float    // e.g. 84, 105, 127
+   121→  buildingSize Float    @default(36)
+   122→  price        Float    @default(173000000) // harga jual ke bank
+   123→  dpAmount     Float    @default(5000000) // DP per luas tanah
+   124→  status       String   @default("AVAILABLE") // AVAILABLE | BOOKED | SOLD | RESERVED
+   125→  customerId   String?
+   126→  soldAt       DateTime?
+   127→  bookedAt     DateTime?
+   128→  createdAt    DateTime @default(now())
+   129→  updatedAt    DateTime @updatedAt
+   130→
+   131→  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   132→  customer      Customer?     @relation(fields: [customerId], references: [id])
+   133→  materialUsages MaterialUsage[]
+   134→  progressPhotos ProgressPhoto[]
+   135→  budgetTracking UnitBudgetTracking[]
+   136→
+   137→  @@unique([projectId, blockNumber])
+   138→}
+   139→
+   140→// ============================================================
+   141→// 3. AGENTS (Multi-Agent System)
+   142→// ============================================================
+   143→
+   144→model Agent {
+   145→  id            String   @id @default(cuid())
+   146→  name          String   // e.g. "RINA", "Ayu", "RATNA"
+   147→  role          String   // FINANCE | MATERIAL | DOCUMENT | MARKETING | CONTENT | CTO | CAO
+   148→  description   String?
+   149→  personality   String?  // personality description
+   150→  systemPrompt  String?  // custom system prompt (long)
+   151→  gender        String?  // MALE | FEMALE
+   152→  avatarUrl     String?
+   153→  whatsappNumber String? // unique WA number per agent
+   154→  llmModel      String   @default("glm-4.6") // HEAVY task model: complex analysis, decisions, content creation
+   155→  llmProvider   String   @default("openrouter") // openrouter | zai | openai | anthropic
+   156→  lightLlmModel String?  // LIGHT task model: FAQ, status, simple replies, casual chat (cheap: gemini-flash, gpt-4o-mini)
+   157→  lightLlmProvider String? // provider for light model
+   158→  llmApiKeyRef  String?  // reference to encrypted key in env/config
+   159→  temperature   Float    @default(0.7)
+   160→  maxTokens     Int      @default(2000)
+   161→  isActive      Boolean  @default(true)
+   162→  isDevilsAdvocate Boolean @default(false) // push back mode
+   163→  skills        String?  // JSON string of skills list
+   164→  createdAt     DateTime @default(now())
+   165→  updatedAt     DateTime @updatedAt
+   166→
+   167→  conversations      Conversation[]
+   168→  memories           Memory[]
+   169→  skillRecords       Skill[]
+   170→  knowledgeItems     KnowledgeItem[]
+   171→  agentTeams         AgentTeamMember[]
+   172→  pos                PO[]
+   173→  fundRequests       FundRequest[]
+   174→  documents          Document[]
+   175→  surveySchedules    SurveySchedule[]
+   176→  approvals          Approval[]
+   177→  assignedCustomers  Customer[]
+   178→
+   179→  @@unique([name, role])
+   180→}
+   181→
+   182→model AgentTeam {
+   183→  id        String   @id @default(cuid())
+   184→  name      String   // e.g. "Tim Anjayo 16", "Tim Proyek B"
+   185→  projectId String
+   186→  createdAt DateTime @default(now())
+   187→  updatedAt DateTime @updatedAt
+   188→
+   189→  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   190→  members AgentTeamMember[]
+   191→}
+   192→
+   193→model AgentTeamMember {
+   194→  id        String   @id @default(cuid())
+   195→  teamId    String
+   196→  agentId   String
+   197→  joinedAt  DateTime @default(now())
+   198→
+   199→  team  AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+   200→  agent Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+   201→
+   202→  @@unique([teamId, agentId])
+   203→}
+   204→
+   205→// ============================================================
+   206→// 4. CUSTOMERS & SALES PIPELINE
+   207→// ============================================================
+   208→
+   209→model Customer {
+   210→  id           String   @id @default(cuid())
+   211→  projectId    String
+   212→  name         String
+   213→  whatsappNumber String?
+   214→  phone        String?
+   215→  email        String?
+   216→  occupation   String?  // KARYAWAN | WIRAUSAHA | LAINNYA
+   217→  maritalStatus String? // SINGLE | MENIKAH | JANDA | DUDA
+   218→  monthlyIncome Float?
+   219→  hasExistingLoan Boolean @default(false)
+   220→  hasExistingHouse Boolean @default(false)
+   221→  sourceLead   String?  // FB | IG | TIKTOK | WALK_IN | REFERRAL
+   222→  assignedAgentId String? // locked to 1 marketing AI per customer
+   223→  personalityPreference String? // cheerful | informatif | manipulatif (for matching)
+   224→  stage        String   @default("DM") // DM | SURVEY | CLOSING | BOOKING | SLIK | PEMBERKASAN | SP3K | AKAD | SERAH_TERIMA | LOST
+   225→  stageUpdatedAt DateTime?
+   226→  notes        String?
+   227→  isExistingMigration Boolean @default(false) // konsumen existing yang dimigrasi
+   228→  createdAt    DateTime @default(now())
+   229→  updatedAt    DateTime @updatedAt
+   230→
+   231→  // Detailed data for auto-fill (added for BerkasView v2)
+   232→  nik          String?
+   233→  birthPlace   String?
+   234→  birthDate    String?
+   235→  gender       String?
+   236→  ktpAddress   String?
+   237→  rtRw         String?
+   238→  kelurahan    String?
+   239→  kecamatan    String?
+   240→  city         String?
+   241→  postalCode   String?
+   242→  religion     String?
+   243→  companyName  String?
+   244→  companyAddress String?
+   245→  companyPhone String?
+   246→  workDuration String?
+   247→  workPosition String?
+   248→  bankName     String?
+   249→  bankAccount  String?
+   250→  npwpNumber   String?
+   251→  btnAccountNumber String?
+   252→  blockLetter  String?
+   253→  houseNumber  String?
+   254→  landSize     Int?
+   255→  houseSize    Int?
+   256→  shmNumber    String?
+   257→  nibNumber    String?
+   258→  spouseName   String?
+   259→  spouseNik    String?
+   260→  spouseBirthPlace String?
+   261→  spouseBirthDate  String?
+   262→  spouseOccupation String?
+   263→  spouseAddress String?
+   264→  spouseIncome Float?
+   265→  motherMaidenName String?
+   266→  emergencyContact String?
+   267→  dependents   Int?
+   268→  dateOfDocument String?
+   269→  // Date tracking
+   270→  closingDate    DateTime?
+   271→  berkasLengkapDate DateTime?
+   272→  berkasMasukBankDate DateTime?
+   273→  sp3kDate       DateTime?
+   274→  akadDate       DateTime?
+   275→  akadNumber     String?
+   276→  lpaDate        DateTime?
+   277→  lpaNumber      String?
+   278→  berkasLengkap  Boolean  @default(false)
+   279→  atasanName     String?
+   280→  atasanNip      String?
+   281→  workplaceFrontPhoto String?
+   282→  workplaceInsidePhoto String?
+   283→  workplaceMapsLink String?
+   284→  workplaceMapsShortLink String?  // short link maps.app.goo.gl/... (untuk bank)
+   285→  workplaceJamOperasional String?
+   286→  workplaceWaktuHubungi String?
+   287→  gajiPokok      Int?
+   288→  slipGajiData   String?  // JSON: tunjangan, potongan, tanggalTerima, periode
+   289→  uploadedDocs   String?  // JSON string of { docId: dataUrl } for file persistence
+   290→
+   291→  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   292→  assignedAgent  Agent?        @relation(fields: [assignedAgentId], references: [id])
+   293→  units          Unit[]
+   294→  conversations  Conversation[]
+   295→  stageHistory   CustomerStageHistory[]
+   296→  documents      Document[]
+   297→  googleDocs     GoogleDoc[]
+   298→  surveySchedules SurveySchedule[]
+   299→  bankPipelines  BankPipeline[]
+   300→
+   301→  @@index([projectId, stage])
+   302→  @@index([assignedAgentId])
+   303→}
+   304→
+   305→model CustomerStageHistory {
+   306→  id          String   @id @default(cuid())
+   307→  customerId  String
+   308→  fromStage   String?
+   309→  toStage     String
+   310→  changedBy   String?  // agentId | userId
+   311→  reason      String?
+   312→  changedAt   DateTime @default(now())
+   313→
+   314→  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+   315→}
+   316→
+   317→// ============================================================
+   318→// 5. CONVERSATIONS & MESSAGES (WhatsApp + Dashboard chat)
+   319→// ============================================================
+   320→
+   321→model Conversation {
+   322→  id          String   @id @default(cuid())
+   323→  customerId  String?
+   324→  agentId     String?
+   325→  channel     String   @default("WHATSAPP") // WHATSAPP | DASHBOARD | INSTAGRAM | FACEBOOK | TIKTOK
+   326→  status      String   @default("ACTIVE") // ACTIVE | ARCHIVED | CLOSED
+   327→  summary     String?  // AI-generated summary
+   328→  lastMessageAt DateTime?
+   329→  createdAt   DateTime @default(now())
+   330→  updatedAt   DateTime @updatedAt
+   331→
+   332→  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+   333→  agent    Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+   334→  messages Message[]
+   335→
+   336→  @@index([customerId, agentId])
+   337→  @@index([lastMessageAt])
+   338→}
+   339→
+   340→model Message {
+   341→  id             String   @id @default(cuid())
+   342→  conversationId String
+   343→  role           String   // CUSTOMER | AGENT | SYSTEM | OWNER
+   344→  content        String
+   345→  contentType    String   @default("TEXT") // TEXT | IMAGE | AUDIO | DOCUMENT | LOCATION | STICKER
+   346→  mediaUrl       String?
+   347→  metadata       String?  // JSON string
+   348→  isRead         Boolean  @default(false)
+   349→  needsApproval  Boolean  @default(false) // for actions requiring owner sign-off
+   350→  approvalStatus String?  // PENDING | APPROVED | REJECTED
+   351→  createdAt      DateTime @default(now())
+   352→
+   353→  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+   354→
+   355→  @@index([conversationId, createdAt])
+   356→}
+   357→
+   358→// ============================================================
+   359→// 6. MEMORY LAYER (Central Brain + Per-Agent Memory)
+   360→// ============================================================
+   361→
+   362→model Memory {
+   363→  id              String   @id @default(cuid())
+   364→  agentId         String?  // null = entity memory / umum
+   365→  customerId      String?  // customer-specific memory
+   366→  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING
+   367→  memoryType      String   @default("long_term") // short_term | long_term | entity | umum
+   368→  entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER
+   369→  entityId        String?  // ID of the entity
+   370→  title           String?  // Judul memory (like book title)
+   371→  content         String   // Deskripsi: what happened / what's the rule
+   372→  resolution      String?  // Action items: what to do about it
+   373→  importance      Float    @default(0.5)
+   374→  source          String?
+   375→  attachmentUrl   String?
+   376→  version         Int      @default(1)
+   377→  isActive        Boolean  @default(true)
+   378→  createdAt       DateTime @default(now())
+   379→  updatedAt       DateTime @updatedAt
+   380→
+   381→  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+   382→  versions MemoryVersion[]
+   383→
+   384→  @@index([agentId, category])
+   385→  @@index([customerId])
+   386→  @@index([memoryType, entityType])
+   387→  @@index([isActive])
+   388→}
+   389→
+   390→// Memory versioning — track every change (v1, v2, v3...)
+   391→model MemoryVersion {
+   392→  id          String   @id @default(cuid())
+   393→  memoryId    String
+   394→  version     Int
+   395→  content     String   // snapshot of content at this version
+   396→  changedBy   String?  // owner | ratna | agent_name
+   397→  changeNote  String?  // why was it changed?
+   398→  createdAt   DateTime @default(now())
+   399→
+   400→  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+   401→
+   402→  @@index([memoryId, version])
+   403→}
+   404→
+   405→// Skill — kemampuan agent (prompt-based, like Claude Skills)
+   406→model Skill {
+   407→  id              String   @id @default(cuid())
+   408→  name            String   // e.g. "generate-laporan-keuangan"
+   409→  displayName     String   // e.g. "Generate Laporan Keuangan"
+   410→  description     String?  // what this skill does
+   411→  prompt          String   // the actual prompt/instruction
+   412→  category        String   @default("UMUM") // UMUM | DINA | RINA | MITRA | RATNA | RANGGA | MARKETING
+   413→  agentId         String?  // null = umum (all agents), specific = that agent only
+   414→  source          String?  // MANUAL | CAVINHUANG | PROMPT_ENGINEER | RATNA_CREATED
+   415→  isActive        Boolean  @default(true)
+   416→  version         Int      @default(1)
+   417→  createdAt       DateTime @default(now())
+   418→  updatedAt       DateTime @updatedAt
+   419→
+   420→  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+   421→  versions SkillVersion[]
+   422→
+   423→  @@index([agentId, category])
+   424→  @@index([isActive])
+   425→}
+   426→
+   427→// Skill versioning — track every change
+   428→model SkillVersion {
+   429→  id          String   @id @default(cuid())
+   430→  skillId     String
+   431→  version     Int
+   432→  prompt      String   // snapshot of prompt at this version
+   433→  changedBy   String?  // owner | ratna
+   434→  changeNote  String?  // why was it changed?
+   435→  createdAt   DateTime @default(now())
+   436→
+   437→  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+   438→
+   439→  @@index([skillId, version])
+   440→}
+   441→
+   442→// MemoryAudit — audit trail for all memory/skill changes
+   443→model MemoryAudit {
+   444→  id          String   @id @default(cuid())
+   445→  action      String   // CREATE | EDIT | DELETE | CONNECT | DISCONNECT
+   446→  entityType  String   // MEMORY | SKILL
+   447→  entityId    String   // ID of memory or skill
+   448→  agentId     String?  // which agent (if applicable)
+   449→  changedBy   String?  // owner | ratna | system
+   450→  details     String?  // JSON: what changed, old value, new value
+   451→  createdAt   DateTime @default(now())
+   452→
+   453→  @@index([entityType, entityId])
+   454→  @@index([createdAt])
+   455→}
+   456→
+   457→// ============================================================
+   458→// 7. KNOWLEDGE BASE (FAQ, Objection, RAB, Templates, etc)
+   459→// ============================================================
+   460→
+   461→model KnowledgeItem {
+   462→  id          String   @id @default(cuid())
+   463→  agentId     String?  // null = global knowledge, available to all agents
+   464→  category    String   // FAQ | OBJECTION | PRODUCT_INFO | BANK_REQUIREMENT | RAB_DETAIL | SELLING_POINT | COMPANY_POLICY
+   465→  question    String?  // for FAQ/objection
+   466→  answer      String?  // for FAQ/objection
+   467→  content     String?  // for general knowledge (markdown)
+   468→  tags        String?  // JSON array of tags
+   469→  isActive    Boolean  @default(true)
+   470→  createdAt   DateTime @default(now())
+   471→  updatedAt   DateTime @updatedAt
+   472→
+   473→  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+   474→
+   475→  @@index([category, isActive])
+   476→  @@index([agentId])
+   477→}
+   478→
+   479→// ============================================================
+   480→// 8. APPROVALS (Owner sign-off workflow)
+   481→// ============================================================
+   482→
+   483→model Approval {
+   484→  id          String   @id @default(cuid())
+   485→  requesterAgentId String
+   486→  approverUserId String?
+   487→  type        String   // PO | FUND_REQUEST | PAYMENT | DOCUMENT_SIGN | POST_PUBLISH
+   488→  referenceId String?  // ID of related entity (PO, FundRequest, etc)
+   489→  payload     String   // JSON string of what needs approval
+   490→  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
+   491→  signatureUrl String? // digital signature or photo of physical sign
+   492→  notes       String?
+   493→  respondedAt DateTime?
+   494→  createdAt   DateTime @default(now())
+   495→
+   496→  agent    Agent    @relation(fields: [requesterAgentId], references: [id])
+   497→  approver AppUser? @relation(fields: [approverUserId], references: [id])
+   498→  pos      PO[]
+   499→}
+   500→
+   501→// ============================================================
+   502→// 9. FINANCE: SUPPLIERS, POs, PAYMENTS (RINA domain)
+   503→// ============================================================
+   504→
+   505→model Supplier {
+   506→  id          String   @id @default(cuid())
+   507→  name        String
+   508→  whatsappNumber String?
+   509→  phone       String?
+   510→  address     String?
+   511→  contactPerson String?
+   512→  totalDebt   Float    @default(0) // running total hutang
+   513→  createdAt   DateTime @default(now())
+   514→  updatedAt   DateTime @updatedAt
+   515→
+   516→  pos     PO[]
+   517→  payments SupplierPayment[]
+   518→}
+   519→
+   520→model PO {
+   521→  id           String   @id @default(cuid())
+   522→  poNumber     String   @unique // e.g. PO-2026-001
+   523→  agentId      String   // RINA
+   524→  supplierId   String
+   525→  projectId    String?
+   526→  unitIds      String?  // JSON array of unit IDs (1 PO can cover multiple units)
+   527→  workItem     String?  // e.g. "Plaster", "Plesteran"
+   528→  status       String   @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | SENT_TO_SUPPLIER | PARTIAL_DELIVERED | DELIVERED | PARTIAL_PAID | PAID | CANCELLED
+   529→  subtotal     Float    @default(0)
+   530→  totalAmount  Float    @default(0)
+   531→  notes        String?
+   532→  approvedAt   DateTime?
+   533→  sentAt       DateTime?
+   534→  deliveredAt  DateTime?
+   535→  createdAt    DateTime @default(now())
+   536→  updatedAt    DateTime @updatedAt
+   537→
+   538→  agent    Agent    @relation(fields: [agentId], references: [id])
+   539→  supplier Supplier @relation(fields: [supplierId], references: [id])
+   540→  lines    POLine[]
+   541→  payments SupplierPayment[]
+   542→  approvalRecords Approval[]  // back-relation: approvals linked to this PO
+   543→
+   544→  @@index([supplierId, status])
+   545→  @@index([status])
+   546→}
+   547→
+   548→model POLine {
+   549→  id          String   @id @default(cuid())
+   550→  poId        String
+   551→  materialName String
+   552→  quantity    Float
+   553→  unitMeasure String   // zak | kg | m3 | btg | bh
+   554→  unitPrice   Float
+   555→  totalPrice  Float
+   556→  deliveredQuantity Float @default(0) // actual delivered (may differ from ordered)
+   557→  finalUnitPrice Float? // actual price at payment (may differ due to price change)
+   558→  notes       String?
+   559→
+   560→  po PO @relation(fields: [poId], references: [id], onDelete: Cascade)
+   561→}
+   562→
+   563→model SupplierPayment {
+   564→  id          String   @id @default(cuid())
+   565→  supplierId  String
+   566→  poId        String?
+   567→  amount      Float
+   568→  method      String   @default("TRANSFER") // TRANSFER | CASH | GIRO
+   569→  notes       String?
+   570→  approvalId  String?
+   571→  paidAt      DateTime @default(now())
+   572→  createdAt   DateTime @default(now())
+   573→
+   574→  supplier Supplier @relation(fields: [supplierId], references: [id])
+   575→  po       PO?       @relation(fields: [poId], references: [id])
+   576→}
+   577→
+   578→model FundRequest {
+   579→  id           String   @id @default(cuid())
+   580→  agentId      String   // RINA
+   581→  requesterName String? // nama tukang/penerima
+   582→  type         String   // TUKANG_WAGE | OPERATIONAL | NOTARY | SLF | KWH | FUEL | SALARY | DP_REFUND | REIMBURSE | OTHER
+   583→  projectId    String?
+   584→  unitIds      String?  // JSON array
+   585→  description  String
+   586→  amount       Float
+   587→  status       String   @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
+   588→  paidAt       DateTime?
+   589→  notes        String?
+   590→  approvedBy   String?
+   591→  approvedAt   DateTime?
+   592→  createdAt    DateTime @default(now())
+   593→  updatedAt    DateTime @updatedAt
+   594→
+   595→  agent    Agent    @relation(fields: [agentId], references: [id])
+   596→  approver AppUser? @relation(fields: [approvedBy], references: [id])
+   597→}
+   598→
+   599→// ============================================================
+   600→// 10. MATERIAL MANAGEMENT (Material AI domain)
+   601→// ============================================================
+   602→
+   603→model RAB {
+   604→  id          String   @id @default(cuid())
+   605→  projectId   String
+   606→  name        String
+   607→  version     Int      @default(1)
+   608→  totalBudget Float    @default(0)
+   609→  createdAt   DateTime @default(now())
+   610→  updatedAt   DateTime @updatedAt
+   611→
+   612→  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   613→  lines   RABLine[]
+   614→}
+   615→
+   616→model RABLine {
+   617→  id            String   @id @default(cuid())
+   618→  rabId         String
+   619→  projectId     String
+   620→  workItem      String   // e.g. "Plasteran", "Plesteran"
+   621→  materialName  String
+   622→  quantity      Float
+   623→  unitMeasure   String
+   624→  unitPrice     Float
+   625→  totalPrice    Float
+   626→  supplierSuggestion String?
+   627→  createdAt     DateTime @default(now())
+   628→
+   629→  rab     RAB     @relation(fields: [rabId], references: [id], onDelete: Cascade)
+   630→  project Project @relation(fields: [projectId], references: [id])
+   631→}
+   632→
+   633→model MaterialStock {
+   634→  id          String   @id @default(cuid())
+   635→  projectId   String
+   636→  materialName String
+   637→  unitMeasure String
+   638→  quantity    Float    @default(0)
+   639→  minimumStock Float   @default(0) // 10% threshold
+   640→  unitPrice   Float?
+   641→  lastRestockAt DateTime?
+   642→  createdAt   DateTime @default(now())
+   643→  updatedAt   DateTime @updatedAt
+   644→
+   645→  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   646→
+   647→  @@unique([projectId, materialName, unitMeasure])
+   648→}
+   649→
+   650→model MaterialUsage {
+   651→  id          String   @id @default(cuid())
+   652→  unitId      String
+   653→  materialName String
+   654→  quantity    Float
+   655→  unitMeasure String
+   656→  workItem    String?  // which work item this was used for
+   657→  reportedBy  String?  // nama orang lapangan
+   658→  reportMethod String? // PHOTO | TEXT | VOICE
+   659→  photoUrl    String?
+   660→  notes       String?
+   661→  usedAt      DateTime @default(now())
+   662→  createdAt   DateTime @default(now())
+   663→
+   664→  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+   665→
+   666→  @@index([unitId, usedAt])
+   667→}
+   668→
+   669→model ProgressPhoto {
+   670→  id          String   @id @default(cuid())
+   671→  unitId      String
+   672→  workItem    String?
+   673→  photoUrl    String
+   674→  caption     String?
+   675→  takenBy     String?
+   676→  weekClosing String?  // e.g. "2026-W25" for Friday closing book
+   677→  takenAt     DateTime @default(now())
+   678→  createdAt   DateTime @default(now())
+   679→
+   680→  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+   681→}
+   682→
+   683→model UnitBudgetTracking {
+   684→  id           String   @id @default(cuid())
+   685→  unitId       String
+   686→  workItem     String
+   687→  budgetAmount Float
+   688→  actualAmount Float    @default(0)
+   689→  usagePercent Float    @default(0) // computed: actual/budget
+   690→  isOverBudget Boolean  @default(false)
+   691→  warningSentAt DateTime?
+   692→  notes        String?
+   693→  createdAt    DateTime @default(now())
+   694→  updatedAt    DateTime @updatedAt
+   695→
+   696→  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+   697→
+   698→  @@unique([unitId, workItem])
+   699→}
+   700→
+   701→// ============================================================
+   702→// 11. DOCUMENT MANAGEMENT (Document AI domain)
+   703→// ============================================================
+   704→
+   705→model Document {
+   706→  id          String   @id @default(cuid())
+   707→  customerId  String?
+   708→  agentId     String?
+   709→  projectId   String?
+   710→  type        String   // KTP | NPWP | KK | AKTA_NIKAH | SLIP_GAJI | SK_KERJA | NIB | LABA_RUGI | BANK_FORM | BPHTB | NOTARY | OTHER
+   711→  bankName    String?  // BTN | MANDIRI | SUMSELBABEL | null if not bank-specific
+   712→  fileName    String
+   713→  fileUrl     String
+   714→  fileSize    Int?
+   715→  mimeType    String?
+   716→  extractedData String? // JSON of OCR/extracted fields
+   717→  status      String   @default("UPLOADED") // UPLOADED | EXTRACTED | FILLED_TEMPLATE | SIGNED | ARCHIVED
+   718→  notes       String?
+   719→  uploadedBy  String?
+   720→  createdAt   DateTime @default(now())
+   721→  updatedAt   DateTime @updatedAt
+   722→
+   723→  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+   724→  agent    Agent?    @relation(fields: [agentId], references: [id])
+   725→  uploadedByUser AppUser? @relation(fields: [uploadedBy], references: [id])
+   726→}
+   727→
+   728→model DocumentTemplate {
+   729→  id          String   @id @default(cuid())
+   730→  bankName    String
+   731→  templateName String
+   732→  templateUrl String?
+   733→  fields      String?
+   734→  version     Int      @default(1)
+   735→  isActive    Boolean  @default(true)
+   736→  type        String?
+   737→  category    String?
+   738→  sortOrder   Int?
+   739→  isRequired  Boolean?
+   740→  description String?
+   741→  mimeType    String?
+   742→  fileSize    Int?
+   743→  createdAt   DateTime @default(now())
+   744→  updatedAt   DateTime @updatedAt
+   745→}
+   746→
+   747→// ============================================================
+   748→// 12. SURVEY SCHEDULING (Survey group)
+   749→// ============================================================
+   750→
+   751→model SurveySchedule {
+   752→  id          String   @id @default(cuid())
+   753→  customerId  String
+   754→  agentId     String?
+   755→  scheduledAt DateTime
+   756→  duration    Int      @default(60) // minutes
+   757→  location    String?
+   758→  status      String   @default("SCHEDULED") // SCHEDULED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+   759→  assignedTo  String?  // nama human yang nemuin: Ayen / Desri / Owner
+   760→  notes       String?
+   761→  createdAt   DateTime @default(now())
+   762→  updatedAt   DateTime @updatedAt
+   763→
+   764→  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+   765→  agent    Agent?    @relation(fields: [agentId], references: [id])
+   766→}
+   767→
+   768→// ============================================================
+   769→// 13. AUDIT LOG (for RATNA to analyze & optimize)
+   770→// ============================================================
+   771→
+   772→model AuditLog {
+   773→  id          String   @id @default(cuid())
+   774→  userId      String?
+   775→  agentId     String?
+   776→  action      String
+   777→  entityType  String?
+   778→  entityId    String?
+   779→  metadata    String?  // JSON
+   780→  ipAddress   String?
+   781→  createdAt   DateTime @default(now())
+   782→
+   783→  user AppUser? @relation(fields: [userId], references: [id])
+   784→
+   785→  @@index([createdAt])
+   786→  @@index([agentId, createdAt])
+   787→}
+   788→
+   789→// ============================================================
+   790→// 13b. PENDING ACTIONS (DINA confirmation flow)
+   791→// Critical: pendingAction was previously in-memory module-level state
+   792→// which is BROKEN on Vercel serverless — each request may run in a
+   793→// different lambda. Moving to DB for persistence + per-conversation isolation.
+   794→// ============================================================
+   795→
+   796→model PendingAction {
+   797→  id              String   @id @default(cuid())
+   798→  conversationId  String?  // which conversation thread this belongs to
+   799→  customerId      String?  // optional: which customer this is about
+   800→  channel         String   @default("DASHBOARD") // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+   801→  senderNumber    String?  // for WA: who initiated
+   802→  type            String   // DELETE | CREATE | UPDATE
+   803→  targetType      String   // CUSTOMER | FIELD
+   804→  targetId        String?  // customer id being deleted/updated
+   805→  targetName      String?  // human-readable target name
+   806→  fieldName       String?  // for UPDATE: which field
+   807→  newValue        String?  // for UPDATE: new value
+   808→  customerData    String?  // for CREATE: JSON of new customer data
+   809→  status          String   @default("PENDING") // PENDING | CONFIRMED | CANCELLED | EXPIRED
+   810→  createdAt       DateTime @default(now())
+   811→  expiresAt       DateTime // 5 minutes TTL
+   812→  confirmedAt     DateTime?
+   813→
+   814→  @@index([conversationId, status])
+   815→  @@index([channel, senderNumber, status])
+   816→  @@index([expiresAt])
+   817→}
+   818→
+   819→// ============================================================
+   820→// 13d. BANK CONFIG (Self-service bank template management)
+   821→// User can add new banks without AI code changes.
+   822→// Each bank has: name, templatePath, fields (JSON array of annotations)
+   823→// DINA can manage banks via chat (list, add, update, delete)
+   824→// ============================================================
+   825→
+   826→model BankConfig {
+   827→  id            String   @id @default(cuid())
+   828→  bankCode      String   @unique // BTN, MANDIRI, BSB_SYARIAH, BCA, etc.
+   829→  bankName      String   // Display name: "BTN", "Mandiri", "BSB Syariah"
+   830→  description   String?  // Optional description
+   831→  templatePath  String?  // Path to PDF template (e.g. /templates/btn-flpp.pdf)
+   832→  documents     String?  // JSON array of document configs: [{ id, name, templatePath, fields: [...] }]
+   833→  isActive      Boolean  @default(true)
+   834→  createdBy     String?  // 'system' (migration) or 'dina' (via chat) or 'owner' (UI)
+   835→  createdAt     DateTime @default(now())
+   836→  updatedAt     DateTime @updatedAt
+   837→
+   838→  @@index([isActive])
+   839→  @@index([bankCode])
+   840→}
+   841→
+   842→model NotarisSetting {
+   843→  id        String   @id @default(cuid())
+   844→  name      String   // nama + gelar notaris
+   845→  address   String?
+   846→  city      String?
+   847→  isActive  Boolean  @default(true)
+   848→  createdAt DateTime @default(now())
+   849→  updatedAt DateTime @updatedAt
+   850→}
+   851→
+   852→// Company Setting (global - 1 record, id='default')
+   853→// Director info + bank account numbers per bank, shared across all customers
+   854→model CompanySetting {
+   855→  id              String   @id @default("default") // single global record
+   856→  companyName     String?  // Nama PT (Marlindo Bangun Persada)
+   857→  directorName    String?  // Nama Direktur (Andrian Bong)
+   858→  directorNik     String?  // NIK Direktur
+   859→  directorPhone   String?  // No. HP Direktur/Owner (global untuk semua tim Anjayo 16)
+   860→  directorAddress String?  // Alamat KTP Direktur (global)
+   861→  officeAddress   String?  // Alamat Kantor/Perusahaan (global)
+   862→  city            String?  // Kota (Pangkalpinang)
+   863→  btnAccount      String?  // No. Rekening BTN
+   864→  mandiriAccount  String?  // No. Rekening Mandiri
+   865→  bsbAccount      String?  // No. Rekening BSB Syariah
+   866→  btnBranch       String?  // Cabang BTN
+   867→  mandiriBranch   String?  // Cabang Mandiri
+   868→  bsbBranch       String?  // Cabang BSB
+   869→  createdAt       DateTime @default(now())
+   870→  updatedAt       DateTime @updatedAt
+   871→}
+   872→
+   873→model Notification {
+   874→  id          String   @id @default(cuid())
+   875→  userId      String?
+   876→  agentId     String?
+   877→  type        String   // APPROVAL_NEEDED | NEW_LEAD | BUDGET_WARNING | STOCK_LOW | SURVEY_REMINDER | SYSTEM
+   878→  title       String
+   879→  message     String
+   880→  referenceType String?
+   881→  referenceId String?
+   882→  isRead      Boolean  @default(false)
+   883→  createdAt   DateTime @default(now())
+   884→
+   885→  @@index([userId, isRead])
+   886→  @@index([agentId, isRead])
+   887→}
+   888→
+   889→// ============================================================
+   890→// BANK PIPELINE - Track customer progress per bank
+   891→// ============================================================
+   892→
+   893→model BankPipeline {
+   894→  id          String   @id @default(cuid())
+   895→  customerId  String
+   896→  bankName    String
+   897→  status      String   @default("NOT_SUBMITTED") // NOT_SUBMITTED | BERKAS_MASUK | PROSES_BANK | SP3K | AKAD
+   898→  submittedAt DateTime?
+   899→  sp3kAt      DateTime?
+   900→  akadAt      DateTime?
+   901→  rejectAt    DateTime?
+   902→  rejectReason String?
+   903→  notes       String?
+   904→  createdAt   DateTime @default(now())
+   905→  updatedAt   DateTime @updatedAt
+   906→
+   907→  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+   908→
+   909→  @@unique([customerId, bankName])
+   910→  @@index([customerId])
+   911→}
+   912→

@@ -1,0 +1,638 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react'
+     4→import {
+     5→  Plus, ChevronDown, ChevronRight, User, Briefcase, Heart,
+     6→  Save, Loader2, Download, X, Building2, FileText, FileDown,
+     7→  RefreshCw, Eye, Printer, Upload, Send, MessageSquare,
+     8→} from 'lucide-react'
+     9→import { Card } from '@/components/ui/card'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Button } from '@/components/ui/button'
+    12→import { cn } from '@/lib/utils'
+    13→import { toast } from 'sonner'
+    14→
+    15→import {
+    16→  BerkasState, JobType, MaritalStatus,
+    17→  ApplicantData, SpouseData, PropertyData,
+    18→} from '@/lib/berkas/types'
+    19→import { COMPANY_INFO, DEFAULT_PROPERTY, INITIAL_STATE } from '@/lib/berkas/constants'
+    20→import { formatCurrency, formatLongDate } from '@/lib/berkas/formatters'
+    21→import { DocumentLayout } from '@/components/berkas-docs/DocumentLayout'
+    22→import { BTN_DOCUMENTS, getBtnDocuments, type DocDef } from '@/components/berkas-docs/docs/btn'
+    23→
+    24→// ============================================================
+    25→// REQUIRED UPLOADS - Dokumen wajib yang diupload (bukan generated)
+    26→// ============================================================
+    27→const REQUIRED_UPLOADS = [
+    28→  { id: 'ktp', label: 'KTP', desc: 'Kartu Tanda Penduduk' },
+    29→  { id: 'kk', label: 'KK', desc: 'Kartu Keluarga' },
+    30→  { id: 'npwp', label: 'NPWP', desc: 'Nomor Pokok Wajib Pajak' },
+    31→  { id: 'status-nikah', label: 'Akta Nikah/Cerai/Surat Belum Menikah', desc: 'Pilih salah satu sesuai status' },
+    32→  { id: 'slip-gaji', label: 'Slip Gaji / Laporan Keuangan', desc: '3 bulan terakhir (karyawan) atau 6 bulan (wirausaha)' },
+    33→  { id: 'sk-kerja', label: 'SK Kerja / NIB', desc: 'Surat Keterangan Kerja atau NIB (wirausaha)' },
+    34→  { id: 'surat-rumah', label: 'Surat Belum Memiliki Rumah', desc: 'Dari Kelurahan/Desa' },
+    35→  { id: 'sertifikat', label: 'Sertifikat Rumah', desc: 'Sertifikat tanah/rumah' },
+    36→]
+    37→
+    38→// ============================================================
+    39→// MAIN BERKAS VIEW v2
+    40→// ============================================================
+    41→export function BerkasViewV2({ projectId }: { projectId: string }) {
+    42→  const [customers, setCustomers] = useState<any[]>([])
+    43→  const [expandedId, setExpandedId] = useState<string | null>(null)
+    44→  const [loading, setLoading] = useState(true)
+    45→  const [showAddForm, setShowAddForm] = useState(false)
+    46→
+    47→  const fetchCustomers = useCallback(async () => {
+    48→    setLoading(true)
+    49→    try {
+    50→      const res = await fetch(`/api/customers/create?projectId=${projectId}`)
+    51→      const d = await res.json()
+    52→      if (d.success) setCustomers(d.data)
+    53→    } catch {}
+    54→    finally { setLoading(false) }
+    55→  }, [projectId])
+    56→
+    57→  useEffect(() => { fetchCustomers() }, [fetchCustomers])
+    58→
+    59→  return (
+    60→    <div className="space-y-4">
+    61→      <div className="flex items-center justify-between">
+    62→        <div>
+    63→          <h2 className="text-2xl font-bold text-foreground">Berkas Konsumen</h2>
+    64→          <p className="text-sm text-muted-foreground">Isi data sekali → semua dokumen auto-generate → download PDF</p>
+    65→        </div>
+    66→        <Button onClick={() => setShowAddForm(true)} className="bg-emerald-600 hover:bg-emerald-700">
+    67→          <Plus className="w-4 h-4 mr-1" /> Konsumen Baru
+    68→        </Button>
+    69→      </div>
+    70→
+    71→      {loading ? (
+    72→        <Card className="p-8 text-center"><Loader2 className="w-6 h-6 mx-auto animate-spin" /></Card>
+    73→      ) : customers.length === 0 ? (
+    74→        <Card className="p-8 text-center">
+    75→          <User className="w-12 h-12 mx-auto text-muted-foreground/30 mb-2" />
+    76→          <p className="text-sm text-muted-foreground">Belum ada konsumen.</p>
+    77→        </Card>
+    78→      ) : (
+    79→        <div className="space-y-2">
+    80→          {customers.map(c => (
+    81→            <CustomerFolder key={c.id} customer={c} expanded={expandedId === c.id}
+    82→              onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
+    83→              onRefresh={fetchCustomers} projectId={projectId} />
+    84→          ))}
+    85→        </div>
+    86→      )}
+    87→
+    88→      {showAddForm && (
+    89→        <AddCustomerModal projectId={projectId} onClose={() => setShowAddForm(false)}
+    90→          onCreated={() => { fetchCustomers(); setShowAddForm(false) }} />
+    91→      )}
+    92→    </div>
+    93→  )
+    94→}
+    95→
+    96→// ============================================================
+    97→// CUSTOMER FOLDER
+    98→// ============================================================
+    99→function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: {
+   100→  customer: any; expanded: boolean; onToggle: () => void; onRefresh: () => void; projectId: string
+   101→}) {
+   102→  return (
+   103→    <Card className="border border-border overflow-hidden">
+   104→      <button onClick={onToggle} className="w-full p-3 hover:bg-accent/30 transition-colors">
+   105→        <div className="flex items-center gap-3">
+   106→          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+   107→          <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600">
+   108→            {customer.name.substring(0, 2).toUpperCase()}
+   109→          </div>
+   110→          <span className="text-sm font-semibold text-foreground">{customer.name}</span>
+   111→          {customer.units?.[0] && <span className="text-xs text-muted-foreground">Unit {customer.units[0].blockNumber}</span>}
+   112→          <Badge variant="outline" className="text-[8px] ml-auto">{customer.stage}</Badge>
+   113→        </div>
+   114→      </button>
+   115→      {expanded && <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} />}
+   116→    </Card>
+   117→  )
+   118→}
+   119→
+   120→// ============================================================
+   121→// BERKAS EDITOR (Two-column: form + preview)
+   122→// ============================================================
+   123→function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRefresh: () => void; projectId: string }) {
+   124→  const [state, setState] = useState<BerkasState>({
+   125→    ...INITIAL_STATE,
+   126→    applicant: {
+   127→      ...INITIAL_STATE.applicant,
+   128→      fullName: customer.name || '',
+   129→      phone: customer.whatsappNumber || customer.phone || '',
+   130→    },
+   131→    property: {
+   132→      ...DEFAULT_PROPERTY,
+   133→      kavlingNumber: customer.units?.[0]?.blockNumber || '',
+   134→      landSize: customer.units?.[0]?.landSize || 84,
+   135→    },
+   136→    dateOfDocument: new Date().toISOString().split('T')[0],
+   137→  })
+   138→  const [bank, setBank] = useState<string>('BTN')
+   139→  const [docCategory, setDocCategory] = useState<'pre-bank' | 'post-acc'>('pre-bank')
+   140→  const [saving, setSaving] = useState(false)
+   141→  const [generating, setGenerating] = useState(false)
+   142→  const [currentDocIndex, setCurrentDocIndex] = useState(0)
+   143→  const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>({}) // docId → fileUrl
+   144→  const [uploadingId, setUploadingId] = useState<string | null>(null)
+   145→  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+   146→  const [dinaMessages, setDinaMessages] = useState<Array<{ role: 'user' | 'agent'; content: string }>>([
+   147→    { role: 'agent', content: 'Halo! Saya DINA, siap bantu kamu urus berkas. Upload KTP/NPWP/dll di kiri, atau tanya saya apa aja! 😊' }
+   148→  ])
+   149→  const [dinaInput, setDinaInput] = useState('')
+   150→  const [dinaLoading, setDinaLoading] = useState(false)
+   151→  const previewRef = useRef<HTMLDivElement>(null)
+   152→
+   153→  // Get documents for current bank + category
+   154→  const documents: DocDef[] = getBtnDocuments(docCategory, state.maritalStatus)
+   155→  const CurrentDoc = documents[currentDocIndex]?.component
+   156→
+   157→  // Update applicant field
+   158→  function updateApplicant(field: keyof ApplicantData, val: any) {
+   159→    setState(s => ({ ...s, applicant: { ...s.applicant, [field]: val } }))
+   160→  }
+   161→
+   162→  // Update property field
+   163→  function updateProperty(field: keyof PropertyData, val: any) {
+   164→    setState(s => ({ ...s, property: { ...s.property, [field]: val } }))
+   165→  }
+   166→
+   167→  // Update spouse field
+   168→  function updateSpouse(field: keyof SpouseData, val: any) {
+   169→    setState(s => ({
+   170→      ...s,
+   171→      spouse: { ...(s.spouse || { fullName: '', ktpNumber: '', pob: '', dob: '', job: '', address: '', isWorking: false }), [field]: val }
+   172→    }))
+   173→  }
+   174→
+   175→  // Save to cloud
+   176→  async function handleSave() {
+   177→    setSaving(true)
+   178→    try {
+   179→      const res = await fetch(`/api/customers/${customer.id}`, {
+   180→        method: 'PATCH',
+   181→        headers: { 'Content-Type': 'application/json' },
+   182→        body: JSON.stringify({
+   183→          name: state.applicant.fullName,
+   184→          phone: state.applicant.phone,
+   185→          whatsappNumber: state.applicant.phone,
+   186→          nik: state.applicant.ktpNumber,
+   187→          birthPlace: state.applicant.pob,
+   188→          birthDate: state.applicant.dob,
+   189→          occupation: state.applicant.jobType,
+   190→          ktpAddress: state.applicant.address,
+   191→          companyName: state.applicant.companyName,
+   192→          companyAddress: state.applicant.companyAddress,
+   193→          workPosition: state.applicant.jobTitle,
+   194→          monthlyIncome: state.applicant.monthlyIncome,
+   195→          maritalStatus: state.maritalStatus === 'Sudah Menikah' ? 'MENIKAH' : 'SINGLE',
+   196→          spouseName: state.spouse?.fullName,
+   197→          spouseNik: state.spouse?.ktpNumber,
+   198→          spouseBirthPlace: state.spouse?.pob,
+   199→          spouseBirthDate: state.spouse?.dob,
+   200→          spouseOccupation: state.spouse?.job,
+   201→          dateOfDocument: state.dateOfDocument,
+   202→        }),
+   203→      })
+   204→      const d = await res.json()
+   205→      if (d.success) { toast.success('Data tersimpan ke cloud!'); onRefresh() }
+   206→      else toast.error('Gagal simpan')
+   207→    } catch { toast.error('Network error') }
+   208→    finally { setSaving(false) }
+   209→  }
+   210→
+   211→  // Download all as PDF
+   212→  async function handleDownloadPDF() {
+   213→    setGenerating(true)
+   214→    try {
+   215→      const html2pdf = (window as any).html2pdf
+   216→      if (!html2pdf) {
+   217→        // Load dynamically
+   218→        await new Promise((resolve, reject) => {
+   219→          const script = document.createElement('script')
+   220→          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+   221→          script.onload = resolve
+   222→          script.onerror = reject
+   223→          document.head.appendChild(script)
+   224→        })
+   225→      }
+   226→
+   227→      const html2pdfLib = (window as any).html2pdf
+   228→      if (!html2pdfLib) { toast.error('Gagal load PDF library'); return }
+   229→
+   230→      // Show ALL documents in a hidden div
+   231→      const printArea = document.createElement('div')
+   232→      printArea.style.position = 'absolute'
+   233→      printArea.style.left = '-9999px'
+   234→      printArea.style.top = '0'
+   235→
+   236→      // Render all documents
+   237→      const { createRoot } = await import('react-dom/client')
+   238→      const allDocs = documents.map((doc, i) => {
+   239→        const Comp = doc.component
+   240→        return React.createElement(Comp, { key: i, data: state })
+   241→      })
+   242→
+   243→      const root = createRoot(printArea)
+   244→      document.body.appendChild(printArea)
+   245→
+   246→      await new Promise(resolve => {
+   247→        root.render(React.createElement('div', null, allDocs))
+   248→        setTimeout(resolve, 500)
+   249→      })
+   250→
+   251→      const filename = `${bank}_${state.applicant.fullName || 'Konsumen'}_${docCategory}.pdf`
+   252→      const opt = {
+   253→        margin: 0,
+   254→        filename,
+   255→        image: { type: 'jpeg', quality: 1.0 },
+   256→        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollY: 0, scrollX: 0 },
+   257→        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+   258→        pagebreak: { mode: ['css', 'legacy'] },
+   259→      }
+   260→
+   261→      await html2pdfLib().from(printArea).set(opt).save()
+   262→      root.unmount()
+   263→      document.body.removeChild(printArea)
+   264→      toast.success('PDF berhasil di-download!')
+   265→    } catch (err) {
+   266→      console.error('PDF error:', err)
+   267→      toast.error('Gagal generate PDF')
+   268→    } finally { setGenerating(false) }
+   269→  }
+   270→
+   271→  // Upload handler
+   272→  async function handleUpload(docId: string, file: File) {
+   273→    setUploadingId(docId)
+   274→    try {
+   275→      const formData = new FormData()
+   276→      formData.append('file', file)
+   277→      formData.append('docId', docId)
+   278→      formData.append('customerId', customer.id)
+   279→      formData.append('docName', REQUIRED_UPLOADS.find(u => u.id === docId)?.label || docId)
+   280→
+   281→      const res = await fetch('/api/upload-berkas', { method: 'POST', body: formData })
+   282→      const d = await res.json()
+   283→      if (d.success) {
+   284→        setUploadedFiles(prev => ({ ...prev, [docId]: d.data.fileUrl }))
+   285→        toast.success(`${REQUIRED_UPLOADS.find(u => u.id === docId)?.label} berhasil diupload!`)
+   286→        // DINA responds
+   287→        setDinaMessages(prev => [...prev, {
+   288→          role: 'agent',
+   289→          content: `✅ ${REQUIRED_UPLOADS.find(u => u.id === docId)?.label} sudah terupload. ${Object.keys(uploadedFiles).length + 1}/${REQUIRED_UPLOADS.length} dokumen lengkap.`
+   290→        }])
+   291→      } else { toast.error('Gagal upload') }
+   292→    } catch { toast.error('Network error') }
+   293→    finally { setUploadingId(null) }
+   294→  }
+   295→
+   296→  // DINA chat handler
+   297→  async function sendDinaMessage() {
+   298→    if (!dinaInput.trim()) return
+   299→    const msg = dinaInput.trim()
+   300→    setDinaMessages(prev => [...prev, { role: 'user', content: msg }])
+   301→    setDinaInput('')
+   302→    setDinaLoading(true)
+   303→    try {
+   304→      const res = await fetch('/api/agents/create', {
+   305→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   306→        body: JSON.stringify({ message: msg, channel: 'DASHBOARD' }),
+   307→      })
+   308→      // Fallback if no DINA agent ID - use first available
+   309→      if (!res.ok) {
+   310→        const agentsRes = await fetch('/api/agents')
+   311→        const agentsData = await agentsRes.json()
+   312→        const dina = agentsData.data?.find((a: any) => a.name === 'Dina')
+   313→        if (dina) {
+   314→          const res2 = await fetch(`/api/agents/${dina.id}/chat`, {
+   315→            method: 'POST', headers: { 'Content-Type': 'application/json' },
+   316→            body: JSON.stringify({ message: msg, channel: 'DASHBOARD' }),
+   317→          })
+   318→          const d2 = await res2.json()
+   319→          setDinaMessages(prev => [...prev, { role: 'agent', content: d2.data?.response || 'Maaf, saya belum bisa merespons sekarang.' }])
+   320→        } else {
+   321→          setDinaMessages(prev => [...prev, { role: 'agent', content: 'Saya DINA, tapi lagi ada gangguan koneksi. Coba lagi ya!' }])
+   322→        }
+   323→      } else {
+   324→        const d = await res.json()
+   325→        setDinaMessages(prev => [...prev, { role: 'agent', content: d.data?.response || 'Maaf, saya belum bisa merespons.' }])
+   326→      }
+   327→    } catch {
+   328→      setDinaMessages(prev => [...prev, { role: 'agent', content: 'Network error. Coba lagi!' }])
+   329→    } finally { setDinaLoading(false) }
+   330→  }
+   331→
+   332→  const uploadedCount = Object.keys(uploadedFiles).length
+   333→  const uploadPercent = Math.round((uploadedCount / REQUIRED_UPLOADS.length) * 100)
+   334→
+   335→  return (
+   336→    <div className="border-t border-border">
+   337→      {/* Toolbar */}
+   338→      <div className="flex items-center gap-2 p-3 bg-accent/10 flex-wrap">
+   339→        {/* Bank selector */}
+   340→        <select value={bank} onChange={e => setBank(e.target.value)}
+   341→          className="text-xs px-2 py-1.5 rounded border border-border bg-background">
+   342→          <option value="BTN">BTN</option>
+   343→          <option value="MANDIRI">Mandiri (coming soon)</option>
+   344→          <option value="BSB_SYARIAH">BSB Syariah (coming soon)</option>
+   345→        </select>
+   346→
+   347→        {/* Category */}
+   348→        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+   349→          <button onClick={() => setDocCategory('pre-bank')}
+   350→            className={cn('px-3 py-1 rounded text-[10px] font-medium', docCategory === 'pre-bank' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
+   351→            Data Entry (Pre-Bank)
+   352→          </button>
+   353→          <button onClick={() => setDocCategory('post-acc')}
+   354→            className={cn('px-3 py-1 rounded text-[10px] font-medium', docCategory === 'post-acc' ? 'bg-white dark:bg-slate-900 shadow text-emerald-600' : 'text-muted-foreground')}>
+   355→            AJB Bank (Post-ACC)
+   356→          </button>
+   357→        </div>
+   358→
+   359→        <div className="ml-auto flex gap-2">
+   360→          <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">
+   361→            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />} Simpan
+   362→          </Button>
+   363→          <Button size="sm" onClick={handleDownloadPDF} disabled={generating} className="bg-orange-600 hover:bg-orange-700 h-8 text-xs">
+   364→            {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}
+   365→            {generating ? 'Generating...' : 'Download PDF'}
+   366→          </Button>
+   367→        </div>
+   368→      </div>
+   369→
+   370→      {/* Three-column layout: Form+Upload | Preview | DINA Chat */}
+   371→      <div className="grid grid-cols-1 lg:grid-cols-6 gap-0">
+   372→        {/* LEFT: Data Entry + Upload (2/6) */}
+   373→        <div className="lg:col-span-2 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
+   374→          {/* Company settings */}
+   375→          <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan">
+   376→            <FormField label="Nama PT" value={COMPANY_INFO.name} onChange={() => {}} disabled />
+   377→            <FormField label="Direktur" value={COMPANY_INFO.director} onChange={() => {}} disabled />
+   378→            <FormField label="Kota" value={COMPANY_INFO.city} onChange={() => {}} disabled />
+   379→            <FormField label="Rekening BTN" value={COMPANY_INFO.btnAccount} onChange={() => {}} disabled />
+   380→          </FormSection>
+   381→
+   382→          {/* Data Nasabah */}
+   383→          <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
+   384→            <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />
+   385→            <FormField label="NIK / No. KTP" value={state.applicant.ktpNumber} onChange={v => updateApplicant('ktpNumber', v)} />
+   386→            <FormField label="NPWP" value={state.applicant.npwpNumber} onChange={v => updateApplicant('npwpNumber', v)} />
+   387→            <FormField label="Rekening BTN" value={state.applicant.btnAccountNumber} onChange={v => updateApplicant('btnAccountNumber', v)} />
+   388→            <FormField label="Tempat Lahir" value={state.applicant.pob} onChange={v => updateApplicant('pob', v)} />
+   389→            <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />
+   390→            <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />
+   391→            <FormField label="No. WhatsApp" value={state.applicant.phone} onChange={v => updateApplicant('phone', v)} />
+   392→          </FormSection>
+   393→
+   394→          {/* Pekerjaan */}
+   395→          <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan">
+   396→            <div className="col-span-2 flex gap-1 mb-1">
+   397→              <button onClick={() => updateApplicant('jobType', JobType.EMPLOYEE)}
+   398→                className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.applicant.jobType === JobType.EMPLOYEE ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-card border-border')}>
+   399→                KARYAWAN
+   400→              </button>
+   401→              <button onClick={() => updateApplicant('jobType', JobType.ENTREPRENEUR)}
+   402→                className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.applicant.jobType === JobType.ENTREPRENEUR ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-card border-border')}>
+   403→                WIRAUSAHA
+   404→              </button>
+   405→            </div>
+   406→            <FormField label="Jabatan / Jenis Usaha" value={state.applicant.jobTitle} onChange={v => updateApplicant('jobTitle', v)} />
+   407→            <FormField label="Nama Perusahaan" value={state.applicant.companyName} onChange={v => updateApplicant('companyName', v)} />
+   408→            <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />
+   409→            <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />
+   410→          </FormSection>
+   411→
+   412→          {/* Status Keluarga */}
+   413→          <FormSection icon={<Heart className="w-3 h-3" />} title="Status Keluarga">
+   414→            <div className="col-span-2 flex gap-1 mb-1">
+   415→              <button onClick={() => setState(s => ({ ...s, maritalStatus: MaritalStatus.SINGLE }))}
+   416→                className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.maritalStatus === MaritalStatus.SINGLE ? 'bg-pink-500 text-white border-pink-500' : 'bg-card border-border')}>
+   417→                BELUM KAWIN
+   418→              </button>
+   419→              <button onClick={() => setState(s => ({ ...s, maritalStatus: MaritalStatus.MARRIED }))}
+   420→                className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.maritalStatus === MaritalStatus.MARRIED ? 'bg-pink-500 text-white border-pink-500' : 'bg-card border-border')}>
+   421→                KAWIN
+   422→              </button>
+   423→            </div>
+   424→            {state.maritalStatus === MaritalStatus.MARRIED && (
+   425→              <>
+   426→                <FormField label="Nama Pasangan" value={state.spouse?.fullName || ''} onChange={v => updateSpouse('fullName', v)} />
+   427→                <FormField label="NIK Pasangan" value={state.spouse?.ktpNumber || ''} onChange={v => updateSpouse('ktpNumber', v)} />
+   428→                <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />
+   429→                <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />
+   430→                <FormField label="Pekerjaan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />
+   431→              </>
+   432→            )}
+   433→          </FormSection>
+   434→
+   435→          {/* Unit Properti */}
+   436→          <FormSection icon={<Building2 className="w-3 h-3" />} title="Unit Properti">
+   437→            <FormField label="Nama Perumahan" value={state.property.projectName} onChange={v => updateProperty('projectName', v)} />
+   438→            <FormField label="Alamat" value={state.property.houseAddress} onChange={v => updateProperty('houseAddress', v)} full />
+   439→            <FormField label="Kavling / Blok" value={state.property.kavlingNumber} onChange={v => updateProperty('kavlingNumber', v)} />
+   440→            <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />
+   441→            <FormField label="No. Sertifikat (NIB)" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
+   442→            <FormField label="Tgl Sertifikat" type="date" value={state.property.certificateDate} onChange={v => updateProperty('certificateDate', v)} />
+   443→            <FormField label="No. PBG" value={state.property.pbgNumber} onChange={v => updateProperty('pbgNumber', v)} />
+   444→            <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />
+   445→            <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />
+   446→            <FormField label="SBUM" type="number" value={state.property.sbumAmount} onChange={v => updateProperty('sbumAmount', parseInt(v) || 0)} />
+   447→            <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />
+   448→            <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />
+   449→            <FormField label="No. SPR" value={state.property.sprNumber} onChange={v => updateProperty('sprNumber', v)} />
+   450→            <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} />
+   451→          </FormSection>
+   452→
+   453→          {/* === UPLOAD DOKUMEN === */}
+   454→          <div>
+   455→            <h4 className="text-[10px] font-bold text-amber-400 uppercase mb-2 flex items-center gap-1">
+   456→              <Upload className="w-3 h-3" /> Upload Dokumen Wajib ({uploadedCount}/{REQUIRED_UPLOADS.length})
+   457→            </h4>
+   458→            {/* Progress bar */}
+   459→            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-3">
+   460→              <div className="bg-amber-500 h-1.5 rounded-full transition-all" style={{ width: `${uploadPercent}%` }} />
+   461→            </div>
+   462→            <div className="space-y-1.5">
+   463→              {REQUIRED_UPLOADS.map(doc => {
+   464→                const isUploaded = !!uploadedFiles[doc.id]
+   465→                const isUploading = uploadingId === doc.id
+   466→                return (
+   467→                  <div key={doc.id} className={cn('flex items-center gap-2 p-1.5 rounded border', isUploaded ? 'border-emerald-700/30 bg-emerald-950/10' : 'border-slate-200 dark:border-slate-700')}>
+   468→                    <span className="text-xs">{isUploaded ? '✅' : '❌'}</span>
+   469→                    <div className="flex-1 min-w-0">
+   470→                      <p className="text-[10px] font-medium truncate">{doc.label}</p>
+   471→                      <p className="text-[8px] text-muted-foreground truncate">{doc.desc}</p>
+   472→                    </div>
+   473→                    {/* Preview uploaded file */}
+   474→                    {isUploaded && (
+   475→                      <button onClick={() => setPreviewUrl(uploadedFiles[doc.id])} className="text-muted-foreground hover:text-foreground">
+   476→                        <Eye className="w-3 h-3" />
+   477→                      </button>
+   478→                    )}
+   479→                    <input type="file" accept="image/*,.pdf" className="hidden" id={`upload-${doc.id}`}
+   480→                      onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(doc.id, f); e.target.value = '' }} />
+   481→                    <button onClick={() => document.getElementById(`upload-${doc.id}`)?.click()} disabled={isUploading}
+   482→                      className={cn('text-[9px] px-1.5 py-0.5 rounded border', isUploaded ? 'border-border text-muted-foreground' : 'border-amber-500/30 text-amber-400 bg-amber-950/20')}>
+   483→                      {isUploading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : isUploaded ? 'Ganti' : 'Upload'}
+   484→                    </button>
+   485→                  </div>
+   486→                )
+   487→              })}
+   488→            </div>
+   489→          </div>
+   490→        </div>
+   491→
+   492→        {/* MIDDLE: Document Preview (3/6) */}
+   493→        <div className="lg:col-span-3 bg-slate-200 dark:bg-slate-800 p-4 max-h-[70vh] overflow-y-auto">
+   494→          {/* Document tabs */}
+   495→          <div className="flex gap-1 mb-3 flex-wrap">
+   496→            {documents.map((doc, i) => (
+   497→              <button key={doc.id} onClick={() => setCurrentDocIndex(i)}
+   498→                className={cn('px-2 py-1 rounded text-[9px] font-medium border', currentDocIndex === i ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}>
+   499→                {doc.name.length > 25 ? doc.name.substring(0, 25) + '...' : doc.name}
+   500→              </button>
+   501→            ))}
+   502→          </div>
+   503→
+   504→          {/* Live Preview */}
+   505→          <div ref={previewRef} className="flex flex-col items-center">
+   506→            {CurrentDoc && <CurrentDoc data={state} />}
+   507→          </div>
+   508→        </div>
+   509→
+   510→        {/* RIGHT: DINA Chat Sidebar (1/6) */}
+   511→        <div className="lg:col-span-1 border-l border-border flex flex-col max-h-[70vh]">
+   512→          <div className="p-2 border-b border-border bg-accent/20 flex items-center gap-2">
+   513→            <div className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-[8px] font-bold text-violet-600">DI</div>
+   514→            <span className="text-xs font-bold text-foreground">DINA</span>
+   515→            <span className="text-[8px] text-muted-foreground ml-auto">Document AI</span>
+   516→          </div>
+   517→
+   518→          {/* Messages */}
+   519→          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+   520→            {dinaMessages.map((msg, i) => (
+   521→              <div key={i} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+   522→                <div className={cn('max-w-[90%] rounded-lg px-2 py-1 text-[10px]', msg.role === 'user' ? 'bg-emerald-600 text-white' : 'bg-accent/40 text-foreground')}>
+   523→                  {msg.content}
+   524→                </div>
+   525→              </div>
+   526→            ))}
+   527→            {dinaLoading && (
+   528→              <div className="flex justify-start">
+   529→                <div className="bg-accent/40 rounded-lg px-2 py-1 text-[10px]">
+   530→                  <Loader2 className="w-3 h-3 animate-spin" />
+   531→                </div>
+   532→              </div>
+   533→            )}
+   534→          </div>
+   535→
+   536→          {/* Input */}
+   537→          <div className="p-2 border-t border-border">
+   538→            <div className="flex gap-1">
+   539→              <input value={dinaInput} onChange={e => setDinaInput(e.target.value)}
+   540→                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDinaMessage() } }}
+   541→                placeholder="Chat DINA..." disabled={dinaLoading}
+   542→                className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-[10px]" />
+   543→              <button onClick={sendDinaMessage} disabled={dinaLoading || !dinaInput.trim()}
+   544→                className="p-1 rounded bg-violet-600 text-white disabled:opacity-50">
+   545→                <Send className="w-3 h-3" />
+   546→              </button>
+   547→            </div>
+   548→          </div>
+   549→        </div>
+   550→      </div>
+   551→
+   552→      {/* File preview modal */}
+   553→      {previewUrl && (
+   554→        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setPreviewUrl(null)}>
+   555→          <div className="max-w-3xl w-full max-h-[90vh] overflow-auto bg-white rounded-lg" onClick={e => e.stopPropagation()}>
+   556→            <div className="flex justify-between p-2 border-b">
+   557→              <span className="text-sm font-medium">Preview Dokumen</span>
+   558→              <button onClick={() => setPreviewUrl(null)}><X className="w-4 h-4" /></button>
+   559→            </div>
+   560→            {previewUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+   561→              <img src={previewUrl} alt="Preview" className="w-full" />
+   562→            ) : (
+   563→              <iframe src={previewUrl} className="w-full h-[80vh]" title="Preview" />
+   564→            )}
+   565→          </div>
+   566→        </div>
+   567→      )}
+   568→    </div>
+   569→  )
+   570→}
+   571→
+   572→// ============================================================
+   573→// ADD CUSTOMER MODAL (same as before)
+   574→// ============================================================
+   575→function AddCustomerModal({ projectId, onClose, onCreated }: { projectId: string; onClose: () => void; onCreated: () => void }) {
+   576→  const [name, setName] = useState('')
+   577→  const [wa, setWa] = useState('')
+   578→  const [unit, setUnit] = useState('')
+   579→  const [saving, setSaving] = useState(false)
+   580→
+   581→  async function handleCreate() {
+   582→    if (!name.trim()) { toast.error('Nama wajib'); return }
+   583→    setSaving(true)
+   584→    try {
+   585→      const res = await fetch('/api/customers/create', {
+   586→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   587→        body: JSON.stringify({ name, whatsappNumber: wa, unitBlock: unit, bankName: 'BTN', projectId }),
+   588→      })
+   589→      const d = await res.json()
+   590→      if (d.success) { toast.success('Konsumen ditambahkan!'); onCreated() }
+   591→      else toast.error('Gagal')
+   592→    } catch { toast.error('Network error') }
+   593→    finally { setSaving(false) }
+   594→  }
+   595→
+   596→  return (
+   597→    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+   598→      <Card className="max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+   599→        <div className="flex justify-between mb-4">
+   600→          <h3 className="text-lg font-bold">Konsumen Baru</h3>
+   601→          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-4 h-4" /></Button>
+   602→        </div>
+   603→        <div className="space-y-3">
+   604→          <div><label className="text-xs text-muted-foreground">Nama *</label>
+   605→            <input value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 bg-background/50 border border-border rounded px-3 py-2 text-sm" /></div>
+   606→          <div><label className="text-xs text-muted-foreground">No. WA</label>
+   607→            <input value={wa} onChange={e => setWa(e.target.value)} className="w-full mt-1 bg-background/50 border border-border rounded px-3 py-2 text-sm" /></div>
+   608→          <div><label className="text-xs text-muted-foreground">Unit (Blok)</label>
+   609→            <input value={unit} onChange={e => setUnit(e.target.value)} className="w-full mt-1 bg-background/50 border border-border rounded px-3 py-2 text-sm" /></div>
+   610→          <Button onClick={handleCreate} disabled={saving || !name.trim()} className="w-full bg-emerald-600 hover:bg-emerald-700">
+   611→            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />} Tambah
+   612→          </Button>
+   613→        </div>
+   614→      </Card>
+   615→    </div>
+   616→  )
+   617→}
+   618→
+   619→// ============================================================
+   620→// HELPERS
+   621→// ============================================================
+   622→import React from 'react'
+   623→
+   624→function FormSection({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+   625→  return <div><h4 className="text-[10px] font-bold text-emerald-400 uppercase mb-2 flex items-center gap-1">{icon} {title}</h4><div className="grid grid-cols-2 gap-2">{children}</div></div>
+   626→}
+   627→function FormField({ label, value, onChange, placeholder, full, required, type = 'text', disabled }: {
+   628→  label: string; value: string | number; onChange: (v: string) => void; placeholder?: string; full?: boolean; required?: boolean; type?: string; disabled?: boolean
+   629→}) {
+   630→  return (
+   631→    <div className={full ? 'col-span-2' : ''}>
+   632→      <label className="text-[9px] text-muted-foreground">{label} {required && <span className="text-rose-400">*</span>}</label>
+   633→      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+   634→        className="w-full mt-0.5 bg-background/50 border border-border rounded px-2 py-1 text-xs disabled:opacity-50" />
+   635→    </div>
+   636→  )
+   637→}
+   638→

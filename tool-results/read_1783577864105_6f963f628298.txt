@@ -1,0 +1,1940 @@
+     1→// DINA Tools System — Database queries & system actions
+     2→// DINA can READ (query) and WRITE (update) to the database
+     3→// This makes DINA a true AI agent that can actually DO things
+     4→//
+     5→// CRITICAL FIX (v8.2): pendingAction moved from in-memory to DB (PendingAction table)
+     6→// because Vercel serverless lambdas don't preserve module state between requests.
+     7→// This was causing DINA to lose track of what user was confirming, leading to
+     8→// wrong-customer deletions. Now pending actions are persisted with 5-min TTL.
+     9→
+    10→import { db } from '@/lib/db'
+    11→
+    12→export interface ToolResult {
+    13→  toolName: string
+    14→  success: boolean
+    15→  data: any
+    16→  summary: string
+    17→}
+    18→
+    19→export interface IntentResult {
+    20→  tools: string[]
+    21→  customerName?: string
+    22→  blockNumber?: string
+    23→  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO'
+    24→  newBankValue?: string
+    25→  newStageValue?: string
+    26→  updateField?: string
+    27→  updateValue?: string
+    28→  newCustomerName?: string
+    29→  newCustomerPhone?: string
+    30→  newCustomerBlock?: string
+    31→  newCustomerBank?: string
+    32→  requestedFileIndex?: number
+    33→  requestedFileDocType?: string
+    34→  newBankName?: string
+    35→  bankName?: string
+    36→  logoPrompt?: string
+    37→}
+    38→
+    39→// ============================================================
+    40→// PENDING ACTION (DB-backed, survives Vercel lambda cold starts)
+    41→// ============================================================
+    42→
+    43→export interface PendingActionRecord {
+    44→  id: string
+    45→  conversationId: string | null
+    46→  channel: string
+    47→  senderNumber: string | null
+    48→  type: string  // DELETE | CREATE | UPDATE
+    49→  targetType: string  // CUSTOMER | FIELD
+    50→  targetId: string | null
+    51→  targetName: string | null
+    52→  customerData: any | null
+    53→  fieldName?: string | null
+    54→  newValue?: string | null
+    55→}
+    56→
+    57→const PENDING_TTL_MINUTES = 5
+    58→
+    59→// Find active pending action for this conversation/sender
+    60→// Scoping rules:
+    61→//   1. If conversationId provided → scope by conversationId
+    62→//   2. Else if channel + senderNumber provided → scope by both (WA per-user)
+    63→//   3. Else if channel only provided → scope by channel (DASHBOARD single owner)
+    64→export async function getActivePendingAction(opts: {
+    65→  conversationId?: string
+    66→  channel?: string
+    67→  senderNumber?: string
+    68→}): Promise<PendingActionRecord | null> {
+    69→  try {
+    70→    // Expire old pending actions first
+    71→    const expiryTime = new Date(Date.now() - PENDING_TTL_MINUTES * 60 * 1000)
+    72→    await db.pendingAction.updateMany({
+    73→      where: { status: 'PENDING', createdAt: { lt: expiryTime } },
+    74→      data: { status: 'EXPIRED' }
+    75→    })
+    76→
+    77→    // Find active one for this context
+    78→    const where: any = { status: 'PENDING' }
+    79→    if (opts.conversationId) {
+    80→      where.conversationId = opts.conversationId
+    81→    } else if (opts.channel && opts.senderNumber) {
+    82→      where.channel = opts.channel
+    83→      where.senderNumber = opts.senderNumber
+    84→    } else if (opts.channel) {
+    85→      where.channel = opts.channel
+    86→      // For DASHBOARD channel, only match where senderNumber is null
+    87→      // (so DASHBOARD pending doesn't conflict with WA pending)
+    88→      if (opts.channel === 'DASHBOARD') {
+    89→        where.OR = [{ senderNumber: null }, { senderNumber: '' }]
+    90→      }
+    91→    } else {
+    92→      // Default to DASHBOARD
+    93→      where.channel = 'DASHBOARD'
+    94→      where.OR = [{ senderNumber: null }, { senderNumber: '' }]
+    95→    }
+    96→
+    97→    const action = await db.pendingAction.findFirst({
+    98→      where,
+    99→      orderBy: { createdAt: 'desc' },
+   100→    })
+   101→    if (!action) return null
+   102→    return {
+   103→      id: action.id,
+   104→      conversationId: action.conversationId,
+   105→      channel: action.channel,
+   106→      senderNumber: action.senderNumber,
+   107→      type: action.type,
+   108→      targetType: action.targetType,
+   109→      targetId: action.targetId,
+   110→      targetName: action.targetName,
+   111→      customerData: action.customerData ? JSON.parse(action.customerData) : null,
+   112→      fieldName: action.fieldName,
+   113→      newValue: action.newValue,
+   114→    }
+   115→  } catch (err) {
+   116→    console.error('getActivePendingAction error:', err)
+   117→    return null
+   118→  }
+   119→}
+   120→
+   121→// Create new pending action (cancels previous pending for same context)
+   122→export async function setPendingAction(action: Omit<PendingActionRecord, 'id'>): Promise<void> {
+   123→  try {
+   124→    // Cancel previous pending for same context (same scoping rules as getActivePendingAction)
+   125→    const cancelWhere: any = { status: 'PENDING' }
+   126→    if (action.conversationId) {
+   127→      cancelWhere.conversationId = action.conversationId
+   128→    } else if (action.channel && action.senderNumber) {
+   129→      cancelWhere.channel = action.channel
+   130→      cancelWhere.senderNumber = action.senderNumber
+   131→    } else if (action.channel) {
+   132→      cancelWhere.channel = action.channel
+   133→      if (action.channel === 'DASHBOARD') {
+   134→        cancelWhere.OR = [{ senderNumber: null }, { senderNumber: '' }]
+   135→      }
+   136→    }
+   137→    await db.pendingAction.updateMany({ where: cancelWhere, data: { status: 'CANCELLED' } })
+   138→
+   139→    // Create new
+   140→    await db.pendingAction.create({
+   141→      data: {
+   142→        conversationId: action.conversationId || null,
+   143→        channel: action.channel || 'DASHBOARD',
+   144→        senderNumber: action.senderNumber || null,
+   145→        type: action.type,
+   146→        targetType: action.targetType,
+   147→        targetId: action.targetId || null,
+   148→        targetName: action.targetName || null,
+   149→        customerData: action.customerData ? JSON.stringify(action.customerData) : null,
+   150→        fieldName: action.fieldName || null,
+   151→        newValue: action.newValue || null,
+   152→        status: 'PENDING',
+   153→        expiresAt: new Date(Date.now() + PENDING_TTL_MINUTES * 60 * 1000),
+   154→      } as any,
+   155→    })
+   156→  } catch (err) {
+   157→    console.error('setPendingAction error:', err)
+   158→  }
+   159→}
+   160→
+   161→// Mark pending action as confirmed (and execute it)
+   162→export async function confirmPendingAction(actionId: string): Promise<void> {
+   163→  try {
+   164→    await db.pendingAction.update({
+   165→      where: { id: actionId },
+   166→      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+   167→    })
+   168→  } catch (err) {
+   169→    console.error('confirmPendingAction error:', err)
+   170→  }
+   171→}
+   172→
+   173→// Cancel pending action (e.g., user said 'batal' or 'cancel')
+   174→export async function cancelPendingAction(opts: {
+   175→  conversationId?: string
+   176→  channel?: string
+   177→  senderNumber?: string
+   178→}): Promise<void> {
+   179→  try {
+   180→    const where: any = { status: 'PENDING' }
+   181→    if (opts.conversationId) {
+   182→      where.conversationId = opts.conversationId
+   183→    } else if (opts.channel && opts.senderNumber) {
+   184→      where.channel = opts.channel
+   185→      where.senderNumber = opts.senderNumber
+   186→    } else if (opts.channel) {
+   187→      where.channel = opts.channel
+   188→      if (opts.channel === 'DASHBOARD') {
+   189→        where.OR = [{ senderNumber: null }, { senderNumber: '' }]
+   190→      }
+   191→    }
+   192→    await db.pendingAction.updateMany({ where, data: { status: 'CANCELLED' } })
+   193→  } catch (err) {
+   194→    console.error('cancelPendingAction error:', err)
+   195→  }
+   196→}
+   197→
+   198→// ============================================================
+   199→// AUDIT LOG (track all writes for debugging & compliance)
+   200→// ============================================================
+   201→
+   202→async function writeAuditLog(action: string, entityType: string, entityId: string, metadata: any): Promise<void> {
+   203→  try {
+   204→    await db.auditLog.create({
+   205→      data: { action, entityType, entityId, metadata: JSON.stringify(metadata) } as any,
+   206→    })
+   207→  } catch (err) {
+   208→    console.error('AuditLog write error (non-fatal):', err)
+   209→  }
+   210→}
+   211→
+   212→// Backwards-compat stubs (deprecated — use DB-backed versions)
+   213→export function getPendingAction() { return null }
+   214→export function clearPendingAction() { /* no-op, use cancelPendingAction */ }
+   215→
+   216→// ============================================================
+   217→// Memory Categories — each agent has its own memory domain
+   218→// ============================================================
+   219→
+   220→export const MEMORY_CATEGORIES = {
+   221→  UTAMA: 'UTAMA',         // General knowledge, decisions (DINA)
+   222→  BERKAS: 'BERKAS',       // Documents, KPR, bank process (DINA)
+   223→  FINANCE: 'FINANCE',     // Budget, payments, invoices (RINA)
+   224→  MATERIAL: 'MATERIAL',   // Stock, suppliers, PO (MITRA)
+   225→  MARKETING: 'MARKETING', // Leads, prospects, campaigns (10 Marketing AI)
+   226→} as const
+   227→
+   228→// Map topic keywords to memory category
+   229→export function detectMemoryCategory(message: string): string {
+   230→  const msg = message.toLowerCase()
+   231→  if (msg.includes('berkas') || msg.includes('dokumen') || msg.includes('kpr') || msg.includes('bank') || msg.includes('ktp') || msg.includes('kk') || msg.includes('npwp') || msg.includes('slip') || msg.includes('sk kerja') || msg.includes('spr') || msg.includes('flpp') || msg.includes('bphtb') || msg.includes('notaris') || msg.includes('konsumen') || msg.includes('debitur')) return MEMORY_CATEGORIES.BERKAS
+   232→  if (msg.includes('budget') || msg.includes('anggaran') || msg.includes('pembayaran') || msg.includes('invoice') || msg.includes('rab') || msg.includes('laba') || msg.includes('rugi') || msg.includes('pajak') || msg.includes('dana') || msg.includes('kas')) return MEMORY_CATEGORIES.FINANCE
+   233→  if (msg.includes('material') || msg.includes('bahan') || msg.includes('stok') || msg.includes('supplier') || msg.includes('po') || msg.includes('semen') || msg.includes('batu') || msg.includes('pasir')) return MEMORY_CATEGORIES.MATERIAL
+   234→  if (msg.includes('marketing') || msg.includes('prospek') || msg.includes('lead') || msg.includes('iklan') || msg.includes('kampanye')) return MEMORY_CATEGORIES.MARKETING
+   235→  return MEMORY_CATEGORIES.UTAMA
+   236→}
+   237→
+   238→export function detectIntent(message: string): IntentResult {
+   239→  const msg = message.toLowerCase()
+   240→  const tools: string[] = []
+   241→  let action: IntentResult['action'] = 'READ'
+   242→  let newBankValue: string | undefined
+   243→  let newStageValue: string | undefined
+   244→  let intent_updateField: string | undefined
+   245→  let intent_updateValue: string | undefined
+   246→  let newCustomerName: string | undefined
+   247→  let newCustomerPhone: string | undefined
+   248→  let newCustomerBlock: string | undefined
+   249→  let newCustomerBank: string | undefined
+   250→  let intent_requestedFileIndex: number | undefined
+   251→  let intent_requestedFileDocType: string | undefined
+   252→  let intent_newBankName: string | undefined
+   253→  let intent_bankName: string | undefined
+   254→  let intent_logoPrompt: string | undefined
+   255→
+   256→  // === READ INTENTS ===
+   257→
+   258→  // Customer count / statistics
+   259→  if (msg.includes('berapa') && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah') || msg.includes('orang'))) {
+   260→    tools.push('getCustomerStats')
+   261→  }
+   262→
+   263→  // Customer list / names — broader matching
+   264→  if ((msg.includes('siapa') || msg.includes('nama') || msg.includes('list') || msg.includes('daftar') || msg.includes('sebut') || msg.includes('siapa aja') || msg.includes('mana aja')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+   265→    tools.push('getAllCustomers')
+   266→  }
+   267→
+   268→  // Bank distribution
+   269→  if ((msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb')) && (msg.includes('berapa') || msg.includes('distribusi') || msg.includes('masuk') || msg.includes('berapa banyak'))) {
+   270→    tools.push('getBankDistribution')
+   271→  }
+   272→
+   273→  // Stage/pipeline
+   274→  if (msg.includes('stage') || msg.includes('pipeline') || msg.includes('proses') || msg.includes('tahap') || msg.includes('status')) {
+   275→    if (msg.includes('berapa') || msg.includes('distribusi') || msg.includes('ada') || msg.includes('gimana')) {
+   276→      tools.push('getStageDistribution')
+   277→    }
+   278→  }
+   279→
+   280→  // Dashboard / overview
+   281→  if (msg.includes('dashboard') || msg.includes('ringkasan') || msg.includes('overview') || msg.includes('statistik') || msg.includes('summary') || msg.includes('kabar')) {
+   282→    tools.push('getAllCustomers')
+   283→    tools.push('getStageDistribution')
+   284→    tools.push('getBankDistribution')
+   285→  }
+   286→
+   287→  // Document status — broader
+   288→  if (msg.includes('berkas') || msg.includes('dokumen') || msg.includes('lengkap') || msg.includes('kurang') || msg.includes('belum') || msg.includes('kurang')) {
+   289→    tools.push('getCustomerDocStatus')
+   290→  }
+   291→
+   292→  // Workplace / lokasi
+   293→  if ((msg.includes('lokasi') || msg.includes('tempat kerja') || msg.includes('kerja') || msg.includes('maps') || msg.includes('google maps') || msg.includes('alamat kerja')) && !msg.includes('update') && !msg.includes('ubah')) {
+   294→    action = 'GET_WORKPLACE'
+   295→    tools.push('getAllCustomers')
+   296→  }
+   297→
+   298→  // === WRITE INTENTS (UPDATE) — broader detection ===
+   299→
+   300→  // Update bank — catch any "ubah/ganti/pindah/update" + bank name
+   301→  if ((msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('pindahin') || msg.includes('gantiin') || msg.includes('jadikan') || msg.includes('masukin ke')) && (msg.includes('bank') || msg.includes('btn') || msg.includes('mandiri') || msg.includes('bsb') || msg.includes('syariah'))) {
+   302→    action = 'UPDATE_BANK'
+   303→    if (msg.includes('btn')) newBankValue = 'BTN'
+   304→    if (msg.includes('mandiri')) newBankValue = 'MANDIRI'
+   305→    if (msg.includes('bsb') || msg.includes('syariah')) newBankValue = 'BSB_SYARIAH'
+   306→    tools.push('getAllCustomers')
+   307→  }
+   308→
+   309→  // Update stage — catch "ubah status jadi sp3k", "ganti stage ke akad", etc
+   310→  // Also catch: "jadi sp3k", "jadikan sp3k", "pindah ke sp3k", "maju ke akad"
+   311→  const stageKeywords = ['dm', 'survey', 'closing', 'booking', 'slik', 'pemberkasan', 'sp3k', 'sppk', 'akad', 'serah terima', 'serahterima']
+   312→  const hasStageKeyword = stageKeywords.some(kw => msg.includes(kw))
+   313→  const hasUpdateKeyword = msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah') || msg.includes('majuin') || msg.includes('pindahin') || msg.includes('jadikan') || msg.includes('jadi') || msg.includes('masuk') || msg.includes('naik')
+   314→
+   315→  if (hasStageKeyword && (hasUpdateKeyword || msg.includes('status') || msg.includes('stage') || msg.includes('tahap'))) {
+   316→    action = 'UPDATE_STAGE'
+   317→    const stageMap: Record<string, string> = {
+   318→      'dm': 'DM', 'survey': 'SURVEY', 'closing': 'CLOSING', 'booking': 'BOOKING',
+   319→      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'sppk': 'SP3K',
+   320→      'akad': 'AKAD', 'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
+   321→    }
+   322→    for (const [key, val] of Object.entries(stageMap)) {
+   323→      if (msg.includes(key)) { newStageValue = val; break }
+   324→    }
+   325→    // If stage keyword found but not in map, try uppercase
+   326→    if (!newStageValue) {
+   327→      for (const kw of stageKeywords) {
+   328→        if (msg.includes(kw)) { newStageValue = kw.toUpperCase().replace(' ', '_'); break }
+   329→      }
+   330→    }
+   331→    tools.push('getAllCustomers')
+   332→  }
+   333→
+   334→  // Fill form / isi data
+   335→  if ((msg.includes('isi') || msg.includes('fill') || msg.includes('bantu') && msg.includes('data')) && !msg.includes('bank')) {
+   336→    action = 'FILL_FORM'
+   337→    tools.push('getAllCustomers')
+   338→  }
+   339→
+   340→  // === GET_FILES / SEND_FILE (Berkas request from Google Drive) ===
+   341→  // Detect: "minta berkas [konsumen]", "kirim berkas [konsumen]", "berkas [konsumen] apa saja",
+   342→  //         "Dina minta KTP [konsumen]", "kirim slip gaji [konsumen]", "list berkas [konsumen]"
+   343→  const berkasKeywords = ['berkas', 'file', 'dokumen', 'kirim', 'minta', 'ktp', 'kk', 'npwp', 'slip gaji', 'sk kerja', 'spr', 'flpp', 'bphtb', 'notaris', 'lokasi kerja']
+   344→  const hasBerkasIntent = (
+   345→    (msg.includes('minta') || msg.includes('kirim') || msg.includes('lihat') || msg.includes('list') || msg.includes('daftar') || msg.includes('cek') || msg.includes('apa saja'))
+   346→    && berkasKeywords.some(kw => msg.includes(kw))
+   347→  )
+   348→
+   349→  if (hasBerkasIntent) {
+   350→    // Check if user is requesting SPECIFIC file type (e.g., "minta KTP jenni")
+   351→    // vs just asking what files are available
+   352→    const docTypeKeywords: Array<{ keywords: string[], docType: string }> = [
+   353→      { keywords: ['ktp'], docType: 'ktp' },
+   354→      { keywords: ['kk', 'kartu keluarga'], docType: 'kk' },
+   355→      { keywords: ['npwp'], docType: 'npwp' },
+   356→      { keywords: ['slip gaji', 'slip'], docType: 'sk-slip-gaji' },
+   357→      { keywords: ['sk kerja', 'surat keterangan kerja'], docType: 'sk-slip-gaji' },
+   358→      { keywords: ['spr'], docType: 'spr' },
+   359→      { keywords: ['flpp'], docType: 'flpp' },
+   360→      { keywords: ['ajb'], docType: 'ajb' },
+   361→      { keywords: ['bphtb'], docType: 'bphtb' },
+   362→      { keywords: ['notaris'], docType: 'notaris' },
+   363→      { keywords: ['lokasi kerja', 'lokasi'], docType: 'lokasi-kerja' },
+   364→      { keywords: ['sertifikat', 'shgb'], docType: 'sertifikat' },
+   365→    ]
+   366→    const matchedDocType = docTypeKeywords.find(dt => dt.keywords.some(kw => msg.includes(kw)))
+   367→
+   368→    // Check if user picked a number (e.g., "yang nomor 2", "kirim 1 dan 3")
+   369→    const numberMatch = msg.match(/(?:nomor|no|urut)?\s*(\d+(?:\s*(?:dan|,|&)\s*\d+)*)/)
+   370→    const requestedIndices: number[] = []
+   371→    if (numberMatch) {
+   372→      // Extract all numbers from the match
+   373→      const nums = numberMatch[1].match(/\d+/g)
+   374→      if (nums) {
+   375→        for (const n of nums) {
+   376→          const i = parseInt(n)
+   377→          if (i >= 1 && i <= 20) requestedIndices.push(i)  // reasonable range
+   378→        }
+   379→      }
+   380→    }
+   381→
+   382→    if (matchedDocType || requestedIndices.length > 0) {
+   383→      // User wants a specific file → SEND_FILE
+   384→      action = 'SEND_FILE'
+   385→      if (matchedDocType) intent_requestedFileDocType = matchedDocType.docType
+   386→      if (requestedIndices.length > 0) intent_requestedFileIndex = requestedIndices[0]  // First one for now
+   387→      tools.push('getCustomerFiles')
+   388→      tools.push('getAllCustomers')
+   389→    } else {
+   390→      // User wants to see what files are available → GET_FILES
+   391→      action = 'GET_FILES'
+   392→      tools.push('getCustomerFiles')
+   393→      tools.push('getAllCustomers')
+   394→    }
+   395→  }
+   396→
+   397→  // === GENERIC FIELD UPDATE ===
+   398→  // Detect patterns like: "ubah NIK jenni jadi 12345", "ganti alamat andas ke jl xyz", "set penghasilan jenni 5000000"
+   399→  if ((msg.includes('ubah') || msg.includes('ganti') || msg.includes('set') || msg.includes('update') || msg.includes('isi'))) {
+   400→    const fieldPatterns: Array<{ keywords: string[], field: string }> = [
+   401→      { keywords: ['nik', 'ktp', 'no ktp'], field: 'nik' },
+   402→      { keywords: ['npwp', 'no npwp'], field: 'npwp' },
+   403→      { keywords: ['alamat'], field: 'alamat' },
+   404→      { keywords: ['telepon', 'no hp', 'wa', 'whatsapp'], field: 'telepon' },
+   405→      { keywords: ['pekerjaan', 'job'], field: 'pekerjaan' },
+   406→      { keywords: ['perusahaan', 'nama perusahaan'], field: 'perusahaan' },
+   407→      { keywords: ['jabatan', 'posisi'], field: 'jabatan' },
+   408→      { keywords: ['penghasilan', 'gaji', 'income'], field: 'penghasilan' },
+   409→      { keywords: ['tempat lahir'], field: 'tempat lahir' },
+   410→      { keywords: ['tanggal lahir', 'tgl lahir'], field: 'tanggal lahir' },
+   411→      { keywords: ['tgl closing', 'tanggal closing'], field: 'tgl closing' },
+   412→      { keywords: ['tgl sp3k', 'tanggal sp3k'], field: 'tgl sp3k' },
+   413→      { keywords: ['tgl akad', 'tanggal akad'], field: 'tgl akad' },
+   414→      { keywords: ['no akad'], field: 'no akad' },
+   415→      { keywords: ['atasan', 'nama atasan'], field: 'atasan' },
+   416→      { keywords: ['jam operasional'], field: 'jam operasional' },
+   417→      { keywords: ['maps link', 'link maps'], field: 'maps link' },
+   418→      { keywords: ['short link'], field: 'short link' },
+   419→    ]
+   420→
+   421→    for (const fp of fieldPatterns) {
+   422→      if (fp.keywords.some(kw => msg.includes(kw))) {
+   423→        // Check this is not just asking about the field (e.g., "berapa penghasilan jenni?")
+   424→        const isAsking = msg.includes('berapa') || msg.includes('apa') || msg.includes('siapa')
+   425→        if (!isAsking) {
+   426→          action = 'UPDATE_FIELD'
+   427→          intent_updateField = fp.field
+   428→          // Try to extract the value after "jadi" or "ke" or "="
+   429→          const valueMatch = msg.match(/(?:jadi|ke|=)\s*(.+?)(?:\s*(?:dong|ya|tolong|saya|untuk|dari|$))/)
+   430→          if (valueMatch) intent_updateValue = valueMatch[1].trim()
+   431→          tools.push('getAllCustomers')
+   432→        }
+   433→        break
+   434→      }
+   435→    }
+   436→  }
+   437→
+   438→  // === CONFIRM PENDING ACTION === (STRICT — v8.2)
+   439→  // Only treat as confirmation if message is SHORT and matches confirmation keywords.
+   440→  // Long messages with "ya" + action verbs (e.g., "ya hapus aja") are treated as fresh requests, NOT confirmations.
+   441→  // This prevents the LLM from confirming the wrong pending action when user actually meant something else.
+   442→  //
+   443→  // CRITICAL: pendingAction state is now DB-backed. detectIntent can't check it directly
+   444→  // (it's synchronous). Instead, we mark the action as 'CONFIRM_DELETE' / 'CONFIRM_CREATE'
+   445→  // and executeTools() will check DB for active pending action.
+   446→  //
+   447→  // We also detect CANCEL_PENDING here: "batal", "cancel", "tidak", "jangan"
+   448→  const confirmKeywords = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan', 'do it', 'sure', 'go']
+   449→  const cancelKeywords = ['batal', 'cancel', 'tidak', 'jangan', 'ga jadi', 'gajadi', 'berhenti']
+   450→
+   451→  const msgTrimmed = msg.trim()
+   452→  const isShortMsg = msgTrimmed.length <= 30 // short confirmation phrases only
+   453→  const isVeryShort = msgTrimmed.length <= 15 // strict — for confirm/cancel triggers
+   454→  // Use word boundary ONLY (no substring) to avoid false positives like "no" in "nomor"
+   455→  const isConfirmWord = confirmKeywords.some(kw => {
+   456→    const regex = new RegExp(`\\b${kw}\\b`, 'i')
+   457→    return regex.test(msgTrimmed)
+   458→  })
+   459→  const isCancelWord = cancelKeywords.some(kw => {
+   460→    const regex = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`, 'i')
+   461→    return regex.test(msgTrimmed)
+   462→  })
+   463→
+   464→  if (isCancelWord && isVeryShort) {
+   465→    action = 'CANCEL_PENDING'
+   466→    tools.push('getAllCustomers')
+   467→  } else if (isShortMsg && isConfirmWord) {
+   468→    // Only treat as confirmation if message is short (≤30 chars) AND contains confirmation keyword
+   469→    // "ya hapus aja" is 13 chars — would match... let's be even stricter:
+   470→    // Must be ≤15 chars OR pure confirmation keyword
+   471→    const pureConfirm = ['ya', 'iya', 'iyaa', 'yes', 'konfirmasi', 'lanjut', 'eksekusi', 'gas', 'oke', 'ok', 'setuju', 'yakin', 'benar', 'lakukan']
+   472→    const isPureConfirm = pureConfirm.some(kw => msgTrimmed.toLowerCase() === kw || msgTrimmed.toLowerCase() === `${kw}.` || msgTrimmed.toLowerCase() === `${kw}!`)
+   473→
+   474→    if (isPureConfirm || isVeryShort) {
+   475→      // Mark as CONFIRM_DELETE or CONFIRM_CREATE — executeTools will check DB
+   476→      // and route based on pendingAction.type
+   477→      action = 'CONFIRM_DELETE' // generic confirm; executeTools will route to correct type
+   478→      tools.push('getAllCustomers')
+   479→    }
+   480→    // If msg is 16-30 chars and contains confirm word but also other words,
+   481→    // DON'T trigger confirmation — let other intent detectors handle it.
+   482→  }
+   483→
+   484→  // === CREATE CUSTOMER ===
+   485→  // Detect: "dapat konsumen baru", "tambah konsumen", "daftarin konsumen", "bikin konsumen baru"
+   486→  // Also: "namanya [X] di blok [Y]" or "namanya [X] blok [Y]"
+   487→  const hasCreateKeyword = msg.includes('tambah') || msg.includes('daftarin') || msg.includes('daftar') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input') || msg.includes('masukin') || msg.includes('dapat konsumen') || msg.includes('konsumen baru')
+   488→  const hasCustomerWord = msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah')
+   489→
+   490→  if (hasCreateKeyword && hasCustomerWord) {
+   491→    action = 'CREATE_CUSTOMER'
+   492→
+   493→    // Extract name: "namanya [X]", "nama [X]", "konsumen [X]", "debitur [X]"
+   494→    // CRITICAL: Use \s+ (require whitespace) before keyword in lookahead, NOT \s*
+   495→    // Otherwise "Budi" matches "di" inside the word — captures just "Bu" instead of "Budi Santoso"
+   496→    const namePatterns = [
+   497→      msg.match(/namanya\s+([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+   498→      msg.match(/nama\s+([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+   499→      msg.match(/(?:konsumen|debitur|nasabah)\s+(?:baru\s+)?(?:namanya\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|yang|,|$))/i),
+   500→    ]
+   501→    for (const m of namePatterns) {
+   502→      if (m && m[1]) {
+   503→        const stop = ['baru', 'dong', 'ya', 'tolong', 'dengan', 'dari', 'ke', 'yang', 'ini', 'itu', 'namanya', 'nama', 'konsumen', 'debitur', 'nasabah', 'di']
+   504→        const words = m[1].trim().split(/\s+/).filter((w: string) => !stop.includes(w.toLowerCase()))
+   505→        if (words.length > 0) {
+   506→          newCustomerName = words.join(' ')
+   507→          break
+   508→        }
+   509→      }
+   510→    }
+   511→
+   512→    // Extract block: "di blok E7", "blok E7", "di E7", "unit E7"
+   513→    const blockPatterns = [
+   514→      msg.match(/di\s+blok\s+([A-Za-z]\d+)/i),
+   515→      msg.match(/blok\s+([A-Za-z]\d+)/i),
+   516→      msg.match(/di\s+([A-Za-z]\d+)/i),
+   517→      msg.match(/unit\s+([A-Za-z]\d+)/i),
+   518→    ]
+   519→    for (const m of blockPatterns) {
+   520→      if (m && m[1]) {
+   521→        newCustomerBlock = m[1].toUpperCase()
+   522→        break
+   523→      }
+   524→    }
+   525→
+   526→    // Extract phone
+   527→    const phoneMatch = msg.match(/(?:hp|wa|whatsapp|telepon|telp|no)\s*[:.]?\s*(\d{8,15})/) || msg.match(/(\d{10,15})/)
+   528→    if (phoneMatch) newCustomerPhone = phoneMatch[1]
+   529→
+   530→    // Extract bank
+   531→    if (msg.includes('btn')) newCustomerBank = 'BTN'
+   532→    else if (msg.includes('mandiri')) newCustomerBank = 'MANDIRI'
+   533→    else if (msg.includes('bsb') || msg.includes('syariah') || msg.includes('sumsel') || msg.includes('babel')) newCustomerBank = 'BSB_SYARIAH'
+   534→
+   535→    tools.push('getAllCustomers')
+   536→  }
+   537→
+   538→  // === LOGO GENERATION ===
+   539→  // "generate logo [nama perusahaan]" → AI generate logo from prompt
+   540→  // "recreate logo [nama perusahaan]" → recreate from uploaded image
+   541→  if ((msg.includes('logo') || msg.includes('generate logo') || msg.includes('buat logo') || msg.includes('bikin logo') || msg.includes('recreate logo')) && !msg.includes('logout')) {
+   542→    action = 'GENERATE_LOGO' as any
+   543→    const logoMatch = message.match(/(?:generate|buat|bikin|recreate)\s+logo\s+(?:untuk\s+|perusahaan\s+|usaha\s+)?(.+)/i)
+   544→    if (logoMatch) intent_logoPrompt = logoMatch[1].trim()
+   545→    tools.push('getAllCustomers')
+   546→  }
+   547→
+   548→  // === BANK CONFIG MANAGEMENT ===
+   549→  // DINA can manage bank configs via chat:
+   550→  // "list bank" → list all banks
+   551→  // "tambah bank BCA" → create new bank
+   552→  // "hapus bank BCA" → delete bank
+   553→  if (msg.includes('bank') && (msg.includes('list') || msg.includes('daftar') || msg.includes('berapa'))) {
+   554→    if (!msg.includes('konsumen') && !msg.includes('debitur') && !msg.includes('nasabah') && !msg.includes('rekening') && !msg.includes('pindah') && !msg.includes('ubah') && !msg.includes('ganti')) {
+   555→      action = 'LIST_BANKS' as any
+   556→      tools.push('getAllCustomers')
+   557→    }
+   558→  }
+   559→  if ((msg.includes('tambah') || msg.includes('daftarin') || msg.includes('bikin') || msg.includes('buat') || msg.includes('input')) && msg.includes('bank') && !msg.includes('konsumen')) {
+   560→    action = 'ADD_BANK' as any
+   561→    // Extract bank code/name
+   562→    const bankMatch = message.match(/bank\s+([A-Za-z][A-Za-z\s]+?)(?:\s+(?:baru|dengan|yang|,|$))/i)
+   563→    if (bankMatch) intent_newBankName = bankMatch[1].trim()
+   564→    tools.push('getAllCustomers')
+   565→  }
+   566→  // NOTE: DELETE_BANK intent is DISABLED PERMANENTLY.
+   567→  // No one can delete banks from the system — not even owner.
+   568→  // Banks are permanent records. This is a hard rule.
+   569→
+   570→  // === DELETE CUSTOMER ===
+   571→  // Detect: "hapus konsumen", "hapus jenni", "apus debitur", "delete konsumen", "hilangin konsumen"
+   572→  if ((msg.includes('hapus') || msg.includes('apus') || msg.includes('delete') || msg.includes('hilangin') || msg.includes('buang') || msg.includes('remove')) && (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('nasabah'))) {
+   573→    action = 'DELETE_CUSTOMER'
+   574→    tools.push('getAllCustomers')
+   575→  }
+   576→
+   577→  // Always include memories
+   578→  tools.push('getRelevantMemories')
+   579→
+   580→  // Always include ALL customers as context (so DINA knows everyone)
+   581→  if (!tools.includes('getAllCustomers')) {
+   582→    tools.push('getAllCustomers')
+   583→  }
+   584→
+   585→  // Extract customer name — case insensitive, try multiple patterns
+   586→  let customerName: string | undefined
+   587→  // Pattern 1: "konsumen/debitur/nasabah [Name]" (case insensitive)
+   588→  const nameMatch1 = message.match(/(?:konsumen|debitur|nasabah)\s+([A-Za-z]+)/i)
+   589→  // Pattern 2: "dari/si [Name]"
+   590→  const nameMatch2 = message.match(/(?:dari|si)\s+([A-Za-z]+)/i)
+   591→  // Pattern 3: any word 3+ chars (lowercase too — will match against DB case-insensitive)
+   592→  const nameMatch3 = message.match(/\b([A-Za-z]{3,})\b/)
+   593→  // Pattern 4: "ubah/ganti/update [Name] ..."
+   594→  const nameMatch4 = message.match(/(?:ubah|ganti|update|pindah|jadikan)\s+(?:status\s+)?(?:konsumen\s+)?(?:debitur\s+)?([A-Za-z]+)/i)
+   595→  // Pattern 5: "(minta|kirim|lihat|cek) berkas/dokumen/file [Name]" — consumes both verbs
+   596→  const nameMatch5a = message.match(/(?:minta|kirim|lihat|cek|tolong)\s+(?:berkas|dokumen|file)\s+(?:konsumen\s+|debitur\s+|nasabah\s+)?(?:dari\s+|si\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:yang|di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|,|$|\?))/i)
+   597→  // Pattern 5b: "berkas/dokumen/file [Name]" — for "berkas Jenni"
+   598→  const nameMatch5b = message.match(/(?:berkas|dokumen|file)\s+(?:konsumen\s+|debitur\s+|nasabah\s+)?(?:dari\s+|si\s+)?([A-Za-z][A-Za-z\s]+?)(?=\s+(?:yang|di|blok|bank|btn|mandiri|bsb|hp|wa|no|dengan|,|$|\?))/i)
+   599→  // Pattern 6: For "Dina minta berkas Jenni" — name at END of message after "berkas"
+   600→  const nameMatch6 = message.match(/(?:berkas|dokumen|file)\s+([A-Za-z]+)$/i)
+   601→
+   602→  if (nameMatch4) customerName = nameMatch4[1]
+   603→  else if (nameMatch1) customerName = nameMatch1[1]
+   604→  else if (nameMatch2) customerName = nameMatch2[1]
+   605→  else if (nameMatch5a) customerName = nameMatch5a[1]
+   606→  else if (nameMatch5b) customerName = nameMatch5b[1]
+   607→  else if (nameMatch6) customerName = nameMatch6[1]
+   608→  // Don't use nameMatch3 — too noisy (matches "ubah", "jadi", etc)
+   609→
+   610→  // Filter out common non-name words
+   611→  const stopWords = ['ubah', 'ganti', 'update', 'pindah', 'jadikan', 'jadi', 'status', 'stage', 'tahap', 'bank', 'btn', 'mandiri', 'bsb', 'syariah', 'sp3k', 'sppk', 'akad', 'booking', 'closing', 'survey', 'slik', 'pemberkasan', 'serah', 'terima', 'dong', 'ke', 'yang', 'ini', 'itu', 'dari', 'untuk', 'pada', 'dengan', 'agar', 'supaya', 'bisa', 'tolong', 'bantu', 'mohon', 'jenni']
+   612→  // Note: 'jenni' is removed from stopwords — we WANT to match it
+   613→  const actualStopWords = ['ubah', 'ganti', 'update', 'pindah', 'jadikan', 'jadi', 'status', 'stage', 'tahap', 'bank', 'btn', 'mandiri', 'bsb', 'syariah', 'sp3k', 'sppk', 'akad', 'booking', 'closing', 'survey', 'slik', 'pemberkasan', 'serah', 'terima', 'dong', 'yang', 'ini', 'itu', 'untuk', 'pada', 'dengan', 'agar', 'supaya', 'bisa', 'tolong', 'bantu', 'mohon', 'dengan', 'saya', 'kamu', 'kita']
+   614→  if (customerName && actualStopWords.includes(customerName.toLowerCase())) {
+   615→    customerName = undefined
+   616→  }
+   617→
+   618→  // Extract block number
+   619→  let blockNumber: string | undefined
+   620→  const blockMatch = message.match(/blok\s+([A-Za-z]\d+)/i) || message.match(/\b([A-Za-z]\d{1,3})\b/)
+   621→  if (blockMatch && blockMatch[1].length <= 4) blockNumber = blockMatch[1].toUpperCase()
+   622→
+   623→  return { tools: [...new Set(tools)], customerName, blockNumber, action, newBankValue, newStageValue, updateField: intent_updateField, updateValue: intent_updateValue, newCustomerName, newCustomerPhone, newCustomerBlock, newCustomerBank, requestedFileIndex: intent_requestedFileIndex, requestedFileDocType: intent_requestedFileDocType, newBankName: intent_newBankName, bankName: intent_bankName, logoPrompt: intent_logoPrompt }
+   624→}
+   625→
+   626→// ============================================================
+   627→// TOOL: Get ALL Customers (full context for DINA)
+   628→// ============================================================
+   629→
+   630→async function getAllCustomers(): Promise<ToolResult> {
+   631→  const customers = await db.customer.findMany({
+   632→    include: { units: true, bankPipelines: true },
+   633→    take: 50,
+   634→    orderBy: { createdAt: 'desc' },
+   635→  })
+   636→
+   637→  const customerList = customers.map(c => {
+   638→    const block = c.units?.[0]?.blockNumber || (c.blockLetter || '') + (c.houseNumber || '') || '-'
+   639→    const bank = c.bankName || c.bankPipelines?.[0]?.bankName || 'Belum dipilih'
+   640→    let docCount = 0
+   641→    let docsList: string[] = []
+   642→    try {
+   643→      if (c.uploadedDocs) {
+   644→        const docs = JSON.parse(c.uploadedDocs)
+   645→        docsList = Object.keys(docs)
+   646→        docCount = docsList.length
+   647→      }
+   648→    } catch {}
+   649→
+   650→    return {
+   651→      id: c.id,
+   652→      name: c.name,
+   653→      block,
+   654→      bank,
+   655→      stage: c.stage,
+   656→      phone: c.whatsappNumber || c.phone || '',
+   657→      nik: c.nik || '',
+   658→      occupation: c.occupation || '',
+   659→      companyName: c.companyName || '',
+   660→      monthlyIncome: c.monthlyIncome || 0,
+   661→      maritalStatus: c.maritalStatus || '',
+   662→      docCount,
+   663→      docsList,
+   664→      berkasLengkap: c.berkasLengkap,
+   665→      closingDate: c.closingDate,
+   666→      sp3kDate: c.sp3kDate,
+   667→      akadDate: c.akadDate,
+   668→      workplaceMapsLink: c.workplaceMapsLink || '',
+   669→      workplaceMapsShortLink: c.workplaceMapsShortLink || '',
+   670→      workplaceJamOperasional: c.workplaceJamOperasional || '',
+   671→      atasanName: c.atasanName || '',
+   672→      atasanNip: c.atasanNip || '',
+   673→      companyAddress: c.companyAddress || '',
+   674→    }
+   675→  })
+   676→
+   677→  const summary = `DATA SEMUA KONSUMEN (${customers.length} total):\n` +
+   678→    customerList.map(c => `- ${c.name} | Blok ${c.block} | Bank: ${c.bank} | Stage: ${c.stage} | Telp: ${c.phone} | Dokumen: ${c.docCount} file (${c.docsList.join(', ')}) | Berkas Lengkap: ${c.berkasLengkap ? 'YA' : 'BELUM'} | Lokasi Kerja: ${c.workplaceMapsLink || 'belum ada'} | Jam Operasional: ${c.workplaceJamOperasional || 'belum ada'}`).join('\n')
+   679→
+   680→  return {
+   681→    toolName: 'getAllCustomers',
+   682→    success: true,
+   683→    data: customerList,
+   684→    summary,
+   685→  }
+   686→}
+   687→
+   688→// ============================================================
+   689→// TOOL: Get Customer Statistics
+   690→// ============================================================
+   691→
+   692→async function getCustomerStats(): Promise<ToolResult> {
+   693→  const total = await db.customer.count()
+   694→  const byStage = await db.customer.groupBy({ by: ['stage'], _count: true })
+   695→  const berkasLengkap = await db.customer.count({ where: { berkasLengkap: true } })
+   696→
+   697→  return {
+   698→    toolName: 'getCustomerStats',
+   699→    success: true,
+   700→    data: { total, byStage, berkasLengkap },
+   701→    summary: `Total konsumen: ${total}. Berkas lengkap: ${berkasLengkap}. Stage: ${byStage.map(s => `${s.stage}=${s._count}`).join(', ')}.`,
+   702→  }
+   703→}
+   704→
+   705→// ============================================================
+   706→// TOOL: Get Bank Distribution
+   707→// ============================================================
+   708→
+   709→async function getBankDistribution(): Promise<ToolResult> {
+   710→  const btn = await db.customer.count({ where: { bankName: 'BTN' } })
+   711→  const mandiri = await db.customer.count({ where: { bankName: 'MANDIRI' } })
+   712→  const bsb = await db.customer.count({ where: { bankName: 'BSB_SYARIAH' } })
+   713→  const belum = await db.customer.count({ where: { bankName: null } })
+   714→
+   715→  return {
+   716→    toolName: 'getBankDistribution',
+   717→    success: true,
+   718→    data: { btn, mandiri, bsb, belum },
+   719→    summary: `Distribusi bank: BTN=${btn}, Mandiri=${mandiri}, BSB Syariah=${bsb}, Belum dipilih=${belum}.`,
+   720→  }
+   721→}
+   722→
+   723→// ============================================================
+   724→// TOOL: Get Stage Distribution
+   725→// ============================================================
+   726→
+   727→async function getStageDistribution(): Promise<ToolResult> {
+   728→  const stages = await db.customer.groupBy({ by: ['stage'], _count: true, orderBy: { _count: { stage: 'desc' } } })
+   729→
+   730→  const stageNames: Record<string, string> = {
+   731→    DM: 'DM (Pertama kontak)', SURVEY: 'Survey', CLOSING: 'Closing', BOOKING: 'Booking',
+   732→    SLIK: 'SLIK (BI Checking)', PEMBERKASAN: 'Pemberkasan', SP3K: 'SP3K (Persetujuan Bank)',
+   733→    AKAD: 'Akad', SERAH_TERIMA: 'Serah Terima', LOST: 'Lost (Batal)',
+   734→  }
+   735→
+   736→  return {
+   737→    toolName: 'getStageDistribution',
+   738→    success: true,
+   739→    data: stages,
+   740→    summary: `Pipeline: ${stages.map(s => `${stageNames[s.stage] || s.stage}=${s._count}`).join(', ')}`,
+   741→  }
+   742→}
+   743→
+   744→// ============================================================
+   745→// TOOL: Get Customer Document Status (detailed)
+   746→// ============================================================
+   747→
+   748→const REQUIRED_DOCS = [
+   749→  { id: 'ktp', label: 'KTP' }, { id: 'kk', label: 'KK' }, { id: 'npwp', label: 'NPWP' },
+   750→  { id: 'status-nikah', label: 'Akta Nikah/Belum Menikah' }, { id: 'slip-gaji', label: 'Slip Gaji' },
+   751→  { id: 'sk-kerja', label: 'SK Kerja/NIB' }, { id: 'surat-rumah', label: 'Surat Belum Punya Rumah' },
+   752→  { id: 'sertifikat', label: 'Sertifikat Rumah' }, { id: 'pbb', label: 'PBB' },
+   753→]
+   754→const SIGNED_DOCS = [
+   755→  { id: 'flpp-signed', label: 'Form FLPP (TTD)' }, { id: 'spr-signed', label: 'SPR (TTD)' },
+   756→  { id: 'aplikasi-signed', label: 'Form Aplikasi (TTD)' }, { id: 'pernyataan-penghasilan-signed', label: 'Surat Pernyataan Penghasilan (TTD)' },
+   757→  { id: 'rekening-koran-signed', label: 'Rekening Koran (TTD)' }, { id: 'sp3k-btn', label: 'SP3K BTN' },
+   758→  { id: 'sppk-mandiri', label: 'SPPK Mandiri' }, { id: 'sp4-bsb', label: 'SP4 BSB' },
+   759→]
+   760→
+   761→async function getCustomerDocStatus(customerId?: string, customerName?: string): Promise<ToolResult> {
+   762→  let customer: any = null
+   763→  if (customerId) {
+   764→    customer = await db.customer.findUnique({ where: { id: customerId }, include: { units: true } })
+   765→  } else if (customerName) {
+   766→    customer = await db.customer.findFirst({ where: { name: { contains: customerName, mode: 'insensitive' } }, include: { units: true } })
+   767→  } else {
+   768→    // Get all customers' doc status
+   769→    const allCustomers = await db.customer.findMany({ include: { units: true }, take: 20 })
+   770→    const summaries = allCustomers.map(c => {
+   771→      const uploadedDocs = c.uploadedDocs ? JSON.parse(c.uploadedDocs) : {}
+   772→      const uploadedIds = Object.keys(uploadedDocs)
+   773→      const missing = REQUIRED_DOCS.filter(d => !uploadedIds.includes(d.id)).map(d => d.label)
+   774→      const block = c.units?.[0]?.blockNumber || (c.blockLetter || '') + (c.houseNumber || '') || '-'
+   775→      return `- ${c.name} (Blok ${block}): ${uploadedIds.length} dokumen, BELUM: ${missing.join(', ') || 'semua lengkap'}`
+   776→    }).join('\n')
+   777→    return { toolName: 'getCustomerDocStatus', success: true, data: allCustomers, summary: `Status berkas semua konsumen:\n${summaries}` }
+   778→  }
+   779→
+   780→  if (!customer) return { toolName: 'getCustomerDocStatus', success: false, data: null, summary: 'Konsumen tidak ditemukan.' }
+   781→
+   782→  const uploadedDocs = customer.uploadedDocs ? JSON.parse(customer.uploadedDocs) : {}
+   783→  const uploadedIds = Object.keys(uploadedDocs)
+   784→  const requiredMissing = REQUIRED_DOCS.filter(d => !uploadedIds.includes(d.id))
+   785→  const signedMissing = SIGNED_DOCS.filter(d => !uploadedIds.includes(d.id))
+   786→  const block = customer.units?.[0]?.blockNumber || (customer.blockLetter || '') + (customer.houseNumber || '') || '-'
+   787→
+   788→  return {
+   789→    toolName: 'getCustomerDocStatus',
+   790→    success: true,
+   791→    data: { customer, requiredMissing, signedMissing },
+   792→    summary: `Konsumen: ${customer.name} (Blok ${block}, Bank: ${customer.bankName || 'belum'}, Stage: ${customer.stage})
+   793→Dokumen wajib SUDAH: ${REQUIRED_DOCS.filter(d => uploadedIds.includes(d.id)).map(d => d.label).join(', ') || 'tidak ada'}
+   794→Dokumen wajib BELUM: ${requiredMissing.map(d => d.label).join(', ') || 'semua lengkap'}
+   795→Dokumen TTD BELUM: ${signedMissing.map(d => d.label).join(', ') || 'semua lengkap'}
+   796→Lokasi Kerja: ${customer.workplaceMapsLink || 'belum ada'}
+   797→Jam Operasional: ${customer.workplaceJamOperasional || 'belum ada'}
+   798→Atasan: ${customer.atasanName || 'belum ada'} (${customer.atasanNip || 'belum ada'})`,
+   799→  }
+   800→}
+   801→
+   802→// ============================================================
+   803→// HELPER: Find customer by name with duplicate detection
+   804→// Returns:
+   805→//   - { customer, duplicates: [] } if exactly 1 match
+   806→//   - { customer: first, duplicates: [...] } if 2+ matches (caller must disambiguate)
+   807→//   - null if no match
+   808→//
+   809→// CRITICAL: 2+ customers can have SAME exact name + birthdate (rare but legal).
+   810→// When this happens, DINA must NOT silently pick the first one — that causes
+   811→// wrong-customer operations (e.g., delete wrong person, send wrong berkas).
+   812→// Instead: list all matches + ask user to disambiguate by blok or NIK.
+   813→// ============================================================
+   814→
+   815→export interface CustomerLookupResult {
+   816→  customer: any  // first match (for backwards-compat in non-critical paths)
+   817→  duplicates: any[]  // empty if only 1 match, otherwise ALL matches (including customer)
+   818→  needsDisambiguation: boolean
+   819→}
+   820→
+   821→export async function findCustomerWithDisambiguation(
+   822→  name: string,
+   823→  options?: { nik?: string; blockNumber?: string }
+   824→): Promise<CustomerLookupResult | null> {
+   825→  // If NIK provided, use that (NIK is unique per person by Indonesian law)
+   826→  if (options?.nik) {
+   827→    const byNik = await db.customer.findFirst({
+   828→      where: { nik: options.nik },
+   829→      include: { units: true },
+   830→    })
+   831→    if (byNik) {
+   832→      return { customer: byNik, duplicates: [], needsDisambiguation: false }
+   833→    }
+   834→    // NIK not found — fall through to name search
+   835→  }
+   836→
+   837→  // If blockNumber provided, use that (each unit is unique)
+   838→  if (options?.blockNumber) {
+   839→    const byBlock = await db.customer.findFirst({
+   840→      where: {
+   841→        OR: [
+   842→          { blockLetter: { startsWith: options.blockNumber[0], mode: 'insensitive' }, houseNumber: { contains: options.blockNumber.substring(1), mode: 'insensitive' } },
+   843→          { units: { some: { blockNumber: { equals: options.blockNumber, mode: 'insensitive' } } } }
+   844→        ]
+   845→      },
+   846→      include: { units: true },
+   847→    })
+   848→    if (byBlock) {
+   849→      return { customer: byBlock, duplicates: [], needsDisambiguation: false }
+   850→    }
+   851→  }
+   852→
+   853→  // Try exact name match first (case-insensitive)
+   854→  let matches = await db.customer.findMany({
+   855→    where: { name: { equals: name, mode: 'insensitive' } },
+   856→    include: { units: true },
+   857→  })
+   858→
+   859→  // If no exact match, fall back to contains
+   860→  if (matches.length === 0) {
+   861→    matches = await db.customer.findMany({
+   862→      where: { name: { contains: name, mode: 'insensitive' } },
+   863→      include: { units: true },
+   864→    })
+   865→  }
+   866→
+   867→  if (matches.length === 0) return null
+   868→  if (matches.length === 1) return { customer: matches[0], duplicates: [], needsDisambiguation: false }
+   869→
+   870→  // Multiple matches — need disambiguation
+   871→  return {
+   872→    customer: matches[0],  // first match (caller can choose to use or not)
+   873→    duplicates: matches,
+   874→    needsDisambiguation: true,
+   875→  }
+   876→}
+   877→
+   878→// Build disambiguation message for user
+   879→export function buildDisambiguationMessage(duplicates: any[]): string {
+   880→  const list = duplicates.map((c: any, i: number) => {
+   881→    const block = (c.blockLetter || '') + (c.houseNumber || '') || '-'
+   882→    const bank = c.bankName || 'belum dipilih'
+   883→    const stage = c.stage || '-'
+   884→    const nikSuffix = c.nik ? ` (NIK: ...${c.nik.substring(c.nik.length - 4)})` : ''
+   885→    const phone = c.whatsappNumber ? ` | WA: ${c.whatsappNumber}` : ''
+   886→    return `${i + 1}. **${c.name}** — Blok ${block} | Bank ${bank} | Stage ${stage}${nikSuffix}${phone}`
+   887→  }).join('\n')
+   888→
+   889→  return `⚠️ **Ditemukan ${duplicates.length} konsumen dengan nama yang cocok.**
+   890→
+   891→${list}
+   892→
+   893→Sebutkan **blok** atau **NIK** untuk memastikan konsumen yang mana. Contoh:
+   894→• "yang blok E5"
+   895→• "yang NIK 1234567890"
+   896→• "yang bank BTN"`
+   897→}
+   898→
+   899→// ============================================================
+   900→// TOOL: Get Customer Files (from GoogleDoc table — list berkas yang tersimpan di Drive)
+   901→// ============================================================
+   902→
+   903→async function getCustomerFiles(customerId?: string, customerName?: string): Promise<ToolResult> {
+   904→  try {
+   905→    let docs: any[] = []
+   906→
+   907→    if (customerId) {
+   908→      docs = await db.googleDoc.findMany({
+   909→        where: { customerId },
+   910→        orderBy: { createdAt: 'desc' },
+   911→      })
+   912→    } else if (customerName) {
+   913→      // Find customer first by name (case-insensitive contains)
+   914→      const customer = await db.customer.findFirst({
+   915→        where: { name: { contains: customerName, mode: 'insensitive' } },
+   916→      })
+   917→      if (customer) {
+   918→        docs = await db.googleDoc.findMany({
+   919→          where: { customerId: customer.id },
+   920→          orderBy: { createdAt: 'desc' },
+   921→        })
+   922→      } else {
+   923→        return {
+   924→          toolName: 'getCustomerFiles',
+   925→          success: false,
+   926→          data: null,
+   927→          summary: `❌ Konsumen "${customerName}" tidak ditemukan di database.`,
+   928→        }
+   929→      }
+   930→    } else {
+   931→      return {
+   932→        toolName: 'getCustomerFiles',
+   933→        success: false,
+   934→        data: null,
+   935→        summary: `❌ Tidak ada customer yang ditentukan. Sebutkan nama konsumen.`,
+   936→      }
+   937→    }
+   938→
+   939→    if (docs.length === 0) {
+   940→      return {
+   941→        toolName: 'getCustomerFiles',
+   942→        success: true,
+   943→        data: { docs: [], count: 0 },
+   944→        summary: `ℹ️ Belum ada berkas yang tersimpan di Google Drive untuk konsumen ini.`,
+   945→      }
+   946→    }
+   947→
+   948→    // Build readable file list
+   949→    const fileList = docs.map((d, i) => {
+   950→      const docTypeLabel: Record<string, string> = {
+   951→        'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+   952→        'lokasi-kerja': 'Lokasi Kerja',
+   953→        'spr': 'SPR',
+   954→        'flpp': 'FLPP',
+   955→        'ajb': 'AJB',
+   956→        'bphtb': 'BPHTB',
+   957→        'notaris': 'Notaris',
+   958→        'ktp': 'KTP',
+   959→        'kk': 'KK',
+   960→        'npwp': 'NPWP',
+   961→        'sertifikat': 'Sertifikat',
+   962→        'lainnya': 'Lainnya',
+   963→      }
+   964→      const label = docTypeLabel[d.docType] || d.docType
+   965→      return `${i + 1}. **${label}** — ${d.fileName} (docId: ${d.docId.substring(0, 12)}...)`
+   966→    }).join('\n')
+   967→
+   968→    return {
+   969→      toolName: 'getCustomerFiles',
+   970→      success: true,
+   971→      data: { docs, count: docs.length },
+   972→      summary: `📁 Ditemukan ${docs.length} berkas di Google Drive:\n${fileList}\n\nUser dapat memilih berkas dengan menyebut nomor atau nama jenis dokumen. Saya akan kirim file-nya.`,
+   973→    }
+   974→  } catch (err: any) {
+   975→    return {
+   976→      toolName: 'getCustomerFiles',
+   977→      success: false,
+   978→      data: null,
+   979→      summary: `❌ GAGAL mengambil daftar berkas: ${err?.message || 'unknown error'}`,
+   980→    }
+   981→  }
+   982→}
+   983→
+   984→// ============================================================
+   985→// TOOL: Get Relevant Memories (filtered by category)
+   986→// ============================================================
+   987→
+   988→async function getRelevantMemories(message: string): Promise<ToolResult> {
+   989→  const category = detectMemoryCategory(message)
+   990→  // Query memories for this category + UTAMA (always include general)
+   991→  const memories = await db.memory.findMany({
+   992→    where: { OR: [{ category }, { category: 'UTAMA' }, { category: 'DECISION' }] },
+   993→    orderBy: { importance: 'desc' },
+   994→    take: 15,
+   995→  })
+   996→
+   997→  return {
+   998→    toolName: 'getRelevantMemories',
+   999→    success: true,
+  1000→    data: { category, memories },
+  1001→    summary: memories.length > 0
+  1002→      ? `Memory kategori ${category} + UTAMA (${memories.length} items):\n${memories.map(m => `- [${m.category}] (importance: ${m.importance}) ${m.content}`).join('\n')}`
+  1003→      : `Belum ada memory untuk kategori ${category}.`,
+  1004→  }
+  1005→}
+  1006→
+  1007→// ============================================================
+  1008→// TOOL: CREATE Customer (WRITE ACTION)
+  1009→// ============================================================
+  1010→
+  1011→async function createCustomer(data: { name: string; phone?: string; block?: string; bank?: string }): Promise<ToolResult> {
+  1012→  try {
+  1013→    // Find the project (Anjayo 16)
+  1014→    const project = await db.project.findFirst()
+  1015→    if (!project) {
+  1016→      return { toolName: 'createCustomer', success: false, data: null, summary: '❌ Project tidak ditemukan di database.' }
+  1017→    }
+  1018→
+  1019→    // Parse block letter + house number
+  1020→    let blockLetter = '', houseNumber = ''
+  1021→    if (data.block) {
+  1022→      const match = data.block.match(/^([A-Za-z]+)(\d+.*)$/)
+  1023→      if (match) { blockLetter = match[1]; houseNumber = match[2] }
+  1024→      else { blockLetter = data.block }
+  1025→    }
+  1026→
+  1027→    // Check if customer with same name+block already exists (prevent duplicates)
+  1028→    if (data.block) {
+  1029→      const existing = await db.customer.findFirst({
+  1030→        where: {
+  1031→          name: { equals: data.name, mode: 'insensitive' },
+  1032→          blockLetter: blockLetter,
+  1033→          houseNumber: houseNumber,
+  1034→        }
+  1035→      })
+  1036→      if (existing) {
+  1037→        return {
+  1038→          toolName: 'createCustomer',
+  1039→          success: false,
+  1040→          data: existing,
+  1041→          summary: `ℹ️ Konsumen "${data.name}" (Blok ${data.block}) sudah ada di database (ID: ${existing.id}, stage: ${existing.stage}). Tidak perlu dibuat ulang.`,
+  1042→        }
+  1043→      }
+  1044→    }
+  1045→
+  1046→    const customer = await db.customer.create({
+  1047→      data: {
+  1048→        name: data.name,
+  1049→        whatsappNumber: data.phone || null,
+  1050→        phone: data.phone || null,
+  1051→        bankName: data.bank || null,
+  1052→        blockLetter: blockLetter || null,
+  1053→        houseNumber: houseNumber || null,
+  1054→        stage: 'DM',
+  1055→        projectId: project.id,
+  1056→        closingDate: new Date(),
+  1057→      } as any,
+  1058→    })
+  1059→
+  1060→    // Try to link to existing Unit by blockNumber — DON'T create new Unit
+  1061→    // (Unit creation requires landSize/buildingSize/price/dpAmount which we don't have here.
+  1062→    //  Those values come from site plan data, not from chat input.)
+  1063→    let unitLinked = false
+  1064→    if (data.block) {
+  1065→      const existingUnit = await db.unit.findFirst({
+  1066→        where: { blockNumber: { equals: data.block, mode: 'insensitive' }, projectId: project.id }
+  1067→      })
+  1068→      if (existingUnit) {
+  1069→        // Link unit to this customer + mark as BOOKED
+  1070→        await db.unit.update({
+  1071→          where: { id: existingUnit.id },
+  1072→          data: { customerId: customer.id, status: 'BOOKED', bookedAt: new Date() },
+  1073→        })
+  1074→        unitLinked = true
+  1075→      }
+  1076→      // If no existing unit found, that's OK — owner can assign manually later via dashboard
+  1077→    }
+  1078→
+  1079→    return {
+  1080→      toolName: 'createCustomer',
+  1081→      success: true,
+  1082→      data: customer,
+  1083→      summary: `✅ Berhasil menambahkan konsumen baru: ${customer.name}${data.block ? ` (Blok ${data.block})` : ''}${data.bank ? ` Bank: ${data.bank}` : ''}${data.phone ? ` Telp: ${data.phone}` : ''}. Stage awal: DM. Data tersimpan di database.${unitLinked ? ' Unit berhasil di-link.' : (data.block ? ' Unit belum di-link (blok tidak ditemukan di site plan, owner bisa assign manual).' : '')}`,
+  1084→    }
+  1085→  } catch (err: any) {
+  1086→    return { toolName: 'createCustomer', success: false, data: null, summary: `❌ GAGAL menambahkan konsumen: ${err?.message || 'unknown error'}` }
+  1087→  }
+  1088→}
+  1089→
+  1090→// ============================================================
+  1091→// TOOL: DELETE Customer (WRITE ACTION — permanent!)
+  1092→// ============================================================
+  1093→
+  1094→async function deleteCustomer(customerId: string, customerName: string): Promise<ToolResult> {
+  1095→  try {
+  1096→    // Get customer info before delete (for confirmation message + audit log)
+  1097→    const customer = await db.customer.findUnique({
+  1098→      where: { id: customerId },
+  1099→      include: { units: true, googleDocs: true },
+  1100→    })
+  1101→
+  1102→    if (!customer) {
+  1103→      return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ Konsumen tidak ditemukan.` }
+  1104→    }
+  1105→
+  1106→    const block = (customer.blockLetter || '') + (customer.houseNumber || '') || '-'
+  1107→    const bank = customer.bankName || 'belum dipilih'
+  1108→    const googleDocCount = customer.googleDocs?.length || 0
+  1109→
+  1110→    // === PRESERVE GOOGLE DRIVE FILES ===
+  1111→    // Per owner requirement: hapus dari DB saja, JANGAN hapus file dari Google Drive.
+  1112→    // - Schema already has `onDelete: SetNull` on GoogleDoc.customerId
+  1113→    //   → when customer is deleted, GoogleDoc records have customerId set to null automatically
+  1114→    //   → Drive files remain accessible (we never call Drive API to delete)
+  1115→    // - We do NOT call db.googleDoc.deleteMany anymore — that would erase DB metadata
+  1116→    //   and we'd lose reference to those Drive files entirely.
+  1117→    // - Units: unlink (set customerId=null) instead of delete, so site plan history is preserved
+  1118→    //   (we don't want to mark a unit as AVAILABLE just because customer was deleted from DB)
+  1119→
+  1120→    // Unlink units (don't delete them — they belong to the project/site plan)
+  1121→    await db.unit.updateMany({
+  1122→      where: { customerId },
+  1123→      data: { customerId: null, status: 'AVAILABLE', bookedAt: null, soldAt: null },
+  1124→    })
+  1125→
+  1126→    // Delete conversation history (chat logs are not Drive files — safe to delete)
+  1127→    await db.conversation.deleteMany({ where: { customerId } })
+  1128→
+  1129→    // Delete stage history (internal tracking, not user-facing)
+  1130→    await db.customerStageHistory.deleteMany({ where: { customerId } })
+  1131→
+  1132→    // Delete bank pipelines (internal tracking)
+  1133→    await db.bankPipeline.deleteMany({ where: { customerId: customerId as any } })
+  1134→
+  1135→    // === Finally delete the customer (GoogleDoc records auto-set customerId=null via SetNull) ===
+  1136→    await db.customer.delete({ where: { id: customerId } })
+  1137→
+  1138→    return {
+  1139→      toolName: 'deleteCustomer',
+  1140→      success: true,
+  1141→      data: {
+  1142→        deletedCustomer: customer.name,
+  1143→        block,
+  1144→        bank,
+  1145→        googleDocsPreserved: googleDocCount,
+  1146→      },
+  1147→      summary: `✅ Berhasil MENGHAPUS konsumen: ${customer.name} (Blok ${block}, Bank: ${bank}) dari database.
+  1148→
+  1149→📦 **Google Drive files DIPERTAHANKAN** (${googleDocCount} file metadata tetap tersimpan di DB dengan customerId=NULL). File di Drive tidak dihapus dan masih bisa diakses jika konsumen ini didaftarkan ulang di kemudian hari.
+  1150→
+  1151→🏠 Unit site plan di-unlink (status kembali AVAILABLE), tidak dihapus dari site plan.`,
+  1152→    }
+  1153→  } catch (err: any) {
+  1154→    return { toolName: 'deleteCustomer', success: false, data: null, summary: `❌ GAGAL menghapus: ${err?.message || 'unknown error'}` }
+  1155→  }
+  1156→}
+  1157→
+  1158→// ============================================================
+  1159→// TOOL: UPDATE Customer Field (generic WRITE — any field)
+  1160→// ============================================================
+  1161→
+  1162→async function updateCustomerField(customerId: string, field: string, value: any): Promise<ToolResult> {
+  1163→  // Map common field names to DB column names
+  1164→  const fieldMap: Record<string, string> = {
+  1165→    'bank': 'bankName', 'nama bank': 'bankName',
+  1166→    'stage': 'stage', 'status': 'stage', 'tahap': 'stage',
+  1167→    'nik': 'nik', 'ktp': 'nik', 'nomor ktp': 'nik',
+  1168→    'npwp': 'npwpNumber', 'nomor npwp': 'npwpNumber',
+  1169→    'nama': 'name', 'nama lengkap': 'name', 'nama konsumen': 'name',
+  1170→    'alamat': 'ktpAddress', 'alamat ktp': 'ktpAddress',
+  1171→    'telepon': 'whatsappNumber', 'no hp': 'whatsappNumber', 'wa': 'whatsappNumber', 'whatsapp': 'whatsappNumber',
+  1172→    'pekerjaan': 'occupation', 'job': 'occupation',
+  1173→    'perusahaan': 'companyName', 'nama perusahaan': 'companyName',
+  1174→    'jabatan': 'workPosition', 'posisi': 'workPosition',
+  1175→    'penghasilan': 'monthlyIncome', 'gaji': 'monthlyIncome', 'income': 'monthlyIncome',
+  1176→    'tempat lahir': 'birthPlace',
+  1177→    'tanggal lahir': 'birthDate',
+  1178→    'blok': 'blockLetter',
+  1179→    'no rumah': 'houseNumber',
+  1180→    'luas tanah': 'landSize',
+  1181→    'luas bangunan': 'houseSize',
+  1182→    'tgl closing': 'closingDate', 'tanggal closing': 'closingDate',
+  1183→    'tgl sp3k': 'sp3kDate', 'tanggal sp3k': 'sp3kDate',
+  1184→    'tgl akad': 'akadDate', 'tanggal akad': 'akadDate',
+  1185→    'no akad': 'akadNumber',
+  1186→    'tgl lpa': 'lpaDate', 'tanggal lpa': 'lpaDate',
+  1187→    'no lpa': 'lpaNumber',
+  1188→    'no rekening btn': 'btnAccountNumber', 'rekening btn': 'btnAccountNumber',
+  1189→    'atasan': 'atasanName', 'nama atasan': 'atasanName',
+  1190→    'no hp atasan': 'atasanNip',
+  1191→    'jam operasional': 'workplaceJamOperasional',
+  1192→    'waktu hubungi': 'workplaceWaktuHubungi',
+  1193→    'maps link': 'workplaceMapsLink',
+  1194→    'short link': 'workplaceMapsShortLink',
+  1195→    'berkas lengkap': 'berkasLengkap',
+  1196→  }
+  1197→
+  1198→  const dbField = fieldMap[field.toLowerCase()] || field
+  1199→  const isDateField = ['closingDate', 'sp3kDate', 'akadDate', 'lpaDate', 'birthDate'].includes(dbField)
+  1200→  const isIntField = ['landSize', 'houseSize', 'monthlyIncome', 'gajiPokok'].includes(dbField)
+  1201→  const isBoolField = ['berkasLengkap'].includes(dbField)
+  1202→
+  1203→  let dbValue: any = value
+  1204→  if (isDateField) {
+  1205→    // Parse date — accept "2025-06-30", "30 Juni 2025", "30/06/2025"
+  1206→    const dateStr = String(value).trim()
+  1207→    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+  1208→      dbValue = new Date(dateStr)
+  1209→    } else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+  1210→      const [d, m, y] = dateStr.split('/')
+  1211→      dbValue = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`)
+  1212→    } else {
+  1213→      // Try Indonesian date format
+  1214→      const months: Record<string, string> = {
+  1215→        'januari': '01', 'februari': '02', 'maret': '03', 'april': '04', 'mei': '05', 'juni': '06',
+  1216→        'juli': '07', 'agustus': '08', 'september': '09', 'oktober': '10', 'november': '11', 'desember': '12',
+  1217→        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+  1218→        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'okt': '10',
+  1219→      }
+  1220→      const match = dateStr.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/)
+  1221→      if (match) {
+  1222→        const day = match[1].padStart(2, '0')
+  1223→        const month = months[match[2].toLowerCase()] || '01'
+  1224→        dbValue = new Date(`${match[3]}-${month}-${day}`)
+  1225→      }
+  1226→    }
+  1227→  }
+  1228→  if (isIntField) dbValue = parseInt(String(value).replace(/[^\d]/g, '')) || 0
+  1229→  if (isBoolField) dbValue = ['true', 'ya', 'lengkap', '1', 'yes'].includes(String(value).toLowerCase())
+  1230→
+  1231→  // Bank name normalization
+  1232→  if (dbField === 'bankName') {
+  1233→    const v = String(value).toLowerCase()
+  1234→    if (v.includes('btn')) dbValue = 'BTN'
+  1235→    else if (v.includes('mandiri')) dbValue = 'MANDIRI'
+  1236→    else if (v.includes('bsb') || v.includes('syariah') || v.includes('sumsel') || v.includes('babel')) dbValue = 'BSB_SYARIAH'
+  1237→  }
+  1238→
+  1239→  // Stage normalization
+  1240→  if (dbField === 'stage') {
+  1241→    const stageMap: Record<string, string> = {
+  1242→      'dm': 'DM', 'survey': 'SURVEY', 'closing': 'CLOSING', 'booking': 'BOOKING',
+  1243→      'slik': 'SLIK', 'pemberkasan': 'PEMBERKASAN', 'sp3k': 'SP3K', 'sppk': 'SP3K',
+  1244→      'akad': 'AKAD', 'serah terima': 'SERAH_TERIMA', 'serahterima': 'SERAH_TERIMA',
+  1245→    }
+  1246→    const v = String(value).toLowerCase()
+  1247→    for (const [key, val] of Object.entries(stageMap)) {
+  1248→      if (v.includes(key)) { dbValue = val; break }
+  1249→    }
+  1250→  }
+  1251→
+  1252→  try {
+  1253→    const customer = await db.customer.update({
+  1254→      where: { id: customerId },
+  1255→      data: { [dbField]: dbValue },
+  1256→    })
+  1257→    return {
+  1258→      toolName: 'updateCustomerField',
+  1259→      success: true,
+  1260→      data: { field: dbField, value: dbValue, customer },
+  1261→      summary: `✅ Berhasil update ${dbField} = ${dbValue} untuk konsumen ${customer.name}.`,
+  1262→    }
+  1263→  } catch (err: any) {
+  1264→    return {
+  1265→      toolName: 'updateCustomerField',
+  1266→      success: false,
+  1267→      data: null,
+  1268→      summary: `❌ GAGAL update ${dbField}: ${err?.message || 'unknown error'}`,
+  1269→    }
+  1270→  }
+  1271→}
+  1272→
+  1273→// ============================================================
+  1274→// MAIN: Execute tools based on intent
+  1275→// ============================================================
+  1276→
+  1277→// ExecuteContext: passes channel/sender info so DB-backed pending actions are scoped correctly
+  1278→export interface ExecuteContext {
+  1279→  conversationId?: string
+  1280→  channel?: string  // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  1281→  senderNumber?: string
+  1282→}
+  1283→
+  1284→export async function executeTools(
+  1285→  intent: IntentResult,
+  1286→  customerId?: string,
+  1287→  userMessage?: string,
+  1288→  executeContext: ExecuteContext = {},
+  1289→): Promise<{ results: string; directResponse: string | null }> {
+  1290→  const results: string[] = []
+  1291→  let directResponse: string | null = null  // If set, chat route returns this directly without calling LLM
+  1292→
+  1293→  for (const toolName of intent.tools) {
+  1294→    try {
+  1295→      let result: ToolResult
+  1296→
+  1297→      switch (toolName) {
+  1298→        case 'getAllCustomers':
+  1299→          result = await getAllCustomers()
+  1300→          break
+  1301→        case 'getCustomerStats':
+  1302→          result = await getCustomerStats()
+  1303→          break
+  1304→        case 'getBankDistribution':
+  1305→          result = await getBankDistribution()
+  1306→          break
+  1307→        case 'getStageDistribution':
+  1308→          result = await getStageDistribution()
+  1309→          break
+  1310→        case 'getCustomerDocStatus':
+  1311→          result = await getCustomerDocStatus(customerId, intent.customerName)
+  1312→          break
+  1313→        case 'getCustomerFiles':
+  1314→          result = await getCustomerFiles(customerId, intent.customerName)
+  1315→          break
+  1316→        case 'getRelevantMemories':
+  1317→          result = await getRelevantMemories(userMessage || '')
+  1318→          break
+  1319→        default:
+  1320→          continue
+  1321→      }
+  1322→
+  1323→      if (result.success) results.push(`[${toolName}] ${result.summary}`)
+  1324→    } catch (err) {
+  1325→      console.error(`Tool ${toolName} error:`, err)
+  1326→    }
+  1327→  }
+  1328→
+  1329→  // Handle GET_FILES — list available files for customer (DINA shows list, user picks next)
+  1330→  if (intent.action === 'GET_FILES') {
+  1331→    let targetCustomer: any = null
+  1332→    if (customerId) {
+  1333→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1334→    }
+  1335→    if (!targetCustomer && intent.customerName) {
+  1336→      // Disambiguation-aware lookup
+  1337→      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+  1338→        blockNumber: intent.blockNumber,
+  1339→      })
+  1340→      if (lookup) {
+  1341→        if (lookup.needsDisambiguation) {
+  1342→          directResponse = buildDisambiguationMessage(lookup.duplicates)
+  1343→          results.push(`[getCustomerFiles] ⚠️ Duplicates: ${lookup.duplicates.length} customers. Asking user to disambiguate.`)
+  1344→        } else {
+  1345→          targetCustomer = lookup.customer
+  1346→        }
+  1347→      }
+  1348→    }
+  1349→
+  1350→    if (!targetCustomer && !directResponse) {
+  1351→      results.push(`[getCustomerFiles] ❌ Konsumen tidak ditemukan. Minta user sebutkan nama konsumen dengan jelas.`)
+  1352→      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
+  1353→    } else if (targetCustomer && !directResponse) {
+  1354→      const fileResult = await getCustomerFiles(targetCustomer.id, undefined)
+  1355→      if (fileResult.success && fileResult.data?.docs?.length > 0) {
+  1356→        // Build directResponse with the file list — bypass LLM for accuracy
+  1357→        const docs = fileResult.data.docs
+  1358→        const docTypeLabel: Record<string, string> = {
+  1359→          'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+  1360→          'lokasi-kerja': 'Lokasi Kerja',
+  1361→          'spr': 'SPR',
+  1362→          'flpp': 'FLPP',
+  1363→          'ajb': 'AJB',
+  1364→          'bphtb': 'BPHTB',
+  1365→          'notaris': 'Notaris',
+  1366→          'ktp': 'KTP',
+  1367→          'kk': 'KK',
+  1368→          'npwp': 'NPWP',
+  1369→          'sertifikat': 'Sertifikat',
+  1370→        }
+  1371→        const fileList = docs.map((d: any, i: number) => {
+  1372→          const label = docTypeLabel[d.docType] || d.docType
+  1373→          return `${i + 1}. **${label}** — ${d.fileName}`
+  1374→        }).join('\n')
+  1375→
+  1376→        directResponse = `📁 **Berkas ${targetCustomer.name}** (Blok ${(targetCustomer.blockLetter || '') + (targetCustomer.houseNumber || '') || '-'}) di Google Drive:
+  1377→
+  1378→${fileList}
+  1379→
+  1380→Pilih berkas yang mau dikirim dengan menyebut **nomor** (contoh: "yang nomor 2") atau **jenis dokumen** (contoh: "kirim slip gaji"). Bisa lebih dari 1 (contoh: "1 dan 3"). 🙏`
+  1381→        results.push(`[getCustomerFiles] ${fileResult.summary}`)
+  1382→      } else {
+  1383→        directResponse = fileResult.summary
+  1384→        results.push(`[getCustomerFiles] ${fileResult.summary}`)
+  1385→      }
+  1386→    }
+  1387→  }
+  1388→
+  1389→  // Handle SEND_FILE — user picked specific file, fetch from Drive + return as dataUrl
+  1390→  // NOTE: The actual file fetching happens in chat route (because it needs Google API client).
+  1391→  // Here we just identify which GoogleDoc record matches and push its docId to results.
+  1392→  if (intent.action === 'SEND_FILE') {
+  1393→    let targetCustomer: any = null
+  1394→    if (customerId) {
+  1395→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1396→    }
+  1397→    if (!targetCustomer && intent.customerName) {
+  1398→      // Disambiguation-aware lookup
+  1399→      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+  1400→        blockNumber: intent.blockNumber,
+  1401→      })
+  1402→      if (lookup) {
+  1403→        if (lookup.needsDisambiguation) {
+  1404→          directResponse = buildDisambiguationMessage(lookup.duplicates)
+  1405→          results.push(`[sendFile] ⚠️ Duplicates: ${lookup.duplicates.length} customers. Asking user to disambiguate.`)
+  1406→        } else {
+  1407→          targetCustomer = lookup.customer
+  1408→        }
+  1409→      }
+  1410→    }
+  1411→
+  1412→    if (!targetCustomer && !directResponse) {
+  1413→      results.push(`[sendFile] ❌ Konsumen tidak ditemukan. JANGAN bilang berhasil.`)
+  1414→      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap konsumen dengan jelas. 🙏`
+  1415→    } else if (targetCustomer && !directResponse) {
+  1416→      const docs = await db.googleDoc.findMany({
+  1417→        where: { customerId: targetCustomer.id },
+  1418→        orderBy: { createdAt: 'desc' },
+  1419→      })
+  1420→
+  1421→      if (docs.length === 0) {
+  1422→        results.push(`[sendFile] ℹ️ Belum ada berkas untuk konsumen ini.`)
+  1423→        directResponse = `ℹ️ Belum ada berkas yang tersimpan di Google Drive untuk ${targetCustomer.name}. Silakan upload berkas terlebih dahulu melalui dashboard. 🙏`
+  1424→      } else {
+  1425→        // Determine which file(s) to send
+  1426→        let selectedDocs: any[] = []
+  1427→
+  1428→        if (intent.requestedFileDocType) {
+  1429→          // Match by doc type
+  1430→          selectedDocs = docs.filter(d => d.docType === intent.requestedFileDocType)
+  1431→          if (selectedDocs.length === 0) {
+  1432→            // No exact match — try partial match
+  1433→            selectedDocs = docs.filter(d => d.docType.includes(intent.requestedFileDocType!) || intent.requestedFileDocType!.includes(d.docType))
+  1434→          }
+  1435→        }
+  1436→
+  1437→        if (intent.requestedFileIndex && intent.requestedFileIndex >= 1 && intent.requestedFileIndex <= docs.length) {
+  1438→          // Match by index (1-based)
+  1439→          const docByIndex = docs[intent.requestedFileIndex - 1]
+  1440→          if (!selectedDocs.find(d => d.id === docByIndex.id)) {
+  1441→            selectedDocs.push(docByIndex)
+  1442→          }
+  1443→        }
+  1444→
+  1445→        if (selectedDocs.length === 0) {
+  1446→          // No match — show available files
+  1447→          const docTypeLabel: Record<string, string> = {
+  1448→            'sk-slip-gaji': 'SK Kerja + Slip Gaji',
+  1449→            'lokasi-kerja': 'Lokasi Kerja',
+  1450→            'spr': 'SPR', 'flpp': 'FLPP', 'ajb': 'AJB', 'bphtb': 'BPHTB',
+  1451→            'notaris': 'Notaris', 'ktp': 'KTP', 'kk': 'KK', 'npwp': 'NPWP', 'sertifikat': 'Sertifikat',
+  1452→          }
+  1453→          const fileList = docs.map((d, i) => `${i + 1}. **${docTypeLabel[d.docType] || d.docType}** — ${d.fileName}`).join('\n')
+  1454→          results.push(`[sendFile] ⚠️ Tidak ada berkas yang cocok dengan permintaan. Berkas yang tersedia: ${fileList}`)
+  1455→          directResponse = `⚠️ Berkas yang Anda minta tidak ditemukan. 
+  1456→
+  1457→📁 **Berkas ${targetCustomer.name} yang tersedia:**
+  1458→
+  1459→${fileList}
+  1460→
+  1461→Silakan sebutkan nomor atau jenis dokumen yang benar. 🙏`
+  1462→        } else {
+  1463→          // Files selected — push to results with structured data for chat route to pick up
+  1464→          // Chat route will read these from results and fetch from Drive
+  1465→          const fileSummary = selectedDocs.map(d => `${d.fileName} (docId: ${d.docId}, type: ${d.docType})`).join(', ')
+  1466→          results.push(`[sendFile] ✅ Siap kirim ${selectedDocs.length} berkas: ${fileSummary}`)
+  1467→          results.push(`[sendFile:FILES_TO_SEND] ${JSON.stringify(selectedDocs.map(d => ({ docId: d.docId, fileName: d.fileName, docType: d.docType, customerId: d.customerId })))}`)
+  1468→          // directResponse will be set by chat route AFTER fetching files from Drive
+  1469→          // (chat route needs to call Google Drive API to get actual file content)
+  1470→        }
+  1471→      }
+  1472→    }
+  1473→  }
+  1474→
+  1475→  // Handle UPDATE_FIELD (generic field update)
+  1476→  if (intent.action === 'UPDATE_FIELD' && intent.updateField) {
+  1477→    let targetCustomer: any = null
+  1478→    if (customerId) {
+  1479→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1480→    }
+  1481→    if (!targetCustomer && intent.customerName) {
+  1482→      const lookup = await findCustomerWithDisambiguation(intent.customerName, { blockNumber: intent.blockNumber })
+  1483→      if (lookup) {
+  1484→        if (lookup.needsDisambiguation) {
+  1485→          directResponse = buildDisambiguationMessage(lookup.duplicates)
+  1486→          results.push(`[updateCustomerField] ⚠️ Duplicates: ${lookup.duplicates.length}. Asking user to disambiguate.`)
+  1487→        } else {
+  1488→          targetCustomer = lookup.customer
+  1489→        }
+  1490→      }
+  1491→    }
+  1492→    if (!targetCustomer && intent.blockNumber && !directResponse) {
+  1493→      targetCustomer = await db.customer.findFirst({
+  1494→        where: { OR: [
+  1495→          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+  1496→          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+  1497→        ] }
+  1498→      })
+  1499→    }
+  1500→
+  1501→    if (targetCustomer && intent.updateValue && !directResponse) {
+  1502→      const result = await updateCustomerField(targetCustomer.id, intent.updateField, intent.updateValue)
+  1503→      if (result.success) {
+  1504→        await writeAuditLog('UPDATE_FIELD', 'Customer', targetCustomer.id, {
+  1505→          customerName: targetCustomer.name,
+  1506→          field: intent.updateField,
+  1507→          value: intent.updateValue,
+  1508→          updatedBy: executeContext.senderNumber || 'dashboard',
+  1509→          userMessage: userMessage?.substring(0, 200),
+  1510→        })
+  1511→      }
+  1512→      results.push(`[updateCustomerField] ${result.summary}`)
+  1513→    } else if (!targetCustomer) {
+  1514→      results.push(`[updateCustomerField] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
+  1515→    } else if (!intent.updateValue) {
+  1516→      results.push(`[updateCustomerField] ⚠️ Field "${intent.updateField}" terdeteksi tapi value tidak ditemukan. Minta user sebutkan value yang baru.`)
+  1517→    }
+  1518→  }
+  1519→
+  1520→  // Handle UPDATE_BANK (still works, uses generic updateCustomerField)
+  1521→  if (intent.action === 'UPDATE_BANK' && intent.newBankValue) {
+  1522→    let targetCustomer: any = null
+  1523→    if (customerId) {
+  1524→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1525→    }
+  1526→    if (!targetCustomer && intent.customerName) {
+  1527→      // Case-insensitive search
+  1528→      targetCustomer = await db.customer.findFirst({
+  1529→        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+  1530→      })
+  1531→    }
+  1532→    // Try block number if name not found
+  1533→    if (!targetCustomer && intent.blockNumber) {
+  1534→      targetCustomer = await db.customer.findFirst({
+  1535→        where: { OR: [
+  1536→          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+  1537→          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+  1538→        ] }
+  1539→      })
+  1540→    }
+  1541→
+  1542→    if (targetCustomer) {
+  1543→      try {
+  1544→        const result = await updateCustomerField(targetCustomer.id, 'bankName', intent.newBankValue)
+  1545→        if (result.success) {
+  1546→          await writeAuditLog('UPDATE_BANK', 'Customer', targetCustomer.id, {
+  1547→            customerName: targetCustomer.name,
+  1548→            newBank: intent.newBankValue,
+  1549→            updatedBy: executeContext.senderNumber || 'dashboard',
+  1550→          })
+  1551→        }
+  1552→        results.push(`[updateCustomerBank] ${result.summary}`)
+  1553→      } catch (err: any) {
+  1554→        results.push(`[updateCustomerBank] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+  1555→      }
+  1556→    } else {
+  1557→      results.push(`[updateCustomerBank] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil. Minta user sebutkan nama konsumen dengan jelas.`)
+  1558→    }
+  1559→  }
+  1560→
+  1561→  if (intent.action === 'UPDATE_STAGE' && intent.newStageValue) {
+  1562→    let targetCustomer: any = null
+  1563→    if (customerId) {
+  1564→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1565→    }
+  1566→    if (!targetCustomer && intent.customerName) {
+  1567→      targetCustomer = await db.customer.findFirst({
+  1568→        where: { name: { contains: intent.customerName, mode: 'insensitive' } }
+  1569→      })
+  1570→    }
+  1571→    if (!targetCustomer && intent.blockNumber) {
+  1572→      targetCustomer = await db.customer.findFirst({
+  1573→        where: { OR: [
+  1574→          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+  1575→          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+  1576→        ] }
+  1577→      })
+  1578→    }
+  1579→
+  1580→    if (targetCustomer) {
+  1581→      try {
+  1582→        const result = await updateCustomerField(targetCustomer.id, 'stage', intent.newStageValue)
+  1583→        if (result.success) {
+  1584→          await writeAuditLog('UPDATE_STAGE', 'Customer', targetCustomer.id, {
+  1585→            customerName: targetCustomer.name,
+  1586→            newStage: intent.newStageValue,
+  1587→            updatedBy: executeContext.senderNumber || 'dashboard',
+  1588→          })
+  1589→        }
+  1590→        results.push(`[updateCustomerStage] ${result.summary}`)
+  1591→      } catch (err: any) {
+  1592→        results.push(`[updateCustomerStage] ❌ GAGAL update: ${err?.message || 'unknown error'}. JANGAN bilang berhasil.`)
+  1593→      }
+  1594→    } else {
+  1595→      results.push(`[updateCustomerStage] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil. Minta user sebutkan nama konsumen dengan jelas.`)
+  1596→    }
+  1597→  }
+  1598→
+  1599→  // Handle CONFIRM_DELETE / CONFIRM_CREATE — user confirmed, fetch from DB
+  1600→  // CRITICAL: Validate target name matches user's confirmation message to prevent wrong-customer deletes
+  1601→  // CRITICAL: For all delete operations, set directResponse to bypass LLM (prevent hallucination)
+  1602→  if (intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE') {
+  1603→    const pending = await getActivePendingAction(executeContext)
+  1604→    if (!pending) {
+  1605→      results.push(`[confirm] ⚠️ Tidak ada aksi pending yang menunggu konfirmasi. JANGAN bilang berhasil melakukan apapun. Minta user jelaskan apa yang ingin dilakukan.`)
+  1606→      directResponse = `Tidak ada aksi yang menunggu konfirmasi. Silakan sebutkan apa yang ingin Anda lakukan. 🙏`
+  1607→    } else if (pending.type === 'DELETE') {
+  1608→      // Validate target still exists
+  1609→      if (!pending.targetId) {
+  1610→        results.push(`[deleteCustomer] ❌ Pending action tidak punya target ID. Aksi dibatalkan.`)
+  1611→        directResponse = `❌ Aksi penghapusan dibatalkan karena tidak ada target yang valid. Silakan ulangi permintaan dengan menyebutkan nama konsumen.`
+  1612→        await cancelPendingAction(executeContext)
+  1613→      } else {
+  1614→        const target = await db.customer.findUnique({ where: { id: pending.targetId } })
+  1615→        if (!target) {
+  1616→          results.push(`[deleteCustomer] ❌ Konsumen "${pending.targetName}" tidak ditemukan (mungkin sudah dihapus). Aksi dibatalkan.`)
+  1617→          directResponse = `❌ Konsumen "${pending.targetName}" tidak ditemukan di database (mungkin sudah dihapus). Aksi dibatalkan.`
+  1618→          await cancelPendingAction(executeContext)
+  1619→        } else {
+  1620→          // VALIDATION: if user's confirmation message contains a customer name that differs
+  1621→          // from the pending target, ABORT (user is confused about what they're confirming)
+  1622→          const msgLower = (userMessage || '').toLowerCase()
+  1623→          const targetNameLower = (target.name || '').toLowerCase()
+  1624→          // Check if msg mentions a DIFFERENT customer name
+  1625→          const otherCustomers = await db.customer.findMany({
+  1626→            where: { id: { not: target.id } },
+  1627→            select: { name: true }
+  1628→          })
+  1629→          const mentionsOther = otherCustomers.find(c => {
+  1630→            const cFirst = (c.name || '').toLowerCase().split(/\s+/)[0]
+  1631→            return cFirst.length >= 3 && msgLower.includes(cFirst) && !targetNameLower.includes(cFirst)
+  1632→          })
+  1633→          if (mentionsOther) {
+  1634→            results.push(`[deleteCustomer] ❌ ABORT: Pesan konfirmasi menyebutkan nama konsumen LAIN ("${mentionsOther.name}"), bukan "${target.name}" yang sebelumnya diminta untuk dihapus. Aksi dibatalkan demi keamanan.`)
+  1635→            directResponse = `⚠️ **Konfirmasi DIBATALKAN otomatis.**
+  1636→
+  1637→Alasan: Pesan Anda menyebutkan nama konsumen lain ("${mentionsOther.name}"), tetapi aksi pending yang menunggu konfirmasi adalah penghapusan "${target.name}".
+  1638→
+  1639→Demi keamanan, aksi penghapusan dibatalkan. **Tidak ada konsumen yang dihapus.** ✅
+  1640→
+  1641→Jika Anda ingin menghapus konsumen lain, silakan buat permintaan baru dengan menyebutkan nama lengkapnya. 🙏`
+  1642→            await cancelPendingAction(executeContext)
+  1643→          } else {
+  1644→            // All checks passed — execute delete
+  1645→            await confirmPendingAction(pending.id)
+  1646→            const result = await deleteCustomer(target.id, target.name)
+  1647→            await writeAuditLog('DELETE_CUSTOMER', 'Customer', target.id, {
+  1648→              customerName: target.name,
+  1649→              blockLetter: target.blockLetter,
+  1650→              houseNumber: target.houseNumber,
+  1651→              bankName: target.bankName,
+  1652→              confirmedBy: executeContext.senderNumber || 'dashboard',
+  1653→              userMessage: userMessage?.substring(0, 200),
+  1654→            })
+  1655→            results.push(`[deleteCustomer] ${result.summary}`)
+  1656→            directResponse = result.summary  // Use the actual tool result (no LLM)
+  1657→          }
+  1658→        }
+  1659→      }
+  1660→    } else if (pending.type === 'CREATE') {
+  1661→      const data = pending.customerData
+  1662→      if (data?.name) {
+  1663→        await confirmPendingAction(pending.id)
+  1664→        const result = await createCustomer(data)
+  1665→        await writeAuditLog('CREATE_CUSTOMER', 'Customer', result.data?.id || 'unknown', {
+  1666→          customerData: data,
+  1667→          confirmedBy: executeContext.senderNumber || 'dashboard',
+  1668→        })
+  1669→        results.push(`[createCustomer] ${result.summary}`)
+  1670→        directResponse = result.summary
+  1671→      } else {
+  1672→        results.push(`[createCustomer] ❌ Data konsumen tidak lengkap di pending action.`)
+  1673→        directResponse = `❌ Data konsumen tidak lengkap. Aksi dibatalkan.`
+  1674→        await cancelPendingAction(executeContext)
+  1675→      }
+  1676→    } else {
+  1677→      results.push(`[confirm] ⚠️ Tipe pending action tidak dikenal: ${pending.type}`)
+  1678→      directResponse = `⚠️ Tipe aksi pending tidak dikenal. Aksi dibatalkan.`
+  1679→      await cancelPendingAction(executeContext)
+  1680→    }
+  1681→  }
+  1682→
+  1683→  // Handle CANCEL_PENDING — user said "batal" / "tidak" / "jangan"
+  1684→  if (intent.action === 'CANCEL_PENDING') {
+  1685→    const pending = await getActivePendingAction(executeContext)
+  1686→    if (pending) {
+  1687→      await cancelPendingAction(executeContext)
+  1688→      results.push(`[cancel] ✅ Aksi pending (${pending.type} ${pending.targetName || ''}) telah dibatalkan.`)
+  1689→      directResponse = `✅ Aksi pending (${pending.type}${pending.targetName ? ' ' + pending.targetName : ''}) telah dibatalkan. Tidak ada perubahan yang dilakukan di database.`
+  1690→    } else {
+  1691→      results.push(`[cancel] ℹ️ Tidak ada aksi pending yang perlu dibatalkan.`)
+  1692→      directResponse = `ℹ️ Tidak ada aksi pending yang perlu dibatalkan.`
+  1693→    }
+  1694→  }
+  1695→
+  1696→  // Handle CREATE_CUSTOMER
+  1697→  if (intent.action === 'CREATE_CUSTOMER' && intent.newCustomerName) {
+  1698→    const customerData = {
+  1699→      name: intent.newCustomerName,
+  1700→      phone: intent.newCustomerPhone,
+  1701→      block: intent.newCustomerBlock,
+  1702→      bank: intent.newCustomerBank,
+  1703→    }
+  1704→    // For CREATE, execute directly (don't ask for confirmation — user already gave the command)
+  1705→    try {
+  1706→      const result = await createCustomer(customerData)
+  1707→      if (result.success && result.data?.id) {
+  1708→        await writeAuditLog('CREATE_CUSTOMER', 'Customer', result.data.id, {
+  1709→          customerData,
+  1710→          triggeredBy: executeContext.senderNumber || 'dashboard',
+  1711→        })
+  1712→      }
+  1713→      results.push(`[createCustomer] ${result.summary}`)
+  1714→      // Bypass LLM for CREATE — use the actual tool result (prevent hallucination)
+  1715→      directResponse = result.summary
+  1716→    } catch (err: any) {
+  1717→      const errMsg = `❌ GAGAL: ${err?.message || 'unknown error'}`
+  1718→      results.push(`[createCustomer] ${errMsg}`)
+  1719→      directResponse = errMsg
+  1720→    }
+  1721→  } else if (intent.action === 'CREATE_CUSTOMER' && !intent.newCustomerName) {
+  1722→    results.push(`[createCustomer] ⚠️ User ingin tambah konsumen tapi nama tidak terdeteksi. Minta user sebutkan nama konsumen.`)
+  1723→    directResponse = `Halo! Saya butuh nama konsumen untuk menambahkannya ke database. 🙏
+  1724→
+  1725→Format yang saya pahami:
+  1726→• "dapat konsumen baru namanya **[Nama]** di blok **[Blok]**"
+  1727→• "tambah konsumen **[Nama]** blok **[Blok]** bank **[BTN/Mandiri/BSB]**"
+  1728→• "daftarin konsumen **[Nama]** di blok **[Blok]**"
+  1729→
+  1730→Contoh: "dapat konsumen baru namanya Budi Santoso di blok F7 bank btn"`
+  1731→
+  1732→  }
+  1733→
+  1734→  // Handle DELETE_CUSTOMER — set DB-backed pending action for confirmation
+  1735→  if (intent.action === 'DELETE_CUSTOMER') {
+  1736→    let targetCustomer: any = null
+  1737→    let duplicates: any[] = []
+  1738→
+  1739→    if (customerId) {
+  1740→      targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1741→    }
+  1742→
+  1743→    if (!targetCustomer && intent.customerName) {
+  1744→      // Use disambiguation-aware lookup
+  1745→      const lookup = await findCustomerWithDisambiguation(intent.customerName, {
+  1746→        blockNumber: intent.blockNumber,
+  1747→      })
+  1748→      if (lookup) {
+  1749→        if (lookup.needsDisambiguation) {
+  1750→          // Multiple matches — ask user to disambiguate, DO NOT proceed
+  1751→          directResponse = buildDisambiguationMessage(lookup.duplicates)
+  1752→          results.push(`[deleteCustomer] ⚠️ Duplicates found: ${lookup.duplicates.length} customers match. Asking user to disambiguate.`)
+  1753→          // Skip the rest of DELETE_CUSTOMER handling
+  1754→          // (jump to return at end of executeTools)
+  1755→        } else {
+  1756→          targetCustomer = lookup.customer
+  1757→        }
+  1758→      }
+  1759→    }
+  1760→
+  1761→    if (!targetCustomer && intent.blockNumber && !directResponse) {
+  1762→      targetCustomer = await db.customer.findFirst({
+  1763→        where: { OR: [
+  1764→          { blockLetter: { startsWith: intent.blockNumber[0], mode: 'insensitive' } },
+  1765→          { units: { some: { blockNumber: { contains: intent.blockNumber, mode: 'insensitive' } } } }
+  1766→        ] }
+  1767→      })
+  1768→    }
+  1769→
+  1770→    if (targetCustomer && !directResponse) {
+  1771→      // Set DB-backed pending action
+  1772→      // Don't set conversationId — scope by channel (+ senderNumber for WA)
+  1773→      // This prevents scoping issues when conversationId differs between requests
+  1774→      await setPendingAction({
+  1775→        conversationId: null,
+  1776→        channel: executeContext.channel || 'DASHBOARD',
+  1777→        senderNumber: executeContext.senderNumber || null,
+  1778→        type: 'DELETE',
+  1779→        targetType: 'CUSTOMER',
+  1780→        targetId: targetCustomer.id,
+  1781→        targetName: targetCustomer.name,
+  1782→        customerData: null,
+  1783→      })
+  1784→      const block = (targetCustomer.blockLetter || '') + (targetCustomer.houseNumber || '') || '-'
+  1785→      const bank = targetCustomer.bankName || 'belum dipilih'
+  1786→      results.push(`[deleteCustomer] ⏳ PENDING (DB-backed): Konsumen "${targetCustomer.name}" (Blok ${block}, ID: ${targetCustomer.id}) akan dihapus PERMANEN.`)
+  1787→      // Direct response — bypass LLM to prevent hallucination
+  1788→      directResponse = `⚠️ **Konfirmasi Penghapusan**
+  1789→
+  1790→Yakin ingin menghapus konsumen berikut SECARA PERMANEN?
+  1791→
+  1792→• Nama: **${targetCustomer.name}**
+  1793→• Blok: **${block}**
+  1794→• Bank: **${bank}**
+  1795→
+  1796→Semua data terkait (berkas, unit, percakapan) akan ikut terhapus dan TIDAK bisa dikembalikan.
+  1797→
+  1798→Ketik **"ya"** untuk konfirmasi, atau **"batal"** untuk membatalkan.
+  1799→
+  1800→_Pending action akan expired dalam 5 menit._`
+  1801→    } else if (!directResponse) {
+  1802→      results.push(`[deleteCustomer] ❌ Konsumen tidak ditemukan (cari: name="${intent.customerName}", block="${intent.blockNumber}"). JANGAN bilang berhasil.`)
+  1803→      directResponse = `❌ Konsumen tidak ditemukan. Silakan sebutkan nama lengkap atau blok yang benar. 🙏`
+  1804→    }
+  1805→  }
+  1806→
+  1807→  // === LOGO GENERATION ===
+  1808→  if (intent.action === 'GENERATE_LOGO' && intent.logoPrompt) {
+  1809→    try {
+  1810→      let targetCustomer: any = null
+  1811→      if (customerId) targetCustomer = await db.customer.findUnique({ where: { id: customerId } })
+  1812→      if (!targetCustomer && intent.customerName) targetCustomer = await db.customer.findFirst({ where: { name: { contains: intent.customerName, mode: 'insensitive' } } })
+  1813→      const companyName = intent.logoPrompt || targetCustomer?.companyName || ''
+  1814→      if (!companyName) {
+  1815→        directResponse = `⚠️ Untuk generate logo, sebutkan nama perusahaan. Contoh: "generate logo untuk Warung Bu Tini"`
+  1816→      } else {
+  1817→        // DINA can't generate logo directly (z-ai SDK config not available on Vercel)
+  1818→        // But DINA can instruct user to use Logo Generator in modal
+  1819→        directResponse = `🎨 **Generate Logo: ${companyName}**
+  1820→
+  1821→Untuk generate logo, gunakan Logo Generator di dashboard:
+  1822→
+  1823→1. Buka tab **Berkas** → expand konsumen
+  1824→2. Klik tombol **SK Kerja** atau **Slip Gaji** (buka modal)
+  1825→3. Scroll ke bawah di panel kiri → **Generator Logo Perusahaan**
+  1826→4. Pilih mode:
+  1827→   - **Prompt Generate**: ketik prompt → AI create logo baru
+  1828→   - **Upload Recreate**: upload foto logo → AI recreate versi bersih
+  1829→5. Klik **Generate** → preview → **Insert ke Kop Surat**
+  1830→
+  1831→Logo akan otomatis tersimpan di Google Drive konsumen (jika terhubung).
+  1832→
+  1833→Atau, upload foto logo tempat usaha via sidebar kiri (Upload Dokumen), lalu ketik "recreate logo" — saya akan bantu proses.`
+  1834→      }
+  1835→      results.push(`[generateLogo] ${intent.logoPrompt}`)
+  1836→    } catch (err: any) {
+  1837→      directResponse = `❌ Gagal generate logo: ${err?.message || 'unknown error'}`
+  1838→    }
+  1839→  }
+  1840→
+  1841→  // === BANK CONFIG MANAGEMENT ===
+  1842→  if ((intent as any).action === 'LIST_BANKS') {
+  1843→    try {
+  1844→      const banks = await db.bankConfig.findMany({ where: { isActive: true }, orderBy: { bankName: 'asc' } })
+  1845→      if (banks.length === 0) {
+  1846→        directResponse = `📋 **Daftar Bank**
+  1847→
+  1848→Belum ada bank terdaftar di sistem. Untuk tambah bank baru:
+  1849→• "tambah bank BCA"
+  1850→• "tambah bank BRI"
+  1851→
+  1852→Setelah bank ditambahkan, Anda perlu upload PDF template + set annotation coordinates via Bank Config Builder UI di dashboard.`
+  1853→      } else {
+  1854→        const list = banks.map((b, i) => `${i + 1}. **${b.bankName}** (${b.bankCode})${b.description ? ` — ${b.description}` : ''}${b.templatePath ? ' ✅ template' : ' ⚠️ no template'}`).join('\n')
+  1855→        directResponse = `📋 **Daftar Bank** (${banks.length} bank aktif)
+  1856→
+  1857→${list}
+  1858→
+  1859→Untuk tambah bank baru: "tambah bank [Nama Bank]"
+  1860→Untuk hapus bank: "hapus bank [Nama Bank]"`
+  1861→      }
+  1862→      results.push(`[listBanks] Listed ${banks.length} banks`)
+  1863→    } catch (err: any) {
+  1864→      directResponse = `❌ Gagal mengambil daftar bank: ${err?.message || 'unknown error'}`
+  1865→    }
+  1866→  }
+  1867→
+  1868→  if ((intent as any).action === 'ADD_BANK' && intent.newBankName) {
+  1869→    try {
+  1870→      const bankName = intent.newBankName
+  1871→      const bankCode = bankName.toUpperCase().replace(/\s+/g, '_').substring(0, 20)
+  1872→      
+  1873→      const existing = await db.bankConfig.findUnique({ where: { bankCode } })
+  1874→      if (existing) {
+  1875→        directResponse = `ℹ️ Bank "${bankName}" (${bankCode}) sudah ada di sistem.`
+  1876→      } else {
+  1877→        const bank = await db.bankConfig.create({
+  1878→          data: {
+  1879→            bankCode,
+  1880→            bankName: bankName,
+  1881→            description: 'Added via DINA chat',
+  1882→            createdBy: executeContext.senderNumber || 'dina',
+  1883→          },
+  1884→        })
+  1885→        await writeAuditLog('CREATE_BANK', 'BankConfig', bank.id, {
+  1886→          bankCode, bankName, createdBy: executeContext.senderNumber || 'dina',
+  1887→        })
+  1888→        directResponse = `✅ **Bank baru ditambahkan!**
+  1889→
+  1890→• Nama: **${bankName}**
+  1891→• Kode: **${bankCode}**
+  1892→
+  1893→⚠️ **Langkah selanjutnya:**
+  1894→1. Upload PDF template kosongan via Bank Config Builder UI di dashboard
+  1895→2. Set annotation coordinates (klik di PDF → pilih field)
+  1896→3. Bank akan muncul di dropdown pilih bank
+  1897→
+  1898→Bank ini belum punya template/annotation — perlu setup via dashboard.`
+  1899→      }
+  1900→      results.push(`[addBank] ${bankName} (${bankCode})`)
+  1901→    } catch (err: any) {
+  1902→      directResponse = `❌ Gagal tambah bank: ${err?.message || 'unknown error'}`
+  1903→    }
+  1904→  }
+  1905→
+  1906→  // DELETE_BANK handler DISABLED PERMANENTLY — banks cannot be deleted by anyone.
+  1907→
+  1908→  return { results: results.join('\n\n'), directResponse }
+  1909→}
+  1910→
+  1911→// ============================================================
+  1912→// Save memory
+  1913→// ============================================================
+  1914→
+  1915→export async function saveMemory(content: string, category: string, customerId?: string, importance: number = 0.5) {
+  1916→  try {
+  1917→    await db.memory.create({ data: { content, category, importance, source: 'CONVERSATION', customerId: customerId || null, agentId: null } })
+  1918→  } catch (err) { console.error('Save memory error:', err) }
+  1919→}
+  1920→
+  1921→export function extractLearning(userMessage: string, aiResponse: string): { content: string; category: string; importance: number } | null {
+  1922→  const msg = userMessage.toLowerCase()
+  1923→  const category = detectMemoryCategory(userMessage)
+  1924→
+  1925→  if (msg.includes('update') || msg.includes('ubah') || msg.includes('ganti') || msg.includes('pindah')) {
+  1926→    return { content: `User melakukan UPDATE: "${userMessage.substring(0, 200)}". DINA executed action.`, category: 'DECISION', importance: 0.8 }
+  1927→  }
+  1928→  if (msg.includes('syarat') || msg.includes('requirement') || msg.includes('proses') || msg.includes('tahap')) {
+  1929→    return { content: `User bertanya: "${userMessage.substring(0, 200)}". Jawaban: ${aiResponse.substring(0, 300)}`, category, importance: 0.7 }
+  1930→  }
+  1931→  if (msg.includes('konsumen') || msg.includes('debitur') || msg.includes('berkas') || msg.includes('bank') || msg.includes('kpr')) {
+  1932→    return { content: `User bertanya: "${userMessage.substring(0, 200)}"`, category, importance: 0.4 }
+  1933→  }
+  1934→  if (category !== MEMORY_CATEGORIES.UTAMA) {
+  1935→    return { content: `User bertanya soal ${category}: "${userMessage.substring(0, 200)}"`, category, importance: 0.4 }
+  1936→  }
+  1937→
+  1938→  return null
+  1939→}
+  1940→
