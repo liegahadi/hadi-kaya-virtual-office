@@ -17,13 +17,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DINA_SYSTEM_PROMPT, buildCustomerContext } from '@/lib/agents/dina-knowledge'
 import { detectIntent, executeTools, saveMemory, extractLearning, getActivePendingAction } from '@/lib/agents/dina-tools'
+import { getSessionContext, updateSessionContext, needsTraceback, resolveReference } from '@/lib/agents/session-context'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, customerId, channel, senderNumber, senderName, isOwner } = await req.json()
+    const { message, customerId: _customerId, channel, senderNumber, senderName, isOwner } = await req.json()
+    let customerId: string | undefined = _customerId
     if (!message) return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 })
 
     const apiKey = process.env.GEMINI_API_KEY
@@ -102,14 +104,14 @@ export async function POST(req: NextRequest) {
           conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
         }
       } else if (isWhatsApp && senderNumber) {
-        // WhatsApp: scope by sender + channel
+        // WhatsApp: scope by sender + channel (DINA v2 H1 FIX — previously not scoped by senderNumber)
         conversation = await db.conversation.findFirst({
-          where: { channel: channel || 'WHATSAPP_PRIVATE' },
+          where: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber },
           orderBy: { updatedAt: 'desc' },
         })
         if (!conversation) {
           conversation = await db.conversation.create({
-            data: { channel: channel || 'WHATSAPP_PRIVATE', status: 'ACTIVE' } as any
+            data: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber, status: 'ACTIVE' } as any
           })
         }
       } else {
@@ -125,6 +127,54 @@ export async function POST(req: NextRequest) {
       }
       conversationId = conversation.id
     } catch (dbErr) { console.error('Conversation lookup (non-fatal):', dbErr) }
+
+    // === DINA v2: Session Context + Traceback ===
+    // If user message contains referential keywords ("yang tadi", "kemarin", "dia", "lanjutin"),
+    // try to resolve reference via session context (48h) or traceback (LLM extract from history).
+    let sessionContextData: any = null
+    let tracebackInfo: string | null = null
+    try {
+      if (conversationId && needsTraceback(message)) {
+        const sessionCtx = await getSessionContext({
+          conversationId,
+          channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
+          senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
+        })
+
+        if (sessionCtx && sessionCtx.lastCustomerId) {
+          sessionContextData = sessionCtx
+          // Auto-resolve customerId from session
+          if (!customerId && sessionCtx.lastCustomerId) {
+            customerId = sessionCtx.lastCustomerId
+            customer = await db.customer.findUnique({
+              where: { id: sessionCtx.lastCustomerId },
+              include: { units: true, bankPipelines: true },
+            }).catch(() => null)
+          }
+        } else {
+          // Traceback via LLM
+          const resolution = await resolveReference({
+            conversationId,
+            channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
+            senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
+            userMessage: message,
+          })
+
+          if (resolution.resolved && resolution.customerId) {
+            if (!customerId) {
+              customerId = resolution.customerId
+              customer = await db.customer.findUnique({
+                where: { id: resolution.customerId },
+                include: { units: true, bankPipelines: true },
+              }).catch(() => null)
+            }
+            tracebackInfo = `[TRACEBACK via ${resolution.source}, confidence ${(resolution.confidence * 100).toFixed(0)}%] Resolved to customer: ${resolution.customerName || customerId}`
+          } else if (resolution.source === 'clarify') {
+            tracebackInfo = `[TRACEBACK FAILED] Confidence ${(resolution.confidence * 100).toFixed(0)}% — needs user clarification`
+          }
+        }
+      }
+    } catch (ctxErr) { console.error('Session context (non-fatal):', ctxErr) }
 
     // Step 2: Execute DB tools based on intent — pass executeContext for pending action scoping
     // For DASHBOARD: scope by channel only (single owner, no need for conversationId scoping)
@@ -473,6 +523,25 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
     // Step 8: Extract learning and save to memory
     // Auto-save memory DISABLED — use manual curation with Title + Description + Resolution
 
+    // === DINA v2: Update session context (auto-renew 48h TTL) ===
+    try {
+      const sessionUpdates: any = {
+        lastIntent: intent.action,
+        lastTopic: message.substring(0, 200),
+      }
+      if (customerId) {
+        sessionUpdates.lastCustomerId = customerId
+        if (customer?.name) sessionUpdates.lastCustomerName = customer.name
+      }
+      if (conversationId) {
+        await updateSessionContext({
+          conversationId,
+          channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
+          senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
+        }, sessionUpdates)
+      }
+    } catch (sessErr) { console.error('Session update (non-fatal):', sessErr) }
+
     return NextResponse.json({
       success: true,
       response: aiResponse,
@@ -480,6 +549,7 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
       toolsExecuted: intent.tools,
       files: filesToSend,  // Empty array if not SEND_FILE (for WA bot consistency)
       dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
+      tracebackInfo, // DINA v2: for debugging
     })
   } catch (err: any) {
     console.error('DINA chat error:', err)

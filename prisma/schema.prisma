@@ -67,9 +67,17 @@ model GoogleDoc {
   docType     String   @default("sk-slip-gaji") // sk-slip-gaji | spr | flpp | etc
   editUrl     String
   templateId  String?  // which template was used
+  // DINA v2: anti-duplicate + versioning
+  fileHash    String?  // SHA-256 hash for duplicate detection
+  fileSize    Int?     // file size in bytes
+  version     Int      @default(1) // versioning: v1, v2, v3...
+  isRaw       Boolean  @default(true) // true = RAW (belum signed), false = SIGNED
   createdAt   DateTime @default(now())
 
   customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, fileHash])
+  @@index([customerId, docType, version])
 }
 
 model UserSetting {
@@ -293,6 +301,7 @@ model Customer {
   units          Unit[]
   conversations  Conversation[]
   stageHistory   CustomerStageHistory[]
+  historyLogs    CustomerHistoryLog[]
   documents      Document[]
   googleDocs     GoogleDoc[]
   surveySchedules SurveySchedule[]
@@ -300,6 +309,26 @@ model Customer {
 
   @@index([projectId, stage])
   @@index([assignedAgentId])
+}
+
+model CustomerHistoryLog {
+  id          String   @id @default(cuid())
+  customerId  String
+  eventType   String   // FIELD_UPDATE | STAGE_CHANGE | DOC_UPLOADED | DOC_GENERATED |
+                       // BANK_CHANGE | NOTE_ADDED | STATUS_CHANGE | INTERACTION
+  title       String   // Short summary: "Gaji naik ke 5jt"
+  description String   // Detail: "Diubah dari 4.5jt ke 5jt pada Mar 2026"
+  oldValue    String?
+  newValue    String?
+  metadata    String?  // JSON: {field, source, agentId, ...}
+  createdBy   String?  // userId atau agentId
+  source      String   @default("MANUAL") // MANUAL | DINA | SYSTEM | WA
+  createdAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([eventType])
 }
 
 model CustomerStageHistory {
@@ -323,6 +352,7 @@ model Conversation {
   customerId  String?
   agentId     String?
   channel     String   @default("WHATSAPP") // WHATSAPP | DASHBOARD | INSTAGRAM | FACEBOOK | TIKTOK
+  senderNumber String? // DINA v2: scope WA conversation by sender (H1 fix)
   status      String   @default("ACTIVE") // ACTIVE | ARCHIVED | CLOSED
   summary     String?  // AI-generated summary
   lastMessageAt DateTime?
@@ -334,6 +364,7 @@ model Conversation {
   messages Message[]
 
   @@index([customerId, agentId])
+  @@index([channel, senderNumber])
   @@index([lastMessageAt])
 }
 
@@ -363,7 +394,7 @@ model Memory {
   id              String   @id @default(cuid())
   agentId         String?  // null = entity memory / umum
   customerId      String?  // customer-specific memory
-  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING
+  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING | KONSUMEN | DECISION
   memoryType      String   @default("long_term") // short_term | long_term | entity | umum
   entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER
   entityId        String?  // ID of the entity
@@ -813,6 +844,41 @@ model PendingAction {
 
   @@index([conversationId, status])
   @@index([channel, senderNumber, status])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// DINA v2: SESSION CONTEXT (48-hour memory + traceback)
+// Auto-renew on every interaction. Tracks last entities referenced
+// for "yang tadi", "kemarin", "dia", "lanjutin" type references.
+// ============================================================
+
+model SessionContext {
+  id              String   @id @default(cuid())
+  conversationId  String?
+  channel         String   // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  senderNumber    String?
+
+  // Last entities referenced
+  lastCustomerId   String?
+  lastCustomerName String?
+
+  // JSON array: [{docType, fileId, version, fileName, createdAt}]
+  lastDocs        String?
+
+  // Last topic/intent for traceback
+  lastIntent      String?
+  lastTopic       String?  // free text summary
+
+  // Auto-renew tracking
+  lastInteractionAt DateTime
+  expiresAt       DateTime  // lastInteractionAt + 48 hours
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([conversationId, channel, senderNumber])
+  @@index([channel, senderNumber, expiresAt])
   @@index([expiresAt])
 }
 

@@ -20,7 +20,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO' | 'GENERATE_SURAT'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -542,6 +542,20 @@ export function detectIntent(message: string): IntentResult {
     action = 'GENERATE_LOGO' as any
     const logoMatch = message.match(/(?:generate|buat|bikin|recreate)\s+logo\s+(?:untuk\s+|perusahaan\s+|usaha\s+)?(.+)/i)
     if (logoMatch) intent_logoPrompt = logoMatch[1].trim()
+    tools.push('getAllCustomers')
+  }
+
+  // === DINA v2: SURAT GENERATION ===
+  // "bikinin surat ..." / "buat surat ..." / "generate surat ..." → ask for suratType + instansi
+  if (
+    (msg.includes('surat') && (
+      msg.includes('bikin') || msg.includes('buat') || msg.includes('generate') ||
+      msg.includes('tolong') || msg.includes('bikinin') || msg.includes('buatkan') ||
+      msg.includes('bantu')
+    )) ||
+    msg.includes('bikinin surat') || msg.includes('buat surat') || msg.includes('generate surat')
+  ) {
+    action = 'GENERATE_SURAT' as any
     tools.push('getAllCustomers')
   }
 
@@ -1109,31 +1123,33 @@ async function deleteCustomer(customerId: string, customerName: string): Promise
 
     // === PRESERVE GOOGLE DRIVE FILES ===
     // Per owner requirement: hapus dari DB saja, JANGAN hapus file dari Google Drive.
-    // - Schema already has `onDelete: SetNull` on GoogleDoc.customerId
+    // - Schema has `onDelete: SetNull` on GoogleDoc.customerId
     //   → when customer is deleted, GoogleDoc records have customerId set to null automatically
     //   → Drive files remain accessible (we never call Drive API to delete)
-    // - We do NOT call db.googleDoc.deleteMany anymore — that would erase DB metadata
-    //   and we'd lose reference to those Drive files entirely.
     // - Units: unlink (set customerId=null) instead of delete, so site plan history is preserved
-    //   (we don't want to mark a unit as AVAILABLE just because customer was deleted from DB)
+    //
+    // DINA v2 FIX (C1): Wrap all writes in $transaction for atomicity.
+    // If any step fails, the entire operation rolls back — no more broken state.
 
-    // Unlink units (don't delete them — they belong to the project/site plan)
-    await db.unit.updateMany({
-      where: { customerId },
-      data: { customerId: null, status: 'AVAILABLE', bookedAt: null, soldAt: null },
-    })
-
-    // Delete conversation history (chat logs are not Drive files — safe to delete)
-    await db.conversation.deleteMany({ where: { customerId } })
-
-    // Delete stage history (internal tracking, not user-facing)
-    await db.customerStageHistory.deleteMany({ where: { customerId } })
-
-    // Delete bank pipelines (internal tracking)
-    await db.bankPipeline.deleteMany({ where: { customerId: customerId as any } })
-
-    // === Finally delete the customer (GoogleDoc records auto-set customerId=null via SetNull) ===
-    await db.customer.delete({ where: { id: customerId } })
+    await db.$transaction([
+      // Unlink units (don't delete them — they belong to the project/site plan)
+      db.unit.updateMany({
+        where: { customerId },
+        data: { customerId: null, status: 'AVAILABLE', bookedAt: null, soldAt: null },
+      }),
+      // Delete conversation history (chat logs are not Drive files — safe to delete)
+      db.conversation.deleteMany({ where: { customerId } }),
+      // Delete stage history (internal tracking, not user-facing)
+      db.customerStageHistory.deleteMany({ where: { customerId } }),
+      // Delete bank pipelines (internal tracking)
+      db.bankPipeline.deleteMany({ where: { customerId: customerId as any } }),
+      // Delete history logs (DINA v2 — cascade from customer, but explicit for clarity)
+      db.customerHistoryLog.deleteMany({ where: { customerId } }),
+      // Delete survey schedules (cascade from customer)
+      db.surveySchedule.deleteMany({ where: { customerId } }),
+      // === Finally delete the customer (GoogleDoc.customerId auto-SetNull, Document auto-cascade) ===
+      db.customer.delete({ where: { id: customerId } }),
+    ])
 
     return {
       toolName: 'deleteCustomer',
@@ -1836,6 +1852,90 @@ Atau, upload foto logo tempat usaha via sidebar kiri (Upload Dokumen), lalu keti
     } catch (err: any) {
       directResponse = `❌ Gagal generate logo: ${err?.message || 'unknown error'}`
     }
+  }
+
+  // === DINA v2: SURAT GENERATION ===
+  if ((intent as any).action === 'GENERATE_SURAT') {
+    // DINA must ask user for suratType + instansi (mandatory confirmation)
+    const msgLower = msg
+    let detectedType: string | null = null
+    let detectedInstansi: string | null = null
+
+    // Detect surat type
+    if (msgLower.includes('kerja')) detectedType = 'Surat Keterangan Kerja'
+    else if (msgLower.includes('penghasilan')) detectedType = 'Surat Keterangan Penghasilan'
+    else if (msgLower.includes('domisili')) detectedType = 'Surat Keterangan Domisili'
+    else if (msgLower.includes('belum') && msgLower.includes('rumah')) detectedType = 'Surat Keterangan Belum Memiliki Rumah'
+    else if (msgLower.includes('pernyataan')) detectedType = 'Surat Pernyataan'
+    else if (msgLower.includes('kuasa')) detectedType = 'Surat Kuasa'
+    else if (msgLower.includes('permohonan')) detectedType = 'Surat Permohonan'
+    else if (msgLower.includes('pengantar')) detectedType = 'Surat Pengantar'
+    else if (msgLower.includes('usaha')) detectedType = 'Surat Keterangan Usaha'
+    else if (msgLower.includes('lamaran')) detectedType = 'Surat Lamaran'
+    else if (msgLower.includes('tidak mampu')) detectedType = 'Surat Keterangan Tidak Mampu'
+
+    // Detect instansi
+    if (msgLower.includes('btn')) detectedInstansi = 'BTN'
+    else if (msgLower.includes('mandiri')) detectedInstansi = 'MANDIRI'
+    else if (msgLower.includes('bsb') || msgLower.includes('syariah')) detectedInstansi = 'BSB_SYARIAH'
+    else if (msgLower.includes('kelurahan')) detectedInstansi = 'KELURAHAN'
+    else if (msgLower.includes('notaris') || msgLower.includes('ppat')) detectedInstansi = 'NOTARIS'
+    else if (msgLower.includes('kecamatan')) detectedInstansi = 'KECAMATAN'
+    else if (msgLower.includes('puskesmas')) detectedInstansi = 'PUSKESMAS'
+    else if (msgLower.includes('kapolsek') || msgLower.includes('polsek')) detectedInstansi = 'KAPOLSEK'
+
+    if (detectedType && detectedInstansi) {
+      // Both detected — generate via API (DINA returns instructions, frontend will trigger)
+      directResponse = `✅ Siap! Aku akan buatkan **${detectedType}** untuk **${detectedInstansi === 'BSB_SYARIAH' ? 'BSB Syariah' : detectedInstansi}**.
+
+Untuk generate, buka dashboard → tab Berkas → expand konsumen → klik tombol **Generate Surat** di sidebar.
+
+Pilih:
+- Jenis Surat: ${detectedType}
+- Instansi: ${detectedInstansi === 'BSB_SYARIAH' ? 'BSB Syariah' : detectedInstansi.charAt(0) + detectedInstansi.slice(1).toLowerCase()}
+
+Atau ketik: "generate surat ${detectedType} untuk ${detectedInstansi === 'BSB_SYARIAH' ? 'BSB' : detectedInstansi}" lagi untuk konfirmasi.
+
+File akan disimpan di: Drive/ANJAYO 16/Surat Menyurat/${detectedInstansi === 'BSB_SYARIAH' ? 'BSB Syariah' : detectedInstansi}/
+Nama: RAW - [Nama] - ${detectedType} - ${detectedInstansi === 'BSB_SYARIAH' ? 'BSB Syariah' : detectedInstansi} v1.docx
+Permission: anyone with link = VIEW only 👍`
+    } else {
+      // Ask user for both
+      const missing = []
+      if (!detectedType) missing.push('jenis surat')
+      if (!detectedInstansi) missing.push('instansi/bank tujuan')
+
+      directResponse = `📝 **Generate Surat**
+
+Boleh kasih tau lebih detail? Aku butuh info ini:
+
+**1. Jenis Surat** (pilih salah satu):
+- Surat Keterangan Kerja
+- Surat Keterangan Penghasilan
+- Surat Keterangan Domisili
+- Surat Keterangan Belum Memiliki Rumah
+- Surat Pernyataan
+- Surat Kuasa
+- Surat Permohonan
+- Surat Pengantar
+- Surat Keterangan Usaha
+- Surat Lamaran
+
+**2. Instansi Tujuan** (pilih salah satu):
+- BTN
+- Mandiri
+- BSB Syariah
+- Kelurahan
+- Notaris
+- Kecamatan
+- Puskesmas
+- Kapolsek
+
+Contoh: "bikinin surat keterangan kerja untuk Jenni, ditujukan ke BTN"
+
+${missing.length > 0 ? `⚠️ Yang masih kurang: ${missing.join(', ')}` : ''}`
+    }
+    results.push(`[generateSurat] type=${detectedType} instansi=${detectedInstansi}`)
   }
 
   // === BANK CONFIG MANAGEMENT ===

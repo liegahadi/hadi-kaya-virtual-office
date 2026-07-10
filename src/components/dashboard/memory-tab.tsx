@@ -53,6 +53,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   MATERIAL: 'bg-purple-100 text-purple-700',
   MARKETING: 'bg-pink-100 text-pink-700',
   DECISION: 'bg-red-100 text-red-700',
+  KONSUMEN: 'bg-cyan-100 text-cyan-700',
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -170,6 +171,7 @@ export function MemoryTab() {
             <option value="MATERIAL">MATERIAL</option>
             <option value="MARKETING">MARKETING</option>
             <option value="DECISION">DECISION</option>
+            <option value="KONSUMEN">KONSUMEN</option>
           </select>
         )}
       </div>
@@ -338,6 +340,8 @@ function AddModal({ type, onClose, onSaved }: { type: 'memory' | 'skill'; onClos
                   <option value="FINANCE">FINANCE</option>
                   <option value="MATERIAL">MATERIAL</option>
                   <option value="MARKETING">MARKETING</option>
+                  <option value="DECISION">DECISION</option>
+                  <option value="KONSUMEN">KONSUMEN</option>
                 </select>
                 <select name="memoryType" className="text-xs border rounded p-2 bg-background">
                   <option value="long_term">Long-term</option>

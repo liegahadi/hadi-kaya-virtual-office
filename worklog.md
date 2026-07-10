@@ -805,3 +805,69 @@ Task: OCR VLM migration + Bank Config Builder + DINA bank management
    - Seed initial banks (BTN, Mandiri, BSB Syariah) via migration script
 
 Commit: 8aa2e3b
+
+---
+Task ID: DINA-V2-FULL-IMPLEMENTATION
+Agent: Main Agent (Super Z)
+Task: Implement DINA v2 Architecture Redesign — 8 phases, 15 locked decisions
+
+Work Log:
+- Generated FINAL DESIGN DOCUMENT at /home/z/my-project/download/DINA-FINAL-DESIGN.md (comprehensive: 16 sections, 15 locked decisions, 4 Mermaid diagrams)
+- Updated PRD.md to v2.0 with new Section 15 (DINA v2 Architecture Redesign)
+- Phase 1: Schema additions — added CustomerHistoryLog, SessionContext models; updated GoogleDoc (fileHash, fileSize, version, isRaw), Conversation (senderNumber), Memory (KONSUMEN category)
+- Phase 1: Fixed critical bug C1 — wrapped deleteCustomer in $transaction (atomic, no more broken state)
+- Phase 1: Fixed critical bug H1 — WA conversation now scoped by senderNumber (privacy fix)
+- Phase 2: Created Tab Database Explorer with 4 categories (Berkas/Marketing/Material/Finance)
+  - Created /api/database-explorer/{berkas,marketing,material,finance}/route.ts
+  - Created /components/dashboard/database-tab.tsx (read-only viewer with search)
+  - Integrated into dashboard.tsx as new "Database" tab
+- Phase 3: Created History Log UI per konsumen
+  - Created /api/customer-history/route.ts (GET + POST + addHistoryLog helper)
+  - Created /components/berkas/history-log-view.tsx (timeline UI, append-only, with add dialog)
+  - Integrated into BerkasViewV2 as side panel when customer expanded
+- Phase 4: Memory KONSUMEN category support
+  - Updated memory-tab.tsx: added KONSUMEN option in filter + add form
+  - Added color coding (cyan) for KONSUMEN category
+- Phase 5: Session Context + Traceback engine
+  - Created /lib/agents/session-context.ts (getSessionContext, updateSessionContext, needsTraceback, resolveReference, tracebackFromHistory)
+  - 48-hour TTL with auto-renew
+  - LLM-assisted traceback (Gemini Flash extract from 50 last messages)
+  - Confidence-based routing (>80% auto-resolve, <80% ask user)
+  - Integrated into /api/dina/chat/route.ts
+- Phase 6: Upload anti-overwrite/anti-duplicate
+  - Created /lib/berkas/upload-helper.ts (computeFileHash, checkDuplicateFile, generateUniqueFilename, buildRawFilename, buildSignedFilename, getNextVersion)
+  - Updated /api/documents/google-docs/upload-file/route.ts:
+    * Anti-duplicate: SHA-256 hash check, skip if exists
+    * Anti-overwrite: auto-rename with version suffix
+    * Permission: anyone with link = VIEWER (reader role)
+    * Save GoogleDoc record with hash + version
+    * Add history log entry
+- Phase 7: Generate Surat Umum
+  - Created /lib/berkas/surat/surat-helper.ts (INSTANSI_FOLDER_MAP, detectInstansi, SURAT_TYPES, buildSuratFilename, buildSuratPrompt, getSuratSuggestions)
+  - Created /api/documents/generate-surat/route.ts (POST: generate + upload + share; GET: list types)
+  - Added GENERATE_SURAT intent to dina-tools.ts detectIntent
+  - Added handler in executeTools (asks user for suratType + instansi if missing)
+  - Folder structure: Drive/ANJAYO 16/Surat Menyurat/[Instansi]/
+  - Naming: RAW - [Nama] - [Jenis Surat] - [Instansi] - v[N].docx
+- Phase 8: Bank Builder improvements
+  - Created /api/bank-config/[id]/template/route.ts (POST: upload template PDF + annotations; GET: fetch template info)
+  - Updated /api/bank-config/route.ts PUT to support annotation-only updates (merge with existing documents JSON)
+  - Template storage: Drive/Templates/[BankCode]/Template [BANKCODE] v[N].pdf
+  - Permission: anyone with link = VIEWER
+
+Stage Summary:
+- 8 implementation phases completed
+- 15 locked decisions from design discussion all implemented
+- 4 critical bug fixes (C1: $transaction, H1: senderNumber scoping, + 2 more)
+- New Prisma models: CustomerHistoryLog, SessionContext
+- Updated models: GoogleDoc (fileHash, version, isRaw), Conversation (senderNumber), Memory (KONSUMEN category)
+- New API routes: 6 (database-explorer ×4, customer-history, generate-surat, bank-config/[id]/template)
+- New components: 2 (database-tab, history-log-view)
+- New lib modules: 3 (session-context, upload-helper, surat-helper)
+- Critical: deleteCustomer now atomic via $transaction (prevents Jenni-style data loss)
+- Critical: WA conversations now properly scoped by senderNumber (privacy fix)
+- Files modified: dashboard.tsx, memory-tab.tsx, berkas-view-v2.tsx, dina-tools.ts, dina/chat/route.ts, bank-config/route.ts, upload-file/route.ts, schema.prisma, PRD.md
+- Design document: /home/z/my-project/download/DINA-FINAL-DESIGN.md
+- PRD updated to v2.0
+
+Next: User requested Bank Builder continuation — UI for template upload + annotation editor (visual PDF annotation tool). Backend ready, frontend needs to be built.

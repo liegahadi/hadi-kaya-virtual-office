@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   Building2, Users, Map, BookOpen, Settings, Bot, MessageSquare,
   Bell, CheckCircle2, AlertCircle, Sparkles, Zap, ShieldCheck,
-  TrendingUp, Clock, MapPin, Calendar, FileText, Brain,
+  TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { VirtualOfficeMapWrapper } from '@/components/dashboard/virtual-office-map-wrapper'
 import { BerkasViewV2 } from '@/components/berkas-view-v2'
 import { MemoryTab } from '@/components/dashboard/memory-tab'
+import { DatabaseTab } from '@/components/dashboard/database-tab'
 import { ChatPanel } from '@/components/chat/chat-panel'
 
 // ============================================================
@@ -94,7 +95,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<
-    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'settings'
+    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'settings'
   >('office')
 
   useEffect(() => {
@@ -182,6 +183,12 @@ export default function Dashboard() {
               label="Memory"
             />
             <TabButton
+              active={activeTab === 'database'}
+              onClick={() => setActiveTab('database')}
+              icon={<Database className="w-4 h-4" />}
+              label="Database"
+            />
+            <TabButton
               active={activeTab === 'settings'}
               onClick={() => setActiveTab('settings')}
               icon={<Settings className="w-4 h-4" />}
@@ -200,6 +207,7 @@ export default function Dashboard() {
           {activeTab === 'knowledge' && <KnowledgeView stats={stats} />}
           {activeTab === 'berkas' && <BerkasViewV2 projectId={stats.projects[0]?.id || ''} />}
           {activeTab === 'memory' && <MemoryTab />}
+          {activeTab === 'database' && <DatabaseTab />}
           {activeTab === 'settings' && <SettingsView stats={stats} onRefresh={fetchStats} />}
         </div>
       </main>

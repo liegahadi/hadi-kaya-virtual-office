@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { HistoryLogView } from '@/components/berkas/history-log-view'
 import { toast } from 'sonner'
 
 import {
@@ -212,7 +213,16 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
           </div>
         </button>
       </Card>
-      {expanded && <div className="mt-2"><BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} /></div>}
+      {expanded && (
+        <div className="mt-2 grid grid-cols-1 lg:grid-cols-4 gap-2">
+          <div className="lg:col-span-3">
+            <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} />
+          </div>
+          <div className="lg:col-span-1">
+            <HistoryLogPanel customerId={customer.id} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1888,5 +1898,16 @@ function FormField({ label, value, onChange, placeholder, full, required, type =
         lang={type === 'date' ? 'id' : undefined}
         className="w-full mt-0.5 bg-background/50 border border-border rounded px-2 py-1 text-xs disabled:opacity-50" />
     </div>
+  )
+}
+
+// ============================================================
+// HISTORY LOG PANEL — DINA v2 (append-only timeline per konsumen)
+// ============================================================
+function HistoryLogPanel({ customerId }: { customerId: string }) {
+  return (
+    <Card className="p-3 h-full max-h-[70vh] overflow-hidden">
+      <HistoryLogView customerId={customerId} />
+    </Card>
   )
 }

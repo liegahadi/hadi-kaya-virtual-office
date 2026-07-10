@@ -57,16 +57,30 @@ export async function POST(req: NextRequest) {
 }
 
 // PUT — update bank
+// DINA v2: Enhanced to support annotation-only updates (without re-uploading template)
 export async function PUT(req: NextRequest) {
   try {
-    const { id, bankName, description, templatePath, documents } = await req.json()
+    const { id, bankName, description, templatePath, documents, annotations } = await req.json()
     if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 })
 
     const data: any = { updatedAt: new Date() }
     if (bankName !== undefined) data.bankName = bankName
     if (description !== undefined) data.description = description
     if (templatePath !== undefined) data.templatePath = templatePath
-    if (documents !== undefined) data.documents = documents
+
+    // DINA v2: If annotations provided as array, merge with existing documents JSON
+    if (annotations !== undefined) {
+      const existing = await db.bankConfig.findUnique({ where: { id } })
+      let existingDocs: any = {}
+      if (existing?.documents) {
+        try { existingDocs = JSON.parse(existing.documents) } catch {}
+      }
+      existingDocs.annotations = annotations
+      existingDocs.updatedAt = new Date().toISOString()
+      data.documents = JSON.stringify(existingDocs)
+    } else if (documents !== undefined) {
+      data.documents = documents
+    }
 
     const bank = await db.bankConfig.update({ where: { id }, data })
     return NextResponse.json({ success: true, data: bank })

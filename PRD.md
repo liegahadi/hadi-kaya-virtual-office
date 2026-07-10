@@ -1,9 +1,9 @@
 # PRD — Hadi Kaya Virtual Office
 ## Product Requirements Document (Living Document)
 
-**Versi:** 1.3  
-**Tanggal:** 8 Juli 2026  
-**Status:** Active Development  
+**Versi:** 2.0  
+**Tanggal:** 10 Juli 2026  
+**Status:** Active Development — DINA v2 Architecture Redesign
 **Owner:** Andrian Bong (Hadi) — PT. Marlindo Bangun Persada  
 
 ---
@@ -831,3 +831,206 @@ n8n: "Ayu selesai → log ke DB → schedule follow up besok"
 - n8n deploy: setelah Hostinger VPS ready (n8n butuh persistent process, Vercel = serverless)
 - Loop implementasi: setelah RATNA + Memory System jadi (Loop butuh memory untuk reflect)
 - Integrasi n8n + Loop: setelah keduanya jalan terpisah, baru gabung
+
+---
+
+## 15. DINA v2 ARCHITECTURE REDESIGN (10 Juli 2026)
+
+### 15.1 Self-Realization — Apa yang Sebelumnya Salah
+
+Setelah 7+ putaran diskusi arsitektur, ditemukan 5 kesalahan fundamental di design DINA v1:
+
+1. **Asumsi DINA berhadapan dengan konsumen** — Salah. DINA adalah TOOL untuk user (owner + staff), BUKAN front-line agent. User yang chat konsumen, lalu update ke DINA.
+2. **Dual source of truth** antara history log dan memory — Salah. History log di Tab Berkas = single source of truth per konsumen; Memory Tab = insight lintas konsumen.
+3. **Over-engineer title collision** — Salah. Format `[Nama] - [Blok/No Rumah]` + disambiguation by status akad sudah cukup.
+4. **Format "simplified" yang vague** — Salah. Timeline append-only dengan delta jelas: "Mar 2026: gaji naik jadi 5jt (dari 4.5jt)".
+5. **Lupa tujuan #2 (query pengalaman lintas konsumen)** — Memory dengan kategori KONSUMEN = tempat insight lintas konsumen untuk query analitik.
+
+### 15.2 6 Tujuan DINA (Locked)
+
+| # | Tujuan | Status v1 | Status v2 |
+|---|---|---|---|
+| 1 | Intent & permission management | ✅ Ada | ✅ Enhanced dengan 3-tier LLM |
+| 2 | Query pengalaman lintas konsumen | ❌ Belum ada | ✅ Baru — Memory KONSUMEN + History Log query |
+| 3 | Auto-process berkas dari WhatsApp | ⚠️ Setengah | ✅ Diperbaiki dengan anti-overwrite |
+| 4 | Generate SK/Slip/Laporan/Logo | ✅ Ada | ✅ Enhanced dengan hybrid template + versioning |
+| 5 | Generate surat umum | ❌ Belum ada | ✅ Baru — folder Drive + intent baru |
+| 6 | Status query konsumen | ⚠️ Setengah | ✅ Enhanced dengan History Log |
+
+### 15.3 3-Tier LLM Strategy (NEW)
+
+| Tier | Trigger | Cost | Contoh |
+|------|---------|------|--------|
+| **Tier 1: No LLM** | Keyword jelas, intent terstruktur | $0 | "hapus konsumen Jenni", "daftar bank", "ya" |
+| **Tier 2: LLM Pre-process** | Natural language, intent ambigu | ~$0.001 | "Jenni kerja di mana?", "yang blok E5 gimana?" |
+| **Tier 3: Full LLM** | Butuh synthesis/analisis/generation | ~$0.002 | "ada konsumen kontrak lolos Mandiri?", "bikinin surat..." |
+
+**Cost impact:** ~80% traffic di Tier 1+2 (CRUD + lookup), ~20% di Tier 3 (analisis + generate).
+
+### 15.4 Memory System (Redesigned)
+
+**Single Source of Truth per Konsumen:** `CustomerHistoryLog` table (NEW)
+- Append-only timeline event per konsumen
+- Format: "Mar 2026: gaji naik jadi 5jt (dari 4.5jt)"
+- EventType: FIELD_UPDATE, STAGE_CHANGE, DOC_UPLOADED, DOC_GENERATED, BANK_CHANGE, NOTE_ADDED, STATUS_CHANGE, INTERACTION
+
+**Memory Tab dengan Kategori KONSUMEN (NEW category):**
+- Insight lintas konsumen (bukan duplikat history)
+- Title format: `[Nama Konsumen] - [Blok/No Rumah]`
+- Contoh: "Konsumen Blok 17 - Pattern Reject BTN" (insight dari 5 konsumen)
+- Link ke CustomerHistoryLog untuk detail
+
+**Query Paths:**
+| Query Type | Source |
+|------|--------|
+| Tanya 1 konsumen spesifik | Customer + History Log |
+| Tanya pattern lintas konsumen | History Log (all) + Memory KONSUMEN |
+| Tanya SOP/cara | Memory UTAMA + Skill |
+
+### 15.5 Session Context + Traceback (NEW)
+
+**Session Context (Tier 1 — Hot):**
+- TTL: 48 jam, auto-renew setiap pesan
+- Storage: `SessionContext` table (NEW)
+- Tracks: lastCustomerId, lastDocs, lastIntent, lastTopic
+
+**Traceback Engine (Tier 2 — Warm):**
+- Trigger: kata referensial ("yang tadi", "kemarin", "dia", "lanjutin")
+- Source: Message table (50 pesan terakhir)
+- Engine: Gemini Flash extract context
+- Confidence >80% → pakai hasil; <80% → tanya user
+
+**Cold Clarification (Tier 3):**
+- Traceback gagal/ambigu → DINA tanya user dengan list opsi konkret
+- Berlaku universal: dokumen, konsumen, konteks percakapan apapun
+
+### 15.6 Generate SK/Slip/Laporan/Logo (Enhanced)
+
+**Naming Convention:** `RAW - [Nama Debitur] - [Jenis Dokumen] - v[N].docx`
+- Prefix `RAW-` = versi mentah, belum ditandatangani
+- Versioning v1, v2, v3 — tidak overwrite (sesuai rule "jangan timpa")
+
+**Hybrid Template + LLM Fill:**
+- Template pool: 5-10 template per jenis dokumen di Drive folder `Templates/`
+- Pemilihan: beda dari template terakhir yang dipakai untuk konsumen ini
+- LLM fill tone yang berbeda-beda untuk variasi
+
+**Permission:** Anyone with link = VIEW only (no edit)
+
+**Revisi Identification (3-Tier Fallback):**
+1. Session Context (48 jam) → langsung pakai
+2. Query Latest (konsumen + docType disebut) → GoogleDoc table
+3. List Pilihan (vague, banyak dokumen) → list semua dokumen konsumen
+
+### 15.7 Generate Surat Umum (NEW)
+
+**Folder Structure Drive (NEW):**
+```
+📁 Hadi Kaya Docs/
+├── 📁 ANJAYO 16/
+│   ├── 📁 Berkas Konsumen/ (existing)
+│   ├── 📁 Surat Menyurat/  ← NEW
+│   │   ├── 📁 BTN/
+│   │   ├── 📁 Mandiri/
+│   │   ├── 📁 BSB Syariah/
+│   │   ├── 📁 Kelurahan/
+│   │   ├── 📁 Notaris/
+│   │   └── 📁 [Instansi lain]/
+```
+
+**Naming:** `RAW - [Nama Debitur] - [Jenis Surat] - [Instansi] - v[N].docx`
+
+**Flow:** User minta "bikinin surat..." → DINA WAJIB tanya "Surat untuk apa? Bank/instansi mana?" → match template atau LLM generate → save ke folder instansi → share link VIEW only
+
+### 15.8 Tab Database Explorer (NEW)
+
+**Tujuan:** Transparansi — user bisa lihat dengan mata kepala sendiri apa yang ADA di DB vs apa yang TAMPIL di UI.
+
+**Struktur:**
+```
+[Tab Database] (dashboard, owner only)
+├── Berkas (Customer + Document + GoogleDoc)
+├── Marketing (Leads, interaksi, campaign)
+├── Material (Stok, supplier, harga)
+└── Finance (Laporan keuangan, transaksi)
+```
+
+**Features:** Read-only viewer + search + filter + export CSV + detect orphan records
+
+### 15.9 Upload Anti-Overwrite/Anti-Duplicate (FIX)
+
+**Problem v1:** Upload file dengan nama sama → overwrite (berkas hilang). Upload file sama → duplicate.
+
+**Fix v2:**
+- **Anti-overwrite:** Cek nama file sebelum upload. Jika sama → auto-rename dengan suffix timestamp.
+- **Anti-duplicate:** Compute SHA-256 hash. Query `GoogleDoc WHERE fileHash = X AND customerId = Y`. Jika match → SKIP, return link existing.
+- **Schema:** Add `fileHash`, `fileSize` to GoogleDoc table.
+
+### 15.10 Critical Bug Fixes
+
+| ID | Issue | Fix |
+|----|-------|-----|
+| C1 | `deleteCustomer` NO `$transaction` | Wrap 5 sequential writes in `db.$transaction([...])` |
+| H1 | WA conversation NOT scoped by senderNumber | Add `senderNumber` filter to conversation lookup |
+| H4 | Stage inconsistency DINA=DM, Dashboard=BOOKING | Standardize to `stage: 'DM'` for both paths |
+| C2 | No server-side auth on `/api/dina/chat` | Add JWT verification middleware |
+
+### 15.11 Prisma Schema Additions
+
+**New Models:**
+1. `CustomerHistoryLog` — timeline event per konsumen (append-only)
+2. `SessionContext` — 48-hour session memory
+
+**Updated Models:**
+1. `Memory` — add `KONSUMEN` to category enum
+2. `GoogleDoc` — add `fileHash`, `fileSize` fields
+3. `Conversation` — add `senderNumber` field (H1 fix)
+
+### 15.12 15 Locked Decisions
+
+| # | Item | Decision |
+|---|------|----------|
+| 1 | DINA = tool user, bukan front-line | ✅ LOCKED |
+| 2 | History log di Tab Berkas (single source of truth) | ✅ LOCKED |
+| 3 | Memory Tab dengan kategori KONSUMEN (insight lintas konsumen) | ✅ LOCKED |
+| 4 | Title format: `[Nama] - [Blok/No Rumah]` | ✅ LOCKED |
+| 5 | Tab Database Explorer (Berkas/Marketing/Material/Finance) | ✅ LOCKED |
+| 6 | 3-tier LLM strategy (No LLM / Pre-process / Full) | ✅ LOCKED |
+| 7 | Generate SK/Slip/Laporan/Logo: hybrid template + LLM fill | ✅ LOCKED |
+| 8 | Naming: `RAW - [Nama] - [Jenis] - v[N].docx` | ✅ LOCKED |
+| 9 | Versioning (v1, v2, v3) - tidak overwrite | ✅ LOCKED |
+| 10 | Permission: anyone with link = VIEW only | ✅ LOCKED |
+| 11 | Session context: 48 jam, auto-renew | ✅ LOCKED |
+| 12 | Traceback universal (semua konteks, bukan cuma dokumen) | ✅ LOCKED |
+| 13 | Jenni: biarin, fix upload logic anti-overwrite/anti-duplicate | ✅ LOCKED |
+| 14 | Generate surat umum (folder Drive baru + intent baru) | ✅ LOCKED |
+| 15 | Tujuan DINA: 6 poin (intent, pengalaman, berkas WA, generate, surat, status) | ✅ LOCKED |
+
+### 15.13 Implementation Phases
+
+| Phase | Task | Priority | Status |
+|-------|------|----------|--------|
+| 1 | Schema additions + fix deleteCustomer $transaction | HIGH | In Progress |
+| 2 | Tab Database Explorer UI | HIGH | Pending |
+| 3 | History Log UI di Tab Berkas | HIGH | Pending |
+| 4 | Memory KONSUMEN category support | MEDIUM | Pending |
+| 5 | Session Context + Traceback engine | MEDIUM | Pending |
+| 6 | Upload anti-overwrite/duplicate | MEDIUM | Pending |
+| 7 | Generate Surat Umum | MEDIUM | Pending |
+| 8 | Bank Builder improvements | MEDIUM | Pending |
+
+### 15.14 Full Design Document
+
+Lihat: `/home/z/my-project/download/DINA-FINAL-DESIGN.md` untuk detail lengkap (diagrams, schema, flow, scenarios).
+
+---
+
+## CHANGE LOG (Updated)
+
+| Date | Version | Change |
+|------|---------|--------|
+| 8 Jul 2026 | 1.0 | Initial PRD created. |
+| 8 Jul 2026 | 1.1 | Bank Config Builder detail, Memory System detail. |
+| 8 Jul 2026 | 1.2 | DO NOT DO list, Memory categorization, Mirofish alternatives, Hostinger VPS. |
+| 8 Jul 2026 | 1.3 | Entity Memory flow, Marketing AI memory, Prompt Engineer skill, n8n + Loop. |
+| **10 Jul 2026** | **2.0** | **DINA v2 Architecture Redesign: 15 locked decisions, 3-tier LLM strategy, Memory system redesign (History Log + Memory KONSUMEN), Session Context + Traceback (48h TTL), Generate surat umum, Tab Database Explorer, Upload anti-overwrite/duplicate, Critical bug fixes (C1 $transaction, H1 senderNumber scoping), Hybrid template + versioning for SK/Slip/Laporan.** |
