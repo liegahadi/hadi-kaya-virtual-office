@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { withCache, CACHE_KEYS } from '@/lib/cache'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/dashboard/stats - Virtual office overview
+// OPTIMIZATION: Cache result for 60s — saves DB queries from polling
 export async function GET() {
   try {
+    const data = await withCache(CACHE_KEYS.dashboardStats, 60, async () => {
     const [
       agents,
       marketingAgents,
@@ -77,40 +80,39 @@ export async function GET() {
       return acc
     }, {} as Record<string, number>)
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        agents: {
-          all: agents,
-          marketing: marketingAgents,
-          byRole: agents.reduce((acc, a) => {
-            acc[a.role] = (acc[a.role] || 0) + 1
-            return acc
-          }, {} as Record<string, number>),
-        },
-        projects,
-        units: {
-          total: units.length,
-          byStatus: unitStatus,
-        },
-        customers: {
-          total: customers.length,
-          byStage: customerStages,
-        },
-        conversations: {
-          recent: conversations,
-        },
-        knowledgeBase: {
-          byCategory: knowledgeItems,
-        },
-        approvals: {
-          pending: pendingApprovals,
-        },
-        surveys: {
-          upcoming: surveySchedules,
-        },
+    return {
+      agents: {
+        all: agents,
+        marketing: marketingAgents,
+        byRole: agents.reduce((acc, a) => {
+          acc[a.role] = (acc[a.role] || 0) + 1
+          return acc
+        }, {} as Record<string, number>),
       },
+      projects,
+      units: {
+        total: units.length,
+        byStatus: unitStatus,
+      },
+      customers: {
+        total: customers.length,
+        byStage: customerStages,
+      },
+      conversations: {
+        recent: conversations,
+      },
+      knowledgeBase: {
+        byCategory: knowledgeItems,
+      },
+      approvals: {
+        pending: pendingApprovals,
+      },
+      surveys: {
+        upcoming: surveySchedules,
+      },
+    }
     })
+    return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Dashboard stats error:', error)
     return NextResponse.json(

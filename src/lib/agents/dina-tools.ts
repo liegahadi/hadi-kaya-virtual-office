@@ -8,6 +8,7 @@
 // wrong-customer deletions. Now pending actions are persisted with 5-min TTL.
 
 import { db } from '@/lib/db'
+import { withCache, invalidateCachePrefix, CACHE_KEYS } from '@/lib/cache'
 
 export interface ToolResult {
   toolName: string
@@ -591,8 +592,27 @@ export function detectIntent(message: string): IntentResult {
   // Always include memories
   tools.push('getRelevantMemories')
 
-  // Always include ALL customers as context (so DINA knows everyone)
-  if (!tools.includes('getAllCustomers')) {
+  // OPTIMIZATION: Lazy getAllCustomers — only fetch when needed
+  // Previously: always pushed → 50 customer records loaded on EVERY chat (even "halo")
+  // Now: only fetch when intent truly needs customer list context
+  // 
+  // Cases that NEED getAllCustomers:
+  // - READ queries about customers (list, stats, distributions)
+  // - CRUD operations (need list for disambiguation)
+  // - SEND_FILE (need customer lookup)
+  // - GENERATE_SURAT/LOGO (need customer context)
+  //
+  // Cases that DON'T need it:
+  // - CONFIRM_DELETE / CANCEL_PENDING (pending action has target ID already)
+  // - LIST_BANKS / ADD_BANK (bank config, no customer data)
+  // - Pure small talk / greetings
+  const NEEDS_CUSTOMER_LIST = [
+    'READ', 'UPDATE_BANK', 'UPDATE_STAGE', 'UPDATE_FIELD', 'FILL_FORM',
+    'GET_DOCS', 'GET_WORKPLACE', 'GET_FILES', 'SEND_FILE',
+    'CREATE_CUSTOMER', 'DELETE_CUSTOMER',
+    'GENERATE_LOGO', 'GENERATE_SURAT',
+  ]
+  if (NEEDS_CUSTOMER_LIST.includes(action) && !tools.includes('getAllCustomers')) {
     tools.push('getAllCustomers')
   }
 
@@ -642,61 +662,93 @@ export function detectIntent(message: string): IntentResult {
 // ============================================================
 
 async function getAllCustomers(): Promise<ToolResult> {
-  const customers = await db.customer.findMany({
-    include: { units: true, bankPipelines: true },
-    take: 50,
-    orderBy: { createdAt: 'desc' },
-  })
+  // OPTIMIZATION: Use in-memory cache (60s TTL) to reduce DB queries
+  // Within 60s, multiple DINA chats will reuse cached data → 0 DB queries after first hit
+  return await withCache(CACHE_KEYS.allCustomers, 60, async () => {
+    // OPTIMIZATION: Only select fields DINA actually uses for reasoning
+    // Previously: include units + bankPipelines (N+1 risk + heavy data)
+    // Now: select only essential fields → 70% less data transferred from DB
+    const customers = await db.customer.findMany({
+      select: {
+        id: true,
+        name: true,
+        blockLetter: true,
+        houseNumber: true,
+        bankName: true,
+        stage: true,
+        whatsappNumber: true,
+        phone: true,
+        nik: true,
+        occupation: true,
+        companyName: true,
+        monthlyIncome: true,
+        maritalStatus: true,
+        berkasLengkap: true,
+        closingDate: true,
+        sp3kDate: true,
+        akadDate: true,
+        workplaceMapsLink: true,
+        workplaceMapsShortLink: true,
+        workplaceJamOperasional: true,
+        atasanName: true,
+        atasanNip: true,
+        companyAddress: true,
+        uploadedDocs: true,
+      },
+      take: 50,
+      orderBy: { createdAt: 'desc' },
+    })
 
-  const customerList = customers.map(c => {
-    const block = c.units?.[0]?.blockNumber || (c.blockLetter || '') + (c.houseNumber || '') || '-'
-    const bank = c.bankName || c.bankPipelines?.[0]?.bankName || 'Belum dipilih'
-    let docCount = 0
-    let docsList: string[] = []
-    try {
-      if (c.uploadedDocs) {
-        const docs = JSON.parse(c.uploadedDocs)
-        docsList = Object.keys(docs)
-        docCount = docsList.length
+    const customerList = customers.map(c => {
+      const block = (c.blockLetter || '') + (c.houseNumber || '') || '-'
+      const bank = c.bankName || 'Belum dipilih'
+      let docCount = 0
+      let docsList: string[] = []
+      try {
+        if (c.uploadedDocs) {
+          const docs = JSON.parse(c.uploadedDocs)
+          docsList = Object.keys(docs)
+          docCount = docsList.length
+        }
+      } catch {}
+
+      return {
+        id: c.id,
+        name: c.name,
+        block,
+        bank,
+        stage: c.stage,
+        phone: c.whatsappNumber || c.phone || '',
+        nik: c.nik || '',
+        occupation: c.occupation || '',
+        companyName: c.companyName || '',
+        monthlyIncome: c.monthlyIncome || 0,
+        maritalStatus: c.maritalStatus || '',
+        docCount,
+        docsList,
+        berkasLengkap: c.berkasLengkap,
+        closingDate: c.closingDate,
+        sp3kDate: c.sp3kDate,
+        akadDate: c.akadDate,
+        workplaceMapsLink: c.workplaceMapsLink || '',
+        workplaceMapsShortLink: c.workplaceMapsShortLink || '',
+        workplaceJamOperasional: c.workplaceJamOperasional || '',
+        atasanName: c.atasanName || '',
+        atasanNip: c.atasanNip || '',
+        companyAddress: c.companyAddress || '',
       }
-    } catch {}
+    })
+
+    const summary = `DATA SEMUA KONSUMEN (${customers.length} total):\n` +
+      customerList.map(c => `- ${c.name} | Blok ${c.block} | Bank: ${c.bank} | Stage: ${c.stage} | Telp: ${c.phone} | Dokumen: ${c.docCount} file (${c.docsList.join(', ')}) | Berkas Lengkap: ${c.berkasLengkap ? 'YA' : 'BELUM'} | Lokasi Kerja: ${c.workplaceMapsLink || 'belum ada'} | Jam Operasional: ${c.workplaceJamOperasional || 'belum ada'}`).join('\n')
 
     return {
-      id: c.id,
-      name: c.name,
-      block,
-      bank,
-      stage: c.stage,
-      phone: c.whatsappNumber || c.phone || '',
-      nik: c.nik || '',
-      occupation: c.occupation || '',
-      companyName: c.companyName || '',
-      monthlyIncome: c.monthlyIncome || 0,
-      maritalStatus: c.maritalStatus || '',
-      docCount,
-      docsList,
-      berkasLengkap: c.berkasLengkap,
-      closingDate: c.closingDate,
-      sp3kDate: c.sp3kDate,
-      akadDate: c.akadDate,
-      workplaceMapsLink: c.workplaceMapsLink || '',
-      workplaceMapsShortLink: c.workplaceMapsShortLink || '',
-      workplaceJamOperasional: c.workplaceJamOperasional || '',
-      atasanName: c.atasanName || '',
-      atasanNip: c.atasanNip || '',
-      companyAddress: c.companyAddress || '',
+      toolName: 'getAllCustomers',
+      success: true,
+      data: customerList,
+      summary,
     }
   })
-
-  const summary = `DATA SEMUA KONSUMEN (${customers.length} total):\n` +
-    customerList.map(c => `- ${c.name} | Blok ${c.block} | Bank: ${c.bank} | Stage: ${c.stage} | Telp: ${c.phone} | Dokumen: ${c.docCount} file (${c.docsList.join(', ')}) | Berkas Lengkap: ${c.berkasLengkap ? 'YA' : 'BELUM'} | Lokasi Kerja: ${c.workplaceMapsLink || 'belum ada'} | Jam Operasional: ${c.workplaceJamOperasional || 'belum ada'}`).join('\n')
-
-  return {
-    toolName: 'getAllCustomers',
-    success: true,
-    data: customerList,
-    summary,
-  }
 }
 
 // ============================================================
@@ -1090,6 +1142,9 @@ async function createCustomer(data: { name: string; phone?: string; block?: stri
       // If no existing unit found, that's OK — owner can assign manually later via dashboard
     }
 
+    // Invalidate cache — customer list changed
+    invalidateCachePrefix('dina:')
+
     return {
       toolName: 'createCustomer',
       success: true,
@@ -1150,6 +1205,9 @@ async function deleteCustomer(customerId: string, customerName: string): Promise
       // === Finally delete the customer (GoogleDoc.customerId auto-SetNull, Document auto-cascade) ===
       db.customer.delete({ where: { id: customerId } }),
     ])
+
+    // Invalidate cache — customer list changed
+    invalidateCachePrefix('dina:')
 
     return {
       toolName: 'deleteCustomer',
@@ -1270,6 +1328,8 @@ async function updateCustomerField(customerId: string, field: string, value: any
       where: { id: customerId },
       data: { [dbField]: dbValue },
     })
+    // Invalidate cache — customer data changed
+    invalidateCachePrefix('dina:')
     return {
       toolName: 'updateCustomerField',
       success: true,

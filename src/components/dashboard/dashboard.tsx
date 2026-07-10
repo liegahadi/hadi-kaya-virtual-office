@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   Building2, Users, Map, BookOpen, Settings, Bot, MessageSquare,
   Bell, CheckCircle2, AlertCircle, Sparkles, Zap, ShieldCheck,
-  TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database, Landmark,
+  TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database, Landmark, RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -99,9 +99,11 @@ export default function Dashboard() {
     'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'bank' | 'settings'
   >('office')
 
+  // OPTIMIZATION: Polling 5 menit (was 30s) — saves ~90% dashboard bandwidth
+  // User can manually refresh via RefreshCw button in header
   useEffect(() => {
     fetchStats()
-    const interval = setInterval(fetchStats, 30000)
+    const interval = setInterval(fetchStats, 300000) // 5 minutes
     return () => clearInterval(interval)
   }, [])
 
@@ -246,6 +248,15 @@ function Header({ stats }: { stats: StatsData }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchStats}
+              className="hidden sm:flex"
+              title="Refresh data"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
             <div className="hidden md:flex items-center gap-2">
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                 <Sparkles className="w-3 h-3 mr-1" />

@@ -388,22 +388,20 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
     }
 
     // Step 3: Auto-query memory + skills for context (inject into system prompt)
+    // OPTIMIZATION: Memory is already fetched by getRelevantMemories tool above.
+    // Don't double-fetch from DB. Parse tool results to extract memory context.
+    // Previously: 2 separate DB queries for memory (1 in tool, 1 here) — wasted bandwidth.
+    // Now: only fetch Skills here (memory comes from tool results).
     const dinaAgent = await db.agent.findFirst({ where: { name: 'Dina' } }).catch(() => null)
-    const [relevantMemories, relevantSkills] = await Promise.all([
-      db.memory.findMany({
-        where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { memoryType: 'umum' }] },
-        orderBy: { importance: 'desc' },
-        take: 15,
-        select: { title: true, content: true, resolution: true, category: true, memoryType: true },
-      }).catch(() => []),
-      db.skill.findMany({
-        where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { agentId: null }] },
-        select: { displayName: true, prompt: true, category: true },
-      }).catch(() => []),
-    ])
+    const relevantSkills = await db.skill.findMany({
+      where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { agentId: null }] },
+      select: { displayName: true, prompt: true, category: true },
+    }).catch(() => [])
 
-    const memoryContext = relevantMemories.length > 0
-      ? `\n\n## 🧠 MEMORY DINA (pelajaran dari masa lalu)\n${relevantMemories.map(m => `- **${m.title || m.content.substring(0, 40)}**: ${m.content}${m.resolution ? `\n  Resolusi: ${m.resolution.substring(0, 150)}` : ''}`).join('\n')}`
+    // Extract memory context from tool results (already fetched by getRelevantMemories)
+    // If tool didn't run (e.g., directResponse bypass), memory context will be empty
+    const memoryContext = toolResults.includes('Memory kategori')
+      ? `\n\n## 🧠 MEMORY DINA (dari tool results)\n${toolResults.split('\n').filter(l => l.includes('Memory kategori') || l.startsWith('- [')).join('\n').substring(0, 2000)}`
       : ''
     const skillContext = relevantSkills.length > 0
       ? `\n\n## ⚡ SKILLS DINA (kemampuan yang dimiliki)\n${relevantSkills.map(s => `- **${s.displayName}**: ${s.prompt.substring(0, 100)}...`).join('\n')}`
