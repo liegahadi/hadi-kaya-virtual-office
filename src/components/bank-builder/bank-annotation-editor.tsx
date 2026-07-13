@@ -66,6 +66,11 @@ const FIELD_MAPPINGS = [
   { value: 'customer.sp3kDate', label: 'Tanggal SP3K' },
   { value: 'customer.akadDate', label: 'Tanggal Akad' },
   { value: 'customer.akadNumber', label: 'No Akad' },
+  { value: 'system.todayDate', label: 'Tanggal Hari Ini (realtime, DD/MM/YYYY)' },
+  { value: 'system.todayDateLong', label: 'Tanggal Hari Ini (panjang, e.g. 13 Juli 2026)' },
+  { value: 'system.todayDay', label: 'Hari (e.g. Senin)' },
+  { value: 'system.currentYear', label: 'Tahun Berjalan (e.g. 2026)' },
+  { value: 'system.currentMonth', label: 'Bulan Berjalan (e.g. Juli)' },
   // Company (global)
   { value: 'company.companyName', label: 'Nama PT (Developer)' },
   { value: 'company.directorName', label: 'Nama Direktur' },
@@ -98,6 +103,19 @@ export function BankAnnotationEditor({
 }) {
   const [annotations, setAnnotations] = useState<Annotation[]>(template.annotations || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [dragMode, setDragMode] = useState<null | 'move' | 'resize' | 'resize-bl' | 'resize-tr' | 'resize-tl'>(null)
+  const dragRef = useRef<{
+    annId: string
+    mode: typeof dragMode
+    startX: number
+    startY: number
+    origX: number
+    origY: number
+    origW: number
+    origH: number
+    containerWidth: number
+    containerHeight: number
+  } | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [pdfLoaded, setPdfLoaded] = useState(false)
   const [numPages, setNumPages] = useState(0)
@@ -223,6 +241,95 @@ export function BankAnnotationEditor({
     if (selectedId === id) setSelectedId(null)
   }
 
+  // === DRAG-MOVE + RESIZE handlers ===
+  function startDrag(e: React.MouseEvent, annId: string, mode: typeof dragMode) {
+    e.stopPropagation()
+    e.preventDefault()
+    setSelectedId(annId)
+    setDragMode(mode)
+
+    const ann = annotations.find(a => a.id === annId)
+    if (!ann) return
+
+    const container = e.currentTarget.closest('.relative.inline-block')
+    const rect = container?.getBoundingClientRect()
+    if (!rect) return
+
+    dragRef.current = {
+      annId,
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: ann.x,
+      origY: ann.y,
+      origW: ann.width,
+      origH: ann.height,
+      containerWidth: rect.width,
+      containerHeight: rect.height,
+    }
+
+    // Attach global listeners
+    document.addEventListener('mousemove', onDragMove)
+    document.addEventListener('mouseup', endDrag)
+  }
+
+  function onDragMove(e: MouseEvent) {
+    if (!dragRef.current) return
+    const d = dragRef.current
+    const ann = annotations.find(a => a.id === d.annId)
+    if (!ann) return
+
+    const deltaX = (e.clientX - d.startX) / d.containerWidth
+    const deltaY = (e.clientY - d.startY) / d.containerHeight
+
+    let newX = d.origX
+    let newY = d.origY
+    let newW = d.origW
+    let newH = d.origH
+
+    if (d.mode === 'move') {
+      newX = Math.max(0, Math.min(1 - d.origW, d.origX + deltaX))
+      newY = Math.max(0, Math.min(1 - d.origH, d.origY + deltaY))
+    } else if (d.mode === 'resize') {
+      // Bottom-right resize
+      newW = Math.max(0.02, Math.min(1 - d.origX, d.origW + deltaX))
+      newH = Math.max(0.01, Math.min(1 - d.origY, d.origH + deltaY))
+    } else if (d.mode === 'resize-bl') {
+      // Bottom-left resize
+      const newRight = d.origX + d.origW
+      newX = Math.max(0, Math.min(newRight - 0.02, d.origX + deltaX))
+      newW = newRight - newX
+      newH = Math.max(0.01, Math.min(1 - d.origY, d.origH + deltaY))
+    } else if (d.mode === 'resize-tr') {
+      // Top-right resize
+      const newBottom = d.origY + d.origH
+      newY = Math.max(0, Math.min(newBottom - 0.01, d.origY + deltaY))
+      newH = newBottom - newY
+      newW = Math.max(0.02, Math.min(1 - d.origX, d.origW + deltaX))
+    } else if (d.mode === 'resize-tl') {
+      // Top-left resize
+      const newRight = d.origX + d.origW
+      const newBottom = d.origY + d.origH
+      newX = Math.max(0, Math.min(newRight - 0.02, d.origX + deltaX))
+      newY = Math.max(0, Math.min(newBottom - 0.01, d.origY + deltaY))
+      newW = newRight - newX
+      newH = newBottom - newY
+    }
+
+    setAnnotations(prev => prev.map(a =>
+      a.id === d.annId
+        ? { ...a, x: newX, y: newY, width: newW, height: newH }
+        : a
+    ))
+  }
+
+  function endDrag() {
+    setDragMode(null)
+    dragRef.current = null
+    document.removeEventListener('mousemove', onDragMove)
+    document.removeEventListener('mouseup', endDrag)
+  }
+
   // Save annotations to backend
   async function saveAnnotations() {
     setSaving(true)
@@ -305,7 +412,7 @@ export function BankAnnotationEditor({
                 onClick={handlePdfClick}
                 className="block cursor-crosshair"
               />
-              {/* Annotations overlay */}
+              {/* Annotations overlay — DRAGGABLE + RESIZABLE */}
               {pageAnnotations.map((ann) => {
                 const isSelected = ann.id === selectedId
                 return (
@@ -315,23 +422,58 @@ export function BankAnnotationEditor({
                       e.stopPropagation()
                       setSelectedId(ann.id)
                     }}
+                    onMouseDown={(e) => startDrag(e, ann.id, 'move')}
                     style={{
                       position: 'absolute',
                       left: `${ann.x * 100}%`,
                       top: `${ann.y * 100}%`,
                       width: `${ann.width * 100}%`,
                       height: `${ann.height * 100}%`,
+                      cursor: dragMode === 'move' && isSelected ? 'grabbing' : 'grab',
                     }}
                     className={cn(
-                      'border-2 cursor-pointer transition-colors',
+                      'border-2 transition-colors select-none',
                       isSelected
                         ? 'border-blue-500 bg-blue-500/30'
                         : 'border-emerald-500 bg-emerald-500/20 hover:bg-emerald-500/30'
                     )}
                   >
-                    <span className="absolute -top-5 left-0 text-[9px] font-medium bg-emerald-600 text-white px-1 py-0.5 rounded whitespace-nowrap">
+                    <span className="absolute -top-5 left-0 text-[9px] font-medium bg-emerald-600 text-white px-1 py-0.5 rounded whitespace-nowrap pointer-events-none">
                       {ann.label}
                     </span>
+                    {/* Resize handles (only when selected) */}
+                    {isSelected && (
+                      <>
+                        {/* Bottom-right resize handle */}
+                        <div
+                          onMouseDown={(e) => startDrag(e, ann.id, 'resize')}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 border border-white rounded-sm cursor-se-resize"
+                          style={{ cursor: 'se-resize' }}
+                        />
+                        {/* Bottom-left resize handle */}
+                        <div
+                          onMouseDown={(e) => startDrag(e, ann.id, 'resize-bl')}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 border border-white rounded-sm"
+                          style={{ cursor: 'sw-resize' }}
+                        />
+                        {/* Top-right resize handle */}
+                        <div
+                          onMouseDown={(e) => startDrag(e, ann.id, 'resize-tr')}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 border border-white rounded-sm"
+                          style={{ cursor: 'ne-resize' }}
+                        />
+                        {/* Top-left resize handle */}
+                        <div
+                          onMouseDown={(e) => startDrag(e, ann.id, 'resize-tl')}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 border border-white rounded-sm"
+                          style={{ cursor: 'nw-resize' }}
+                        />
+                      </>
+                    )}
                   </div>
                 )
               })}
