@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 // DINA v2: Enhanced to support annotation-only updates (without re-uploading template)
 export async function PUT(req: NextRequest) {
   try {
-    const { id, bankName, description, templatePath, documents, annotations } = await req.json()
+    const { id, bankName, description, templatePath, documents, annotations, templateId } = await req.json()
     if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 })
 
     const data: any = { updatedAt: new Date() }
@@ -69,12 +69,21 @@ export async function PUT(req: NextRequest) {
     if (templatePath !== undefined) data.templatePath = templatePath
 
     // DINA v2: If annotations provided as array, merge with existing documents JSON
+    // If templateId provided, save to specific template in documents.templates array
     if (annotations !== undefined) {
       const existing = await db.bankConfig.findUnique({ where: { id } })
       let existingDocs: any = {}
       if (existing?.documents) {
         try { existingDocs = JSON.parse(existing.documents) } catch {}
       }
+
+      if (templateId && existingDocs.templates) {
+        // Save annotations to specific template (multi-template)
+        existingDocs.templates = existingDocs.templates.map((t: any) =>
+          t.id === templateId ? { ...t, annotations } : t
+        )
+      }
+      // Also save to legacy annotations field
       existingDocs.annotations = annotations
       existingDocs.updatedAt = new Date().toISOString()
       data.documents = JSON.stringify(existingDocs)

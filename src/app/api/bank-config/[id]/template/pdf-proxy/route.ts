@@ -15,6 +15,8 @@ export async function GET(
 ) {
   try {
     const { id: bankId } = await params
+    const url = new URL(req.url)
+    const fileIdParam = url.searchParams.get('fileId')
 
     // Get bank + template info
     const bank = await db.bankConfig.findUnique({ where: { id: bankId } })
@@ -22,11 +24,21 @@ export async function GET(
       return NextResponse.json({ error: 'Bank not found' }, { status: 404 })
     }
 
-    let fileId: string | null = null
-    if (bank.documents) {
+    // Determine which fileId to use:
+    // 1. If fileId query param provided (multi-template) → use that
+    // 2. Otherwise, try documents.templates[0].fileId
+    // 3. Otherwise, try legacy documents.fileId
+    let fileId: string | null = fileIdParam
+
+    if (!fileId && bank.documents) {
       try {
         const docs = JSON.parse(bank.documents)
-        fileId = docs.fileId
+        // Try multi-template first
+        if (docs.templates && docs.templates.length > 0) {
+          fileId = docs.templates[0].fileId
+        }
+        // Fallback to legacy
+        if (!fileId) fileId = docs.fileId
       } catch {}
     }
 

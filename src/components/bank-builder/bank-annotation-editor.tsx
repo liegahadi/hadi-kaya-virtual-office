@@ -104,6 +104,16 @@ export function BankAnnotationEditor({
   const [annotations, setAnnotations] = useState<Annotation[]>(template.annotations || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dragMode, setDragMode] = useState<null | 'move' | 'resize' | 'resize-bl' | 'resize-tr' | 'resize-tl'>(null)
+
+  // Multi-template state
+  const [templates, setTemplates] = useState<any[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+
+  // Test field state (sample data untuk preview)
+  const [testFieldValues, setTestFieldValues] = useState<Record<string, string>>({})
+  const [testCustomerId, setTestCustomerId] = useState<string>('')
+  const [customers, setCustomers] = useState<any[]>([])
+
   const dragRef = useRef<{
     annId: string
     mode: typeof dragMode
@@ -126,21 +136,67 @@ export function BankAnnotationEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Load PDF
+  // Load templates + customers on mount
   useEffect(() => {
-    if (!template?.fileId) {
+    async function loadAll() {
+      // Load templates
+      try {
+        const res = await fetch(`/api/bank-config/${bank.id}/template`)
+        const data = await res.json()
+        if (data.success) {
+          const tpls = data.data.templates || []
+          if (tpls.length > 0) {
+            setTemplates(tpls)
+            setSelectedTemplateId(tpls[0].id)
+            setAnnotations(tpls[0].annotations || [])
+          } else if (data.data.template) {
+            // Legacy single template
+            const legacyTpl = {
+              id: 'legacy',
+              name: data.data.template.fileName || 'Template',
+              fileId: data.data.template.fileId,
+              annotations: data.data.template.annotations || [],
+            }
+            setTemplates([legacyTpl])
+            setSelectedTemplateId('legacy')
+            setAnnotations(legacyTpl.annotations)
+          }
+        }
+      } catch (err) {
+        console.error('Load templates error:', err)
+      }
+
+      // Load customers for test field dropdown
+      try {
+        const res = await fetch('/api/database-explorer/berkas')
+        const data = await res.json()
+        if (data.success) {
+          setCustomers(data.data.slice(0, 50))
+        }
+      } catch (err) {
+        console.error('Load customers error:', err)
+      }
+    }
+    loadAll()
+  }, [bank.id])
+
+  // Load PDF — use selected template's fileId
+  useEffect(() => {
+    const selectedTpl = templates.find(t => t.id === selectedTemplateId)
+    if (!selectedTpl?.fileId && !template?.fileId) {
       setLoadError('Belum ada template PDF. Upload template di tab "Template PDF" dulu.')
       return
     }
 
+    const activeFileId = selectedTpl?.fileId || template?.fileId
     let cancelled = false
     async function loadPdf() {
       try {
         setLoadError(null)
         setPdfLoaded(false)
-        
-        // Use our own proxy endpoint to avoid CORS issues with pdfjs
-        const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy`
+
+        // Use proxy with fileId param for multi-template support
+        const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy?fileId=${activeFileId}`
 
         // Test proxy first — if it returns error, show real error message
         const testRes = await fetch(proxyUrl)
@@ -169,7 +225,7 @@ export function BankAnnotationEditor({
     }
     loadPdf()
     return () => { cancelled = true }
-  }, [template?.fileId, template?.webViewLink, currentPage])
+  }, [selectedTemplateId, templates, template?.fileId, template?.webViewLink, currentPage, bank.id])
 
     async function renderPage(pdf: any, pageNum: number) {
       try {
@@ -334,17 +390,19 @@ export function BankAnnotationEditor({
   async function saveAnnotations() {
     setSaving(true)
     try {
+      // Save annotations per template (multi-template support)
       const res = await fetch('/api/bank-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: bank.id,
           annotations,
+          templateId: selectedTemplateId, // save to specific template
         }),
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(`${annotations.length} annotation disimpan`)
+        toast.success(`${annotations.length} annotation disimpan untuk template ini`)
         onUpdated()
       } else {
         toast.error(data.error || 'Gagal simpan')
@@ -365,6 +423,26 @@ export function BankAnnotationEditor({
         {/* Toolbar */}
         <div className="flex items-center justify-between p-2 border-b border-border bg-muted/30">
           <div className="flex items-center gap-2">
+            {/* Template selector */}
+            {templates.length > 1 && (
+              <select
+                value={selectedTemplateId || ''}
+                onChange={(e) => {
+                  const tplId = e.target.value
+                  setSelectedTemplateId(tplId)
+                  const tpl = templates.find(t => t.id === tplId)
+                  if (tpl) {
+                    setAnnotations(tpl.annotations || [])
+                    setSelectedId(null)
+                  }
+                }}
+                className="text-xs border rounded bg-background px-2 py-1 h-7"
+              >
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} (v{t.version})</option>
+                ))}
+              </select>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -540,7 +618,7 @@ export function BankAnnotationEditor({
           </div>
         </ScrollArea>
 
-        {/* Selected annotation editor */}
+        {/* Selected annotation editor + Test Field */}
         {selectedId && (
           <div className="p-2 border-t border-border bg-muted/30 space-y-2">
             <h4 className="text-xs font-semibold">Edit Field</h4>
@@ -591,58 +669,104 @@ export function BankAnnotationEditor({
                   <div className="grid grid-cols-4 gap-1">
                     <div>
                       <label className="text-[9px] text-muted-foreground">X</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        value={ann.x.toFixed(3)}
-                        onChange={(e) => updateAnnotation(ann.id, { x: parseFloat(e.target.value) || 0 })}
-                        className="h-6 text-[10px]"
-                      />
+                      <Input type="number" step="0.01" min="0" max="1" value={ann.x.toFixed(3)} onChange={(e) => updateAnnotation(ann.id, { x: parseFloat(e.target.value) || 0 })} className="h-6 text-[10px]" />
                     </div>
                     <div>
                       <label className="text-[9px] text-muted-foreground">Y</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        value={ann.y.toFixed(3)}
-                        onChange={(e) => updateAnnotation(ann.id, { y: parseFloat(e.target.value) || 0 })}
-                        className="h-6 text-[10px]"
-                      />
+                      <Input type="number" step="0.01" min="0" max="1" value={ann.y.toFixed(3)} onChange={(e) => updateAnnotation(ann.id, { y: parseFloat(e.target.value) || 0 })} className="h-6 text-[10px]" />
                     </div>
                     <div>
                       <label className="text-[9px] text-muted-foreground">W</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        max="1"
-                        value={ann.width.toFixed(3)}
-                        onChange={(e) => updateAnnotation(ann.id, { width: parseFloat(e.target.value) || 0.01 })}
-                        className="h-6 text-[10px]"
-                      />
+                      <Input type="number" step="0.01" min="0.01" max="1" value={ann.width.toFixed(3)} onChange={(e) => updateAnnotation(ann.id, { width: parseFloat(e.target.value) || 0.01 })} className="h-6 text-[10px]" />
                     </div>
                     <div>
                       <label className="text-[9px] text-muted-foreground">H</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        max="1"
-                        value={ann.height.toFixed(3)}
-                        onChange={(e) => updateAnnotation(ann.id, { height: parseFloat(e.target.value) || 0.01 })}
-                        className="h-6 text-[10px]"
-                      />
+                      <Input type="number" step="0.01" min="0.01" max="1" value={ann.height.toFixed(3)} onChange={(e) => updateAnnotation(ann.id, { height: parseFloat(e.target.value) || 0.01 })} className="h-6 text-[10px]" />
                     </div>
+                  </div>
+                  {/* TEST FIELD — sample data untuk preview */}
+                  <div className="pt-2 border-t border-border">
+                    <label className="text-[10px] text-violet-500 font-medium">🧪 Test Data (preview)</label>
+                    <Input
+                      placeholder="Ketik sample value..."
+                      value={testFieldValues[ann.fieldMapping] || ''}
+                      onChange={(e) => setTestFieldValues(prev => ({ ...prev, [ann.fieldMapping]: e.target.value }))}
+                      className="h-7 text-xs mt-1"
+                    />
                   </div>
                 </>
               )
             })()}
           </div>
         )}
+
+        {/* Test Customer Selector */}
+        <div className="p-2 border-t border-border bg-violet-500/5">
+          <label className="text-[10px] text-violet-500 font-medium">🧪 Test dari Konsumen Existing</label>
+          <select
+            value={testCustomerId}
+            onChange={async (e) => {
+              const cid = e.target.value
+              setTestCustomerId(cid)
+              if (cid) {
+                // Fetch customer data and fill test field values
+                try {
+                  const res = await fetch(`/api/customers/${cid}`)
+                  const data = await res.json()
+                  if (data.success) {
+                    const c = data.data
+                    const values: Record<string, string> = {}
+                    // Map customer fields to test values
+                    if (c.name) values['customer.name'] = c.name
+                    if (c.nik) values['customer.nik'] = c.nik
+                    if (c.birthPlace) values['customer.birthPlace'] = c.birthPlace
+                    if (c.birthDate) values['customer.birthDate'] = c.birthDate
+                    if (c.gender) values['customer.gender'] = c.gender
+                    if (c.religion) values['customer.religion'] = c.religion
+                    if (c.maritalStatus) values['customer.maritalStatus'] = c.maritalStatus
+                    if (c.ktpAddress) values['customer.ktpAddress'] = c.ktpAddress
+                    if (c.rtRw) values['customer.rtRw'] = c.rtRw
+                    if (c.kelurahan) values['customer.kelurahan'] = c.kelurahan
+                    if (c.kecamatan) values['customer.kecamatan'] = c.kecamatan
+                    if (c.city) values['customer.city'] = c.city
+                    if (c.postalCode) values['customer.postalCode'] = c.postalCode
+                    if (c.whatsappNumber) values['customer.phone'] = c.whatsappNumber
+                    if (c.occupation) values['customer.occupation'] = c.occupation
+                    if (c.companyName) values['customer.companyName'] = c.companyName
+                    if (c.companyAddress) values['customer.companyAddress'] = c.companyAddress
+                    if (c.workPosition) values['customer.workPosition'] = c.workPosition
+                    if (c.monthlyIncome) values['customer.monthlyIncome'] = String(c.monthlyIncome)
+                    if (c.npwpNumber) values['customer.npwpNumber'] = c.npwpNumber
+                    if (c.bankName) values['customer.bankName'] = c.bankName
+                    if (c.blockLetter) values['customer.blockLetter'] = c.blockLetter
+                    if (c.houseNumber) values['customer.houseNumber'] = c.houseNumber
+                    // System fields
+                    const today = new Date()
+                    values['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                    values['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                    values['system.todayDay'] = today.toLocaleDateString('id-ID', { weekday: 'long' })
+                    values['system.currentYear'] = String(today.getFullYear())
+                    values['system.currentMonth'] = today.toLocaleDateString('id-ID', { month: 'long' })
+                    setTestFieldValues(values)
+                    toast.success(`Test data dari ${c.name} dimuat`)
+                  }
+                } catch (err) {
+                  toast.error('Gagal load data konsumen')
+                }
+              } else {
+                setTestFieldValues({})
+              }
+            }}
+            className="w-full h-7 text-xs border rounded bg-background px-2 mt-1"
+          >
+            <option value="">— Pilih konsumen —</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} (Blok {c.blockLetter || ''}{c.houseNumber || ''})
+              </option>
+            ))}
+          </select>
+        </div>
       </Card>
     </div>
   )
