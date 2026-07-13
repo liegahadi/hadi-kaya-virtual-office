@@ -894,8 +894,8 @@ model BankConfig {
   bankCode      String   @unique // BTN, MANDIRI, BSB_SYARIAH, BCA, etc.
   bankName      String   // Display name: "BTN", "Mandiri", "BSB Syariah"
   description   String?  // Optional description
-  templatePath  String?  // Path to PDF template (e.g. /templates/btn-flpp.pdf)
-  documents     String?  // JSON array of document configs: [{ id, name, templatePath, fields: [...] }]
+  templatePath  String?  // Legacy: Path to PDF template (deprecated — use templates JSON)
+  documents     String?  // JSON: { requiredDocuments, formboxFields, customDocs, templates, stages, ... }
   isActive      Boolean  @default(true)
   createdBy     String?  // 'system' (migration) or 'dina' (via chat) or 'owner' (UI)
   createdAt     DateTime @default(now())
@@ -904,6 +904,32 @@ model BankConfig {
   @@index([isActive])
   @@index([bankCode])
 }
+
+// BankConfig.documents JSON structure (v2.1):
+// {
+//   "requiredDocuments": ["ktp", "kk", "npwp", ...],  // kategori 1: dokumen upload
+//   "formboxFields": ["applicant.fullName", "applicant.nik", ...],  // fields yang muncul di sidebar
+//   "customDocs": [{ id, label }],  // custom docs yang user tambah
+//   "templates": [  // kategori 3: dokumen generated (template PDF + annotation)
+//     {
+//       "id": "tpl-xxx",
+//       "name": "FLPP",
+//       "stage": "entry",  // "entry" | "post-sp3k" | "post-akad" | custom
+//       "fileId": "google-drive-file-id",
+//       "fileName": "FLPP_BNI_v1.pdf",
+//       "webViewLink": "https://drive.google.com/...",
+//       "version": 1,
+//       "uploadedAt": "2026-07-13T...",
+//       "annotations": [
+//         { "id", "page", "x", "y", "width", "height", "label", "fieldMapping", "fieldType" }
+//       ]
+//     }
+//   ],
+//   "stages": [  // configurable stages per bank
+//     { "id": "entry", "name": "Entry (Pre-Bank)", "order": 1 },
+//     { "id": "post-sp3k", "name": "AJB (Post SP3K)", "order": 2 }
+//   ]
+// }
 
 model NotarisSetting {
   id        String   @id @default(cuid())

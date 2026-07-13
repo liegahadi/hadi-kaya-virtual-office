@@ -21,7 +21,7 @@ export async function POST(
   try {
     const { id: bankId } = await params
     const body = await req.json()
-    const { templatePdf, annotations, version, originalFileName } = body
+    const { templatePdf, annotations, version, originalFileName, templateName, stage, mode, replaceTemplateId } = body
 
     if (!templatePdf) {
       return NextResponse.json({ success: false, error: 'templatePdf required' }, { status: 400 })
@@ -152,19 +152,53 @@ export async function POST(
     }
 
     // Update bank config with template info + annotations
-    const documents = annotations || []
+    // Support multi-template: simpan ke documents.templates array
+    const newTemplate = {
+      id: mode === 'replace' && replaceTemplateId ? replaceTemplateId : `tpl-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      name: templateName || 'Template',
+      stage: stage || 'entry',
+      fileId: driveFileId,
+      fileName: templateName,
+      webViewLink: driveLink,
+      version: version || 1,
+      uploadedAt: new Date().toISOString(),
+      fileHash,
+      fileSize: buffer.length,
+      annotations: annotations || [],
+    }
+
+    // Get existing documents JSON
+    let existingDocs: any = {}
+    try {
+      if (bank.documents) existingDocs = JSON.parse(bank.documents)
+    } catch {}
+
+    // Initialize templates array if not exists
+    if (!existingDocs.templates) existingDocs.templates = []
+
+    if (mode === 'replace' && replaceTemplateId) {
+      // Replace existing template (keep old version in history)
+      existingDocs.templates = existingDocs.templates.map((t: any) =>
+        t.id === replaceTemplateId ? newTemplate : t
+      )
+    } else {
+      // Add new template
+      existingDocs.templates.push(newTemplate)
+    }
+
+    // Also keep legacy single-template fields for backward compat
+    existingDocs.fileId = driveFileId
+    existingDocs.fileHash = fileHash
+    existingDocs.fileSize = buffer.length
+    existingDocs.annotations = annotations || []
+    existingDocs.uploadedAt = new Date().toISOString()
+    existingDocs.version = version || 1
+
     const updatedBank = await db.bankConfig.update({
       where: { id: bankId },
       data: {
         templatePath: driveLink || `local:${fileHash}`,
-        documents: JSON.stringify({
-          version: version || 1,
-          fileId: driveFileId,
-          fileHash,
-          fileSize: buffer.length,
-          annotations: documents,
-          uploadedAt: new Date().toISOString(),
-        }),
+        documents: JSON.stringify(existingDocs),
       },
     })
 
@@ -172,14 +206,8 @@ export async function POST(
       success: true,
       data: {
         bank: updatedBank,
-        template: {
-          fileId: driveFileId,
-          fileName: `Template ${bank.bankCode} v${version || 1}.pdf`,
-          webViewLink: driveLink,
-          fileHash,
-          version: version || 1,
-        },
-        annotations: documents,
+        template: newTemplate,
+        templates: existingDocs.templates,
       },
     })
   } catch (err: any) {
@@ -217,6 +245,8 @@ export async function GET(
           version: documents.version,
           annotations: documents.annotations || [],
         } : null,
+        templates: documents?.templates || [],
+        stages: documents?.stages || null,
       },
     })
   } catch (err: any) {

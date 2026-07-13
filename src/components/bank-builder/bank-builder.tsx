@@ -367,8 +367,60 @@ function BankEditor({
 // ============================================================
 function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template: BankTemplate | null; onUpdated: () => void }) {
   const [uploading, setUploading] = useState(false)
-  const [version, setVersion] = useState((template?.version || 0) + 1)
+  const [templates, setTemplates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [newTemplateStage, setNewTemplateStage] = useState('entry')
+  const [showAddForm, setShowAddForm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const replaceFileRef = useRef<HTMLInputElement>(null)
+  const [replaceTemplateId, setReplaceTemplateId] = useState<string | null>(null)
+
+  // Load templates from BankConfig.documents
+  useEffect(() => {
+    async function loadTemplates() {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/bank-config/${bank.id}/template`)
+        const data = await res.json()
+        if (data.success && data.data.template) {
+          // Existing single template (backward compat)
+          setTemplates([{
+            id: 'legacy',
+            name: data.data.template.fileName || 'Template',
+            stage: 'entry',
+            fileId: data.data.template.fileId,
+            fileName: data.data.template.fileName,
+            webViewLink: data.data.template.webViewLink,
+            version: data.data.template.version,
+            annotations: data.data.template.annotations || [],
+          }])
+        }
+        // Also check documents JSON for multi-template
+        const docsRes = await fetch('/api/bank-config')
+        const docsData = await docsRes.json()
+        if (docsData.success) {
+          const b = docsData.data.find((x: any) => x.id === bank.id)
+          if (b?.documents) {
+            try {
+              const docs = JSON.parse(b.documents)
+              if (docs.templates && docs.templates.length > 0) {
+                setTemplates(docs.templates)
+              }
+              if (docs.stages) {
+                // Use custom stages if available
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.error('Load templates error:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadTemplates()
+  }, [bank.id, onUpdated])
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -377,10 +429,13 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
       toast.error('File harus PDF')
       return
     }
+    if (!newTemplateName.trim()) {
+      toast.error('Nama template wajib diisi (mis. FLPP, SPR, AJB)')
+      return
+    }
 
     setUploading(true)
     try {
-      // Convert to dataUrl
       const reader = new FileReader()
       reader.onload = async () => {
         const dataUrl = reader.result as string
@@ -390,13 +445,18 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               templatePdf: dataUrl,
-              annotations: template?.annotations || [],
-              version,
+              originalFileName: file.name,
+              version: 1,
+              templateName: newTemplateName.trim(),
+              stage: newTemplateStage,
+              mode: 'add', // add new template
             }),
           })
           const data = await res.json()
           if (data.success) {
-            toast.success(`Template v${version} berhasil diupload`)
+            toast.success(`Template "${newTemplateName}" berhasil diupload`)
+            setNewTemplateName('')
+            setShowAddForm(false)
             onUpdated()
           } else {
             toast.error(data.error || 'Gagal upload template')
@@ -414,74 +474,178 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
     }
   }
 
+  async function handleReplaceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !replaceTemplateId) return
+    if (file.type !== 'application/pdf') {
+      toast.error('File harus PDF')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const dataUrl = reader.result as string
+        try {
+          const res = await fetch(`/api/bank-config/${bank.id}/template`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              templatePdf: dataUrl,
+              originalFileName: file.name,
+              version: (templates.find(t => t.id === replaceTemplateId)?.version || 1) + 1,
+              templateName: templates.find(t => t.id === replaceTemplateId)?.name,
+              stage: templates.find(t => t.id === replaceTemplateId)?.stage || 'entry',
+              mode: 'replace',
+              replaceTemplateId,
+            }),
+          })
+          const data = await res.json()
+          if (data.success) {
+            toast.success(`Template berhasil di-replace (v${(templates.find(t => t.id === replaceTemplateId)?.version || 1) + 1})`)
+            setReplaceTemplateId(null)
+            onUpdated()
+          } else {
+            toast.error(data.error || 'Gagal replace template')
+          }
+        } catch (err) {
+          toast.error('Gagal replace template')
+        } finally {
+          setUploading(false)
+        }
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      toast.error('Gagal baca file')
+      setUploading(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-6 h-6 mx-auto animate-spin" /></div>
+
   return (
-    <Card className="p-4 max-w-lg space-y-3">
-      <h3 className="text-sm font-semibold">Upload Template PDF</h3>
-      <p className="text-xs text-muted-foreground">
-        Upload form kosong dari bank (PDF). Ini akan jadi template dasar untuk auto-generate dokumen.
-      </p>
-
-      {template?.fileId ? (
-        <div className="p-3 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-            <FileText className="w-4 h-4" />
-            <span className="font-medium">Template v{template.version} sudah diupload</span>
-          </div>
-          {template.webViewLink && (
-            <a
-              href={template.webViewLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline mt-1 inline-block"
-            >
-              Lihat di Google Drive →
-            </a>
-          )}
-        </div>
-      ) : null}
-
+    <Card className="p-4 max-w-2xl space-y-4">
       <div>
-        <label className="text-xs text-muted-foreground mb-1 block">Versi Template</label>
-        <Input
-          type="number"
-          min={1}
-          value={version}
-          onChange={(e) => setVersion(parseInt(e.target.value) || 1)}
-          className="w-24"
-        />
-        <p className="text-[10px] text-muted-foreground mt-1">
-          Versi baru tidak overwrite versi lama (anti-overwrite rule)
+        <h3 className="text-sm font-semibold">Template PDF</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Upload form kosong dari bank (PDF). 1 bank bisa punya multiple template (FLPP, SPR, AJB, dll). Nama file = nama asli upload + version.
         </p>
       </div>
 
-      <div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        <Button
-          variant="outline"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-          ) : (
-            <Upload className="w-4 h-4 mr-1" />
-          )}
-          {uploading ? 'Uploading...' : 'Pilih File PDF'}
+      {/* List of templates */}
+      {templates.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase">Templates ({templates.length})</h4>
+          {templates.map(tpl => (
+            <div key={tpl.id} className="flex items-center gap-2 p-3 rounded-md border border-border bg-muted/30">
+              <FileText className="w-5 h-5 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{tpl.name}</span>
+                  <Badge variant="outline" className="text-[9px]">v{tpl.version}</Badge>
+                  <Badge variant="secondary" className="text-[9px]">{tpl.stage || 'entry'}</Badge>
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate">{tpl.fileName}</div>
+              </div>
+              {tpl.webViewLink && (
+                <a
+                  href={tpl.webViewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:underline shrink-0"
+                >
+                  Lihat
+                </a>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px]"
+                onClick={() => {
+                  setReplaceTemplateId(tpl.id)
+                  replaceFileRef.current?.click()
+                }}
+                disabled={uploading}
+              >
+                Replace
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new template form */}
+      {showAddForm ? (
+        <div className="p-3 rounded-md border border-violet-500/30 bg-violet-500/5 space-y-2">
+          <h4 className="text-xs font-semibold">Tambah Template Baru</h4>
+          <div>
+            <label className="text-[10px] text-muted-foreground">Nama Template</label>
+            <Input
+              placeholder="mis. FLPP, SPR, AJB, LPA"
+              value={newTemplateName}
+              onChange={e => setNewTemplateName(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">Stage</label>
+            <select
+              value={newTemplateStage}
+              onChange={e => setNewTemplateStage(e.target.value)}
+              className="w-full h-8 text-xs border rounded bg-background px-2"
+            >
+              <option value="entry">Entry (Pre-Bank)</option>
+              <option value="post-sp3k">AJB (Post SP3K)</option>
+              <option value="post-akad">Post Akad</option>
+              <option value="serah-terima">Serah Terima</option>
+            </select>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || !newTemplateName.trim()}
+              className="h-8"
+            >
+              {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1" />}
+              Pilih File PDF
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)} className="h-8">
+              Batal
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="h-8">
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          Tambah Template
         </Button>
-      </div>
+      )}
+
+      {/* Hidden replace file input */}
+      <input
+        ref={replaceFileRef}
+        type="file"
+        accept="application/pdf"
+        onChange={handleReplaceFile}
+        className="hidden"
+      />
+
+      <p className="text-[10px] text-muted-foreground">
+        💡 Setiap template bisa di-annotate di tab "Annotation". Versi baru tidak overwrite versi lama (anti-overwrite rule).
+      </p>
     </Card>
   )
 }
-
-// ============================================================
-// ADD BANK DIALOG
-// ============================================================
 function AddBankDialog({
   open,
   onOpenChange,
