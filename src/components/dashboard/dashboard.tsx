@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, Map, BookOpen, Settings, Bot, MessageSquare,
   Bell, CheckCircle2, AlertCircle, Sparkles, Zap, ShieldCheck,
@@ -101,13 +101,7 @@ export default function Dashboard() {
 
   // OPTIMIZATION: Polling 5 menit (was 30s) — saves ~90% dashboard bandwidth
   // User can manually refresh via RefreshCw button in header
-  useEffect(() => {
-    fetchStats()
-    const interval = setInterval(fetchStats, 300000) // 5 minutes
-    return () => clearInterval(interval)
-  }, [])
-
-  async function fetchStats() {
+  const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/dashboard/stats')
       const data = await res.json()
@@ -117,7 +111,13 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchStats()
+    const interval = setInterval(fetchStats, 300000) // 5 minutes
+    return () => clearInterval(interval)
+  }, [fetchStats])
 
   if (loading) return <DashboardSkeleton />
   if (!stats) {
