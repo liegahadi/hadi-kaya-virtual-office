@@ -871,3 +871,183 @@ Stage Summary:
 - PRD updated to v2.0
 
 Next: User requested Bank Builder continuation — UI for template upload + annotation editor (visual PDF annotation tool). Backend ready, frontend needs to be built.
+
+---
+Task ID: FINAL-BATCH
+Agent: Main (GLM)
+Task: 4-task batch — BerkasViewV2 Bank Builder preview + DINA v3 Function Calling rebuild + DB Migration scripts/API
+
+Work Log:
+
+## TASK 1: B-STEP 5 — BerkasViewV2 baca templates dari BankConfig → Preview Dokumen
+- Added Bank Builder template integration to berkas-view-v2.tsx
+- New state: bankTemplates[], activeBankTemplateId, bankTemplateBlobUrl, bankTemplateLoading
+- useEffect fetches templates from /api/bank-config/[bankId]/template when selected bank
+  is NOT in [BTN, MANDIRI, BSB_SYARIAH] (existing hardcoded banks)
+- Template buttons rendered in Preview Dokumen panel after existing BTN/Mandiri/BSB buttons
+- Click handler fetches PDF via /api/bank-config/[bankId]/template/pdf-proxy?fileId=xxx
+- PDF preview shown in iframe (replaces FLPP overlay when active)
+- Auto-refresh preview when form data changes (debounced 2.5s)
+- Download active template via 'Single' button (uses pdf-proxy endpoint)
+- Refresh + Drive link + Close buttons in template preview header
+- Additive only — existing BTN/Mandiri/BSB code untouched
+
+## TASK 2: B-STEP 6 — Connect existing BTN/Mandiri/BSB (documentation only)
+- Added comment near BTN/Mandiri/BSB button definitions (line ~1745):
+  // NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
+  // Bank Builder is an ALTERNATIVE path for new banks + future editing.
+  // Do NOT migrate existing code — just add Bank Builder templates as additional options.
+- Same comment also added near Bank Builder template buttons section
+
+## TASK 3: DINA Rebuild — Function Calling Architecture (BIGGEST TASK)
+
+### 3a. LLM Router (src/lib/agents/llm-router.ts) — ADDED ~380 lines
+- Multi-provider function calling support via callLLMWithTools()
+- Primary: Gemini 2.0 Flash (native functionDeclarations)
+- Backup: OpenRouter (OpenAI-compatible tools API)
+- Multi-account rotation via comma-separated env vars:
+  * GEMINI_API_KEYS or GEMINI_API_KEY (single-key fallback)
+  * OPENROUTER_API_KEYS or OPENROUTER_API_KEY
+- Round-robin cursor with auto-skip on retryable errors (429, 5xx, timeout)
+- Provider-agnostic ToolDeclaration/ToolCall/FunctionCallResponse types
+- Schema conversion helpers (Gemini UPPER + OpenAI lower)
+- appendToolResult helper for multi-round function calling
+- Existing callLLM() kept for backwards compat (other agents still use it)
+
+### 3b. DINA Tools v3 (src/lib/agents/dina-tools-v3.ts) — NEW FILE (~660 lines)
+10 tools as Gemini function declarations, each with JSON schema + handler:
+ 1. upload_berkas — catat upload ke slot
+ 2. generate_sk_kerja — generate SK Kerja DOCX (karyawan)
+ 3. generate_slip_gaji — generate Slip Gaji 7 lembar DOCX (karyawan)
+ 4. generate_laporan_keuangan — generate Laporan Keuangan 6 bulan DOCX (wirausaha)
+ 5. get_customer_status — query status + berkas + tanggal penting
+ 6. update_customer_field — update field (LANGSUNG, tanpa konfirmasi)
+ 7. create_customer — tambah konsumen (LANGSUNG)
+ 8. delete_customer — set pending action + minta konfirmasi "ya"
+ 9. send_file — kirim dari DB (uploadedDocs atau GoogleDoc)
+10. query_experience — agregasi lintas konsumen (stats, by_stage, by_bank, incomplete, recent)
+
+Handlers reuse existing functions from dina-tools.ts (createCustomer, deleteCustomer,
+updateCustomerField via legacy executeTools). Helpers:
+- checkPendingConfirmation() — detects "ya"/"batal" for fast bypass
+- executeConfirmedAction() — executes pending DELETE/CREATE
+
+### 3c. DINA Chat Route (src/app/api/dina/chat/route.ts) — REWRITTEN (~340 lines)
+- Replaced regex intent detection with LLM function calling
+- Build context: 15-message history + customer + memory + skills + channel + traceback
+- Multi-round tool execution (MAX_TOOL_ROUNDS = 5):
+  LLM → tool call(s) → execute handlers → append results → LLM → final text reply
+- File sending: parse [sendFile:UPLOADED_DOC] and [sendFile:GOOGLE_DOC] markers
+  → fetch file content (dataUrl from Customer.uploadedDocs OR Drive API for GoogleDoc)
+  → attach to response as files[] array
+- Permission rejects (DELETE in group from non-owner) bypass LLM (fast path)
+- Pending confirmation bypass: user types "ya"/"batal" → execute directly (no LLM)
+- Handle file uploads: chat UI sends fileInfo → LLM decides what to do
+- maxDuration = 60s (was 30s) for function calling round-trips
+- Legacy v2 route backed up as route.ts.legacy-v2.bak (gitignored)
+- Legacy regex code in dina-tools.ts KEPT (not deleted) but NOT used
+
+### 3d. DINA System Prompt (src/lib/agents/dina-knowledge.ts) — UPDATED
+- Added "6 TUJUAN DINA" section (Berkas, Generate, Status, CRUD, Send File, Cross-Customer)
+- Added "DINA TOOLS v3 — FUNCTION CALLING (10 TOOLS)" section with full tool descriptions
+- Added "CARA PAKAI TOOLS" section (when to call, anti-hallucination rules)
+  * Jangan halusinasi — tool result = kebenaran
+  * Jangan sebut nama tool ke user
+  * 1 tool per utterance (avoid multi-call spam)
+  * DELETE: tool sets pending → user confirms → system auto-executes
+- Retained ANTI-CURHAT (no internal reasoning exposed)
+- Retained ANTI-CONFUSION NAMA (data user = data konsumen)
+- Expanded KONFIRMASI KONSUMEN to 7 scenarios (per PRD):
+  1. Upload tanpa konteks → tanya "untuk konsumen siapa?"
+  2. Update field tanpa konteks → tanya
+  3. Generate dokumen tanpa konteks → tanya
+  4. 48h terakhir >1 konsumen → tanya "X atau Y?"
+  5. Nama parsial → tanya disambiguation
+  6. "konsumen yang tadi" gap >1 jam → tanya ulang
+  7. File ke grup WA tanpa nama → tanya
+- GENERATE FLOW rule: LANGSUNG generate kalau data lengkap, jangan tanya konfirmasi
+
+## TASK 4: DB Migration Support
+
+### 4a. Backup Script (scripts/backup-db.ts) — NEW
+- Usage: DATABASE_URL="..." npx tsx scripts/backup-db.ts
+- Exports ALL 43 Prisma models to JSON (in dependency order)
+- Serializes Date/Buffer/BigInt with __type markers (round-trip safe)
+- Saves to /home/z/my-project/download/db-backup-{timestamp}.json
+- Tested: 114 records in 4.3s, 1.41 MB output ✓
+
+### 4b. Restore Script (scripts/restore-db.ts) — NEW
+- Usage: DATABASE_URL="..." npx tsx scripts/restore-db.ts <backup.json> [--upsert|--truncate] [--yes]
+- 3 modes: insert (skip existing), upsert (update), truncate (wipe + insert)
+- Conflict handling: P2002 unique constraint → skip (not error)
+- Interactive confirmation prompt (skip with --yes)
+- Tested: restore to same DB skipped all 114 records correctly ✓
+
+### 4c. Admin API Endpoints — NEW
+- GET /api/admin/backup
+  * ?download=1 → return as Content-Disposition attachment
+  * ?save=1 → also save to /home/z/my-project/download/
+  * Default → return JSON inline (backup < 5MB) or meta only (>= 5MB)
+- POST /api/admin/restore
+  * Body: { backup, mode: 'insert'|'upsert'|'truncate' } (JSON)
+  * OR multipart: file=<json>, mode=insert
+  * Returns per-table stats: { inserted, updated, skipped, failed }
+- Tested via curl: backup endpoint saved 1.41 MB file ✓
+- Tested via curl: restore endpoint skipped 114 existing records ✓
+
+## Build & Deploy
+- `npx next build` → ✓ Compiled successfully in 44s (1 unrelated warning about 'pg' module
+  from existing src/app/api/setup/route.ts — pre-existing, not from this commit)
+- `bun run lint` → 5 errors all PRE-EXISTING (wa-bot/* + scripts/extract-annotations.mjs);
+  no new errors from this commit's code
+- Git commit: 7d27021 → pushed to origin main successfully
+- Files: 6 new, 5 modified, ~2883 insertions, ~441 deletions
+
+## DB State
+- Connected to Aiven PostgreSQL (DATABASE_URL updated in local .env)
+- 114 records successfully backed up via new scripts
+- .env is in .gitignore — production uses Vercel env vars (GEMINI_API_KEY, OPENROUTER_API_KEY,
+  DATABASE_URL must be set in Vercel project settings)
+
+## Architecture decisions:
+1. Function calling > regex intent detection:
+   - LLM understands natural language nuances (partial names, multi-intent)
+   - No need to maintain regex patterns for each intent
+   - Anti-hallucination: tool result is truth (LLM can't make up data)
+2. Multi-provider with rotation:
+   - Gemini free tier (15 RPM, 1500 RPD) — primary
+   - OpenRouter free models — backup when Gemini rate-limited
+   - Multi-account rotation via comma-separated env vars (scalable)
+3. Pending action confirmation bypass:
+   - User typing 'ya'/'batal' is detected BEFORE LLM call (saves 2-4s latency)
+   - Same security checks (target name validation, owner-only delete in group)
+   - Falls back to LLM if no pending action (so user can still say 'ya' casually)
+4. Legacy code kept (not deleted):
+   - dina-tools.ts (regex intent detection) — kept as fallback, NOT used by v3
+   - route.ts.legacy-v2.bak — backup of v2 chat route
+   - Existing BTN/Mandiri/BSB document generation code — UNTOUCHED (additive only)
+
+## Next Steps for Owner:
+1. Set GEMINI_API_KEY in Vercel env vars (required for DINA v3 to work)
+2. Optionally set OPENROUTER_API_KEY as backup (and optionally GEMINI_API_KEYS for multi-account rotation)
+3. Test DINA v3 in dashboard — try: "status Jenni", "list all customers", "buat SK Kerja untuk Budi"
+4. Use /api/admin/backup?save=1 before any major DB changes
+5. Use scripts/backup-db.ts for scheduled cron backups (e.g., daily via Vercel Cron or external scheduler)
+6. For Bank Builder: tambah bank baru via DINA chat ("tambah bank BCA") → upload PDF template via Bank Builder UI → templates muncul sebagai tombol di Preview Dokumen panel
+
+Files Created (6):
+- scripts/backup-db.ts
+- scripts/restore-db.ts
+- src/app/api/admin/backup/route.ts
+- src/app/api/admin/restore/route.ts
+- src/lib/agents/dina-tools-v3.ts
+- (route.ts.legacy-v2.bak — gitignored)
+
+Files Modified (5):
+- src/components/berkas-view-v2.tsx (+216 lines)
+- src/lib/agents/llm-router.ts (+378 lines)
+- src/lib/agents/dina-knowledge.ts (+101 lines, mostly additions)
+- src/app/api/dina/chat/route.ts (full rewrite, -441 +340 lines)
+- .gitignore (added /download/, /tool-results/, *.legacy-v2.bak)
+
+Commit: 7d27021 (pushed to origin main)
