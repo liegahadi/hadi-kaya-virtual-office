@@ -131,7 +131,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
-      <Header stats={stats} />
+      <Header stats={stats} onRefresh={fetchStats} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <nav className="sticky top-[72px] z-30 bg-card/80 backdrop-blur-md border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">
@@ -228,7 +228,7 @@ export default function Dashboard() {
 // ============================================================
 // HEADER
 // ============================================================
-function Header({ stats }: { stats: StatsData }) {
+function Header({ stats, onRefresh }: { stats: StatsData; onRefresh?: () => void }) {
   return (
     <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -251,7 +251,7 @@ function Header({ stats }: { stats: StatsData }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchStats}
+              onClick={onRefresh}
               className="hidden sm:flex"
               title="Refresh data"
             >
