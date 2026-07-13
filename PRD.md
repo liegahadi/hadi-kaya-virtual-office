@@ -1217,15 +1217,32 @@ flowchart TD
 - Schema: `BankConfig.stages` = array of stage configs
 - User bisa add stage baru untuk bank manapun
 
-### 17.7 SPR Per-Bank (IMPORTANT)
+### 17.7 SPR Per-Bank (IMPORTANT — TEGAS)
 
 - **SPR (Surat Pemesanan Rumah) berbeda untuk setiap bank**
-- BTN punya format SPR sendiri
-- Mandiri punya format SPR sendiri
-- BSB Syariah punya format SPR sendiri
-- SPR harus di-setup per-bank via Bank Builder (template PDF + annotation)
+- **CEK: SPR yang dibuat secara REACT selain BTN — kalau ada di BASE_REQUIRED_UPLOADS atau reactDocs generik, HAPUS**
+- BTN SPR tetap pakai code existing (React component SPR_BTN) — JANGAN GANGGU
+- Mandiri SPR, BSB SPR: via Bank Builder (template PDF + annotation)
+- SPR future banks: via Bank Builder
 
-### 17.8 Connect Existing Banks to Bank Builder
+### 17.8 Test Isi Field di Annotation Editor
+
+**TIDAK ADA panel "Test Preview" terpisah.**
+
+Test isi field dilakukan di bagian **"Edit Field"** pada tab Annotation:
+
+1. **Sample data manual:**
+   - User bisa ketik sample data langsung di form box "Edit Field"
+   - PDF preview ter-update real-time dengan sample data
+   - User bisa verify annotation benar sebelum save
+
+2. **Sample data dari existing konsumen:**
+   - User pilih konsumen dari dropdown di "Edit Field"
+   - Data konsumen ter-isi otomatis ke form box
+   - PDF preview ter-update dengan data konsumen tersebut
+   - User bisa verify annotation dengan data real
+
+### 17.9 Connect Existing Banks to Bank Builder
 
 **Existing banks yang harus di-connect ke Bank Builder:**
 - **BTN**: FLPP, SPR (Pre-Bank) + AJB, LPA, AKAD (Post SP3K)
@@ -1412,6 +1429,8 @@ User message →
 
 ### 19.7 LLM Router Implementation
 
+**BERLAKU UNTUK SEMUA AGENTIC AI, DI TIM MANAPUN, TANPA TERKECUALI.**
+
 ```typescript
 async function callLLM(messages, tools) {
   const providers = [
@@ -1438,5 +1457,11 @@ async function callLLM(messages, tools) {
 - Setiap provider punya multiple API keys (multi-account)
 - Round-robin antar API key
 - Kalau 1 key kena limit, otomatis pakai key berikutnya
+
+**Aturan:**
+- LLM Router WAJIB dipakai oleh SEMUA agentic AI (DINA, RINA, MITRA, RATNA, RANGGA, 10 Marketing, future agents)
+- Berlaku untuk SEMUA tim (Tim 1, Tim 2, ..., Tim N)
+- Tidak ada exception
+- Implementasi: 1 shared module `src/lib/agents/llm-router.ts`
 
 ---
