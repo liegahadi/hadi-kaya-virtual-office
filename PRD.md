@@ -1034,3 +1034,364 @@ Lihat: `/home/z/my-project/download/DINA-FINAL-DESIGN.md` untuk detail lengkap (
 | 8 Jul 2026 | 1.2 | DO NOT DO list, Memory categorization, Mirofish alternatives, Hostinger VPS. |
 | 8 Jul 2026 | 1.3 | Entity Memory flow, Marketing AI memory, Prompt Engineer skill, n8n + Loop. |
 | **10 Jul 2026** | **2.0** | **DINA v2 Architecture Redesign: 15 locked decisions, 3-tier LLM strategy, Memory system redesign (History Log + Memory KONSUMEN), Session Context + Traceback (48h TTL), Generate surat umum, Tab Database Explorer, Upload anti-overwrite/duplicate, Critical bug fixes (C1 $transaction, H1 senderNumber scoping), Hybrid template + versioning for SK/Slip/Laporan.** |
+| **13 Jul 2026** | **2.1** | **TEAMS Concept (multi-company flexible architecture — VITAL), Bank Builder final concept (multi-template, pre-bank/post-SP3K stages, SPR per-bank), DINA reaffirmation (Function Calling, no regex), LLM multi-provider strategy (NVIDIA NIM + Ollama + multi-account backup).** |
+
+---
+
+## 16. TEAMS CONCEPT — MULTI-COMPANY ARCHITECTURE (VITAL)
+
+### 16.1 Vision
+
+HADI KAYA VIRTUAL OFFICE adalah **1 sistem terpusat** yang menampung **multiple teams/companies**. Bayangkan seperti 1 gedung kantor dengan banyak lantai — setiap lantai adalah perusahaan/franchise berbeda, tapi owner-nya sama (kamu).
+
+### 16.2 Arsitektur Multi-Team
+
+```
+HADI KAYA VIRTUAL OFFICE (1 sistem, 1 codebase, 1 DB)
+│
+├── Tim 1: PT. Marlindo Bangun Persada — ANJAYO 16 (CURRENT)
+│   ├── Agents: DINA, RINA, MITRA, RATNA, RANGGA + 10 marketing
+│   ├── Memory: isolated (hanya untuk tim ini)
+│   ├── Skills: isolated
+│   └── Bank config: BTN, Mandiri, BSB Syariah, BNI
+│
+├── Tim 2: PT. Marlindo Bangun Persada — Project lain (ANJAYO 17, dll)
+│   ├── Agents: SAMA dengan Tim 1 (karena masih 1 PT)
+│   ├── Memory: PERGABUNGAN Tim 1 + Tim 2 (shared)
+│   └── Bisa akses data Tim 1
+│
+├── Tim 3: [PT perumahan saingan A] (future)
+│   ├── Agents: agents baru, basic prompt sendiri
+│   ├── Memory: ISOLATED (tidak bisa akses Tim lain)
+│   └── Tidak bisa akses data dari Tim manapun
+│
+├── Tim 4: [PT perumahan saingan B] (future)
+│   ├── Agents: agents baru
+│   ├── Memory: ISOLATED
+│   └── Tidak bisa akses data dari Tim manapun
+│
+├── Tim 5: [PT SAAS] (future)
+│   ├── Agents: agents SAAS context
+│   ├── Memory: ISOLATED
+│   └── Tidak ada hubungan dengan perumahan
+│
+├── Tim 6: [PT supporting perumahan] (future)
+│   ├── Project: konstruksi, distributor bahan baku, dll
+│   ├── Agents: agents baru
+│   ├── Memory: BISA AKSES SEMUA TIM PERUMAHAN (Tim 1, 2, 3, 4)
+│   └── Supporting role untuk semua tim perumahan
+│
+├── Tim 7: [PT F&B] (future)
+│   ├── Memory: ISOLATED
+│   └── Tidak ada hubungan dengan perumahan
+│
+└── Tim N: [PT future lainnya] (unlimited)
+```
+
+### 16.3 Memory Sharing Models (FLEXIBLE)
+
+| Model | Deskripsi | Contoh |
+|-------|-----------|--------|
+| **Isolated** | Memory tidak bisa diakses tim lain | Tim 3 (saingan) tidak bisa lihat Tim 1 |
+| **Combined** | Memory digabung antar tim dengan PT sama | Tim 1 + Tim 2 (sama PT Marlindo) |
+| **Open Access** | Tim bisa akses memory semua tim perumahan | Tim 6 (supporting) baca semua perumahan |
+| **Custom** | Owner bisa set custom sharing rule | Tim 7 sharing sebagian ke Tim 5 |
+
+### 16.4 Schema Direction (NOT ENFORCED YET)
+
+```prisma
+model Team {
+  id          String   @id @default(cuid())
+  name        String   // "PT. Marlindo Bangun Persada"
+  type        String   // "PROPERTY" | "SAAS" | "FNB" | "AFFILIATOR" | "SUPPORTING" | etc
+  description String?
+  ownerId     String   // kamu (1 owner, multiple teams)
+  memoryAccess String  // "ISOLATED" | "COMBINED_WITH:teamId" | "OPEN_ALL_PROPERTY" | "CUSTOM"
+  createdAt   DateTime @default(now())
+  
+  projects    Project[]
+  agents      Agent[]
+  members     TeamMember[]
+  memories    Memory[]
+  skills      Skill[]
+  bankConfigs BankConfig[]
+}
+
+// Semua model yang sekarang "global" akan add teamId:
+// Customer, Agent, Memory, Skill, BankConfig, Document, GoogleDoc, dll
+```
+
+### 16.5 Principles
+
+1. **1 Owner, Multiple Teams** — kamu adalah owner semua tim, 1 login akses semua
+2. **Pengalaman lintas tim** — "lessons learned" bisa share (dengan izin eksplisit)
+3. **1 codebase, 1 deployment, 1 DB** — tapi data ter-isolate per tim (kecuali open access)
+4. **Fleksibel maksimal** — siapapun bisa jadi franchise baru, siapapun bisa jadi supporting
+5. **Tidak ada interaksi default** — tim tidak saling kontak kecuali owner set explicit
+
+### 16.6 Status Saat Ini
+
+- **FOKUS: Tim 1 (PT. Marlindo / ANJAYO 16) dulu**
+- Schema `Team` Belum di-enforce
+- Nanti kalau siap bikin Tim 2, migrate data existing ke Team 1 + enable isolation
+- **JANGAN ganggu Tim 1 sampai DINA jalan sempurna**
+
+---
+
+## 17. BANK BUILDER — FINAL CONCEPT
+
+### 17.1 Purpose
+
+Bank Builder adalah **tool satu kali pakai** untuk:
+1. **Tambah bank baru** — setup template + annotation + dokumen wajib
+2. **Edit bank existing** — update format, tambah dokumen baru, revise annotation
+3. **Connect ke Tab Berkas** — dokumen yang di-setup di Bank Builder langsung muncul di preview Tab Berkas
+
+### 17.2 Flow (Mirip BTN/Mandiri/BSB Existing)
+
+```mermaid
+flowchart TD
+    A[User buka Bank Builder] --> B[Setup Info Bank]
+    B --> C[Pilih Dokumen Wajib + FormBox fields]
+    C --> D[Upload Template PDF — BISA MULTIPLE]
+    D --> E[Annotate koordinat field di PDF]
+    E --> F[Save]
+    F --> G[User buka Tab Berkas]
+    G --> H[Pilih bank tersebut]
+    H --> I[Isi form box di sidebar kiri]
+    I --> J[Real-time preview dokumen ter-fill otomatis]
+    J --> K[Klik Single → download PDF]
+```
+
+**Key points:**
+- ❌ TIDAK ADA tombol "Generate Dokumen" terpisah
+- ✅ Auto-generate real-time saat user isi form (seperti BTN/Mandiri/BSB sekarang)
+- ✅ Annotation di-set sekali di Bank Builder, bukan saat isi form
+- ✅ Template PDF + annotation = pre-set, user tinggal isi form
+
+### 17.3 Multi-Template Support
+
+- 1 bank bisa punya **MULTIPLE template PDF** dengan nama file berbeda
+- Contoh: BTN punya FLPP, SPR, AJB, LPA, AKAD (5 templates)
+- User bisa **ADD template** kapan saja (kalau bank minta tambah berkas)
+- User bisa **REPLACE template** (kalau format lama tidak berlaku)
+- Setiap template punya annotation sendiri
+
+### 17.4 Pre-Bank vs Post-SP3K Stages
+
+**Saat ini (hardcoded):**
+- BTN: ada "Entry (Pre-Bank)" + "AJB (Post SP3K)" stages
+- Mandiri: hanya Entry
+- BSB Syariah: hanya Entry
+
+**Future (via Bank Builder):**
+- Setiap bank bisa set **stages** mereka sendiri
+- Bisa tambah "Post SP3K" stage untuk Mandiri/BSB kalau bank minta
+- Bisa tambah stage lain (mis. "Post Akad", "Serah Terima")
+- Schema: `BankConfig.stages` = array of stage configs
+
+### 17.5 SPR Per-Bank (IMPORTANT)
+
+- **SPR (Surat Pemesanan Rumah) berbeda untuk setiap bank**
+- BTN punya format SPR sendiri
+- Mandiri punya format SPR sendiri
+- BSB Syariah punya format SPR sendiri
+- **HAPUS SPR dari BASE_REQUIRED_UPLOADS** (hardcoded)
+- SPR harus di-setup per-bank via Bank Builder
+
+**Yang tetap generic (boleh di BASE_REQUIRED_UPLOADS):**
+- Surat Tidak Punya Rumah (format sama untuk semua bank)
+- Surat Penghasilan (format sama untuk semua bank)
+- KTP, KK, NPWP, Akta Nikah (dokumen upload, bukan generated)
+
+### 17.6 Connect Existing Banks to Bank Builder
+
+**Existing banks yang harus di-connect ke Bank Builder:**
+- **BTN**: FLPP, SPR (Pre-Bank) + AJB, LPA, AKAD (Post SP3K)
+- **Mandiri**: SPR, Surat Pernyataan Pemohon
+- **BSB Syariah**: FLPP, SPR, Permohonan, Kuasa Bendaharawan, Pernyataan, SBUM
+
+**Yang harus dilakukan:**
+1. Migrate existing BTN/Mandiri/BSB templates ke Bank Builder
+2. Setup annotation untuk masing-masing
+3. Jangan ganggu code existing (BTN/Mandiri/BSB preview tetap jalan via code lama)
+4. Bank Builder = alternative path untuk bank baru + future editing
+
+---
+
+## 18. DINA REAFFIRMATION — KEMBALI KE TUJUAN ASLI
+
+### 18.1 6 Tujuan DINA (Reaffirm)
+
+| # | Tujuan | Status | Catatan |
+|---|-------|--------|---------|
+| 1 | **Intent & permission management** — DINA paham maksud user, tahu apa yang boleh/tidak | ❌ GAGAL | Regex tidak paham konteks |
+| 2 | **Query pengalaman lintas konsumen** — case lookup, pattern, solusi bank | ❌ Belum ada | Butuh History Log + Memory KONSUMEN |
+| 3 | **Auto-process berkas dari WhatsApp** — upload ke konsumen terkait | ⚠️ Setengah | Upload jalan, tapi Drive connect issue |
+| 4 | **Generate dokumen** (SK Kerja, Slip Gaji, Laporan Keuangan, Logo) | ❌ GAGAL | DINA bingung, tanya konfirmasi terus |
+| 5 | **Generate surat umum** | ⚠️ Setengah | Intent ada, tapi flow belum smooth |
+| 6 | **Status query konsumen** | ⚠️ Setengah | Bisa query, tapi response kaku |
+
+### 18.2 Kenapa DINA Gagal?
+
+**Root cause:** Arsitektur regex-based tidak cocok untuk bahasa manusia yang dinamis.
+
+| Masalah | Penyebab | Dampak |
+|---------|----------|--------|
+| DINA detect "ya" = confirm delete | Regex keyword matching | "andas ya" dianggap konfirmasi delete |
+| DINA tanya konfirmasi terus | System prompt tidak cukup jelas | User frustrasi |
+| DINA "curhat" internal reasoning | Tidak ada rule anti-curhat | Response tidak natural |
+| DINA bingung nama "Putri" | Tidak ada context awareness | Data konsumen dianggap data user |
+| DINA tidak baca history chat | Regex tidak baca context | Tidak paham percakapan sebelumnya |
+
+### 18.3 Direction: Function Calling (No Regex)
+
+**Pindah dari regex-based ke LLM Function Calling:**
+
+```
+User message → 
+  LLM (Gemini 2.0 Flash dengan Function Calling) →
+  LLM baca: message + conversation history + customer context →
+  LLM decide: tool mana yang dipanggil + parameter apa →
+  Execute tool →
+  Return result →
+  LLM generate natural response
+```
+
+**Tools yang DINA punya:**
+- `upload_berkas(customerId, fileType, fileName)` 
+- `generate_sk_kerja(customerId, data)`
+- `generate_slip_gaji(customerId, data)`
+- `get_customer_status(customerId)`
+- `update_customer_field(customerId, field, value)`
+- `create_customer(data)`
+- `delete_customer(customerId)` — with confirmation
+- `send_file(customerId, fileType)`
+- `query_experience(pattern)` — lintas konsumen
+
+**Key principle:** LLM yang decide, bukan regex. LLM baca konteks, paham maksud, pilih tool.
+
+### 18.4 No Regex (Update from v2.0)
+
+**v2.0:** Pakai regex untuk task simple (ya/batal/stats)
+**v2.1 (NOW):** Hapus regex. SEMUA task lewat LLM Function Calling.
+
+**Alasan:**
+- Regex terlalu kaku untuk bahasa dinamis
+- "andas ya" tidak bisa di-handle regex
+- LLM dengan function calling bisa handle semua case dengan context
+- Cost LLM function calling sangat murah (~$0.001/call)
+- Lebih natural, lebih human-like
+
+---
+
+## 19. LLM MULTI-PROVIDER STRATEGY
+
+### 19.1 Vision
+
+Gunakan **multiple LLM providers** sebagai backup. Kalau satu kena daily limit, otomatis pindah ke backup. Semua FREE TIER.
+
+### 19.2 Provider Stack
+
+| Tier | Task | Primary | Backup 1 | Backup 2 | Backup 3 |
+|------|------|---------|----------|----------|----------|
+| **Light** | FAQ, greeting, simple query | Llama-3.3-70B (NVIDIA NIM) | Gemini 2.0 Flash Lite | OpenRouter Mistral-7B free | Ollama Llama-3.2-3B (VPS) |
+| **Medium** | Intent, CRUD, function calling | Nemotron-4-340B (NVIDIA NIM) | Gemini 2.0 Flash | OpenRouter Llama-3.3-70B free | Ollama Llama-3.3-70B (VPS) |
+| **Heavy** | Generate dokumen, analisis | Gemini 2.0 Flash | Nemotron-4-340B (NVIDIA NIM) | OpenRouter Nemotron-3-Nano free | Ollama Qwen-2.5-32B (VPS) |
+
+### 19.3 Kenapa Pilih Ini?
+
+**Light Task:**
+- Llama-3.3-70B (NVIDIA): Cepat, free 1000 credits, cocok untuk FAQ
+- Gemini Flash Lite: Lebih cepat dari Flash biasa, free tier besar
+- Mistral-7B: Kecil, cepat, free di OpenRouter
+- Ollama Llama-3.2-3B: Self-hosted, unlimited, butuh VPS
+
+**Medium Task:**
+- Nemotron-4-340B: Function calling support, powerful, free NVIDIA credits
+- Gemini 2.0 Flash: Function calling native, paling reliable
+- OpenRouter Llama-3.3-70B: Free, function calling support
+- Ollama Llama-3.3-70B: Self-hosted, unlimited
+
+**Heavy Task:**
+- Gemini 2.0 Flash: Best quality untuk generate, free tier besar
+- Nemotron-4-340B: Reasoning kuat, free NVIDIA
+- OpenRouter Nemotron-3-Nano: Free, 30B parameters
+- Ollama Qwen-2.5-32B: Self-hosted, butuh VPS 16GB+ RAM
+
+### 19.4 Multi-Account Trick
+
+- **Gemini**: Bikin 3-5 akun Google, masing-masing dapat free tier (15 RPM, 1500 RPM/day)
+- **NVIDIA**: 1 akun = 1000 credits, bisa bikin multiple akun (pakai email berbeda)
+- **OpenRouter**: Free models ada rate limit per akun, bisa bikin multiple akun
+- **Implementasi**: LLM router dengan round-robin + fallback otomatis
+
+### 19.5 Ollama (Self-Hosted)
+
+- Butuh VPS sendiri (Hostinger KVM 2 cukup untuk model 7B-13B)
+- Model 70B+ butuh VPS besar (KVM 4 atau KVM 8)
+- Untuk sekarang: belum bisa, butuh VPS dulu
+- Future: Ollama jadi backup unlimited (no daily limit, no cost)
+
+### 19.6 Task Complexity Classification (IMPORTANT)
+
+**Pertanyaan:** How does DINA decide task is light/medium/heavy?
+
+**Jawaban:** LLM dengan Function Calling yang decide. TIDAK ADA pre-classification.
+
+**Flow:**
+```
+User message →
+  LLM (Gemini Flash dengan function calling) →
+  LLM baca: message + context + history →
+  LLM decide: 
+    - Tool mana yang dipanggil?
+    - Atau tidak perlu tool (cukup response)?
+  → Execute (kalau ada tool)
+  → Generate response
+```
+
+**Tool selection = task classification:**
+- User bilang "halo" → LLM decide: no tool, just respond (LIGHT)
+- User bilang "berapa konsumen BTN?" → LLM call `get_stats` (LIGHT-MEDIUM)
+- User bilang "hapus Jenni" → LLM call `delete_customer` (MEDIUM)
+- User bilang "bikin SK kerja untuk Jenni" → LLM call `generate_sk_kerja` (HEAVY)
+
+**Tidak perlu regex untuk klasifikasi.** LLM yang decide berdasarkan konteks.
+
+**Tapi tetap pakai LLM tier yang sesuai:**
+- Default: Gemini 2.0 Flash (handle semua tier)
+- Kalau Gemini limit → fallback Nemotron (medium) atau Llama (light)
+- Untuk heavy task (generate): Gemini Flash (best quality)
+- Tidak perlu pre-classify, LLM yang handle semuanya
+
+### 19.7 LLM Router Implementation
+
+```typescript
+async function callLLM(messages, tools) {
+  const providers = [
+    { name: 'gemini', call: callGemini, priority: 1 },
+    { name: 'nvidia-nemotron', call: callNvidiaNemotron, priority: 2 },
+    { name: 'nvidia-llama', call: callNvidiaLlama, priority: 3 },
+    { name: 'openrouter', call: callOpenRouter, priority: 4 },
+    { name: 'ollama', call: callOllama, priority: 5 }, // future
+  ]
+  
+  for (const provider of providers) {
+    try {
+      return await provider.call(messages, tools)
+    } catch (err) {
+      if (err is rate limit) continue  // try next provider
+      throw err
+    }
+  }
+  throw new Error('All LLM providers failed')
+}
+```
+
+**Plus multi-account rotation:**
+- Setiap provider punya multiple API keys (multi-account)
+- Round-robin antar API key
+- Kalau 1 key kena limit, otomatis pakai key berikutnya
+
+---
