@@ -33,6 +33,8 @@ interface DinaMessage {
     dataUrl: string
     fileSize: number
     mimeType: string
+    driveLink?: string
+    driveFileName?: string
   }>
   replyTo?: {
     id: string
@@ -158,7 +160,7 @@ export function DinaChat({ customer, onDbUpdate }: DinaChatProps) {
 
       // Convert to base64
       const reader = new FileReader()
-      reader.onload = () => {
+      reader.onload = async () => {
         const dataUrl = reader.result as string
         const attachment = {
           type: file.type.startsWith('image/') ? 'IMAGE' as const : 'PDF' as const,
@@ -168,7 +170,40 @@ export function DinaChat({ customer, onDbUpdate }: DinaChatProps) {
           mimeType: file.type,
         }
         setPendingAttachments(prev => [...(prev || []), attachment])
-        toast.success(`${file.name} siap dikirim`)
+
+        // Upload ke Google Drive (jika ada customer context)
+        if (customer?.id) {
+          toast.loading(`Mengupload ${file.name} ke Google Drive...`, { id: `upload-${file.name}` })
+          try {
+            const uploadRes = await fetch('/api/dina/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                dataUrl,
+                fileName: file.name,
+                customerId: customer.id,
+                customerName: customer.name,
+                customerBlock: (customer.blockLetter || '') + (customer.houseNumber || ''),
+              }),
+            })
+            const uploadData = await uploadRes.json()
+            if (uploadData.success && uploadData.data?.driveUploaded) {
+              toast.success(`${file.name} → ${uploadData.data.driveFileName} (Drive)`, { id: `upload-${file.name}` })
+              // Update attachment dengan Drive info
+              setPendingAttachments(prev => (prev || []).map(a =>
+                a.fileName === file.name
+                  ? { ...a, driveLink: uploadData.data.driveLink, driveFileName: uploadData.data.driveFileName }
+                  : a
+              ))
+            } else {
+              toast.success(`${file.name} siap dikirim (chat only)`, { id: `upload-${file.name}` })
+            }
+          } catch (err) {
+            toast.error(`Gagal upload ${file.name} ke Drive`, { id: `upload-${file.name}` })
+          }
+        } else {
+          toast.success(`${file.name} siap dikirim (tidak ada konsumen aktif)`)
+        }
       }
       reader.onerror = () => toast.error(`Gagal baca ${file.name}`)
       reader.readAsDataURL(file)
@@ -579,9 +614,6 @@ function MessageBubble({
   )
 }
 
-// ============================================================
-// ATTACHMENT VIEW (extracted to avoid JSX parser issue)
-// ============================================================
 function AttachmentView({
   att,
   isUser,
@@ -603,6 +635,16 @@ function AttachmentView({
             className="max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90"
           />
         </a>
+        {att.driveLink && (
+          <a
+            href={att.driveLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-2 py-1 bg-emerald-900/30 text-[9px] text-emerald-300 hover:bg-emerald-900/50"
+          >
+            📁 {att.driveFileName || att.fileName} — tersimpan di Google Drive
+          </a>
+        )}
       </div>
     )
   }
@@ -623,6 +665,17 @@ function AttachmentView({
         </div>
         <Download className="w-3 h-3 text-slate-400 ml-1" />
       </a>
+      {att.driveLink && (
+        <a
+          href={att.driveLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block px-2 py-1 bg-emerald-900/30 text-[9px] text-emerald-300 hover:bg-emerald-900/50"
+        >
+          📁 {att.driveFileName || att.fileName} — tersimpan di Google Drive
+        </a>
+      )}
     </div>
   )
 }
+

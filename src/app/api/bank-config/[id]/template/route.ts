@@ -16,10 +16,10 @@ export const maxDuration = 60
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const bankId = params.id
+    const { id: bankId } = await params
     const body = await req.json()
     const { templatePdf, annotations, version } = body
 
@@ -181,10 +181,11 @@ export async function POST(
 // GET — fetch current template info for a bank
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const bank = await db.bankConfig.findUnique({ where: { id: params.id } })
+    const { id } = await params
+    const bank = await db.bankConfig.findUnique({ where: { id } })
     if (!bank) {
       return NextResponse.json({ success: false, error: 'Bank tidak ditemukan' }, { status: 404 })
     }

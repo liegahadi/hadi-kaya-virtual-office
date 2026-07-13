@@ -6,7 +6,7 @@ import {
   Save, Loader2, Download, X, Building2, FileText, FileDown,
   RefreshCw, Eye, Printer, Upload, Send, MessageSquare,
   LayoutGrid, Files, Calendar, Banknote, CheckCircle2, Circle, MapPin,
-  ExternalLink,
+  ExternalLink, History,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -215,13 +215,8 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
         </button>
       </Card>
       {expanded && (
-        <div className="mt-2 grid grid-cols-1 lg:grid-cols-4 gap-2">
-          <div className="lg:col-span-3">
-            <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} />
-          </div>
-          <div className="lg:col-span-1">
-            <HistoryLogPanel customerId={customer.id} />
-          </div>
+        <div className="mt-2">
+          <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} />
         </div>
       )}
     </div>
@@ -426,7 +421,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, string>>(loadUploadedFiles)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [previewMode, setPreviewMode] = useState<'generate' | 'uploads'>('generate')
+  const [previewMode, setPreviewMode] = useState<'generate' | 'uploads' | 'history'>('generate')
   const [docStage, setDocStage] = useState<'entry' | 'ajb' | 'bphtb'>('entry')
   const [formMode, setFormMode] = useState<'bank' | 'bphtb' | 'notaris'>('bank')
   const [generateDocId, setGenerateDocId] = useState<string>('flpp')
@@ -1511,6 +1506,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
           <div className="flex bg-white dark:bg-slate-900 rounded-lg p-0.5 mb-3 shadow-sm">
             <button onClick={() => setPreviewMode('generate')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'generate' ? 'bg-emerald-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><FileText className="w-3.5 h-3.5" /> Preview Dokumen</button>
             <button onClick={() => setPreviewMode('uploads')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'uploads' ? 'bg-amber-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="w-3.5 h-3.5" /> Review Berkas ({totalUploadCount}/{totalDocs})</button>
+            <button onClick={() => setPreviewMode('history')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'history' ? 'bg-violet-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><History className="w-3.5 h-3.5" /> History Log</button>
           </div>
 
           {previewMode === 'generate' && (
@@ -1817,6 +1813,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               )}
             </div>
           )}
+
+          {previewMode === 'history' && (
+            <div className="bg-white dark:bg-slate-900 rounded-lg p-3 max-h-[60vh] overflow-hidden">
+              <HistoryLogView customerId={customer.id} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1902,13 +1904,3 @@ function FormField({ label, value, onChange, placeholder, full, required, type =
   )
 }
 
-// ============================================================
-// HISTORY LOG PANEL — DINA v2 (append-only timeline per konsumen)
-// ============================================================
-function HistoryLogPanel({ customerId }: { customerId: string }) {
-  return (
-    <Card className="p-3 h-full max-h-[70vh] overflow-hidden">
-      <HistoryLogView customerId={customerId} />
-    </Card>
-  )
-}

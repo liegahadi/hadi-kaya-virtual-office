@@ -21,7 +21,7 @@ export interface IntentResult {
   tools: string[]
   customerName?: string
   blockNumber?: string
-  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO' | 'GENERATE_SURAT'
+  action?: 'READ' | 'UPDATE_BANK' | 'UPDATE_STAGE' | 'UPDATE_FIELD' | 'FILL_FORM' | 'GET_DOCS' | 'GET_WORKPLACE' | 'GET_FILES' | 'SEND_FILE' | 'CREATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'CONFIRM_DELETE' | 'CONFIRM_CREATE' | 'CANCEL_PENDING' | 'LIST_BANKS' | 'ADD_BANK' | 'DELETE_BANK' | 'GENERATE_LOGO' | 'GENERATE_SURAT' | 'GENERATE_SK' | 'GENERATE_SLIP' | 'GENERATE_LAPKEU'
   newBankValue?: string
   newStageValue?: string
   updateField?: string
@@ -558,6 +558,50 @@ export function detectIntent(message: string): IntentResult {
   ) {
     action = 'GENERATE_SURAT' as any
     tools.push('getAllCustomers')
+  }
+
+  // === DINA v2: GENERATE SK KERJA ===
+  // "bikin SK kerja" / "buat SK kerja" / "generate SK kerja" / "surat keterangan kerja"
+  if (
+    (msg.includes('sk kerja') || msg.includes('surat keterangan kerja') || msg.includes('surat kerja')) &&
+    (msg.includes('bikin') || msg.includes('buat') || msg.includes('generate') ||
+     msg.includes('tolong') || msg.includes('bikinin') || msg.includes('buatkan') ||
+     msg.includes('bantu') || msg.includes('format'))
+  ) {
+    action = 'GENERATE_SK' as any
+    tools.push('getAllCustomers')
+  }
+
+  // === DINA v2: GENERATE SLIP GAJI ===
+  if (
+    (msg.includes('slip gaji') || msg.includes('slipgaji') || msg.includes('slip')) &&
+    (msg.includes('bikin') || msg.includes('buat') || msg.includes('generate') ||
+     msg.includes('tolong') || msg.includes('bikinin') || msg.includes('buatkan') ||
+     msg.includes('bantu') || msg.includes('format'))
+  ) {
+    action = 'GENERATE_SLIP' as any
+    tools.push('getAllCustomers')
+  }
+
+  // === DINA v2: GENERATE LAPORAN KEUANGAN ===
+  if (
+    (msg.includes('laporan keuangan') || msg.includes('lapkeu') || msg.includes('laba rugi')) &&
+    (msg.includes('bikin') || msg.includes('buat') || msg.includes('generate') ||
+     msg.includes('tolong') || msg.includes('bikinin') || msg.includes('buatkan') ||
+     msg.includes('bantu') || msg.includes('format'))
+  ) {
+    action = 'GENERATE_LAPKEU' as any
+    tools.push('getAllCustomers')
+  }
+
+  // === Detect data payload (user kasih data lengkap untuk generate dokumen) ===
+  // Pattern: "Nama perusahaan : X" / "Gaji : Y" / "NIK : Z" / "Jabatan : A"
+  // Jika user ngisi data dan sebelumnya DINA udah tanya data → DINA harus generate, bukan tanya lagi
+  // This is handled by LLM via system prompt (anti-confusion + generate rules)
+  const dataPatternMatch = msg.match(/(?:nama\s+perusahaan|gaji|nik|jabatan|status|masa\s+kerja|mulai\s+bekerja|nama\s+atasan|nama\s+owner|periode)\s*[:=]/i)
+  if (dataPatternMatch) {
+    // User is filling data — let LLM process (system prompt has rules to generate directly)
+    // Don't override action — let it stay as is (READ or previously set GENERATE_*)
   }
 
   // === BANK CONFIG MANAGEMENT ===
