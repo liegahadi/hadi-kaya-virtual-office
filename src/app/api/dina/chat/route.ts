@@ -1,65 +1,103 @@
 // POST /api/dina/chat
-// DINA AI Assistant — with DB tools + memory + Gemini/OpenRouter
+// DINA AI Assistant v3 — Function Calling Architecture
+// ============================================================
 // Flow:
-// 1. Detect intent from user message
-// 2. Execute relevant DB tools (get customer stats, list, doc status, etc)
-// 3. Include tool results in context
-// 4. Send to Gemini (or fallback OpenRouter)
-// 5. Save conversation + extract learning to memory
+// 1. Build context: conversation history (15 messages) + customer context + memory + skills
+// 2. Call LLM (Gemini 2.0 Flash primary, OpenRouter fallback) with 10 tools (functionDeclarations)
+// 3. If LLM returns function call → execute tool → return result to LLM → LLM generates natural response
+// 4. If LLM returns text directly → return as response
+// 5. NO REGEX for intent detection (regex code in dina-tools.ts kept as legacy fallback, NOT used)
+// 6. NO directResponse bypass EXCEPT for:
+//    - Permission rejects (DELETE in group from non-owner)
+//    - Pending action confirmation (user types "ya"/"batal")
+// 7. Handle file uploads: chat UI sends file info → pass to LLM → LLM decides what to do
 //
-// CRITICAL FIXES (v8.2):
-// - PendingAction now persisted in DB (not in-memory) — survives Vercel lambda cold starts
-// - Strict confirmation: only short messages (≤15 chars or pure confirm keyword) trigger CONFIRM_DELETE
-// - Target name validation: if user mentions different customer in confirmation, ABORT
-// - Anti-hallucination: system prompt explicitly tells LLM "if tool result doesn't show success, JANGAN bilang berhasil"
-// - AuditLog on all CREATE/UPDATE/DELETE for traceability
+// CRITICAL FIXES (v3):
+// - Anti-hallucination: tool result is truth. If tool says "GAGAL", DINA says "GAGAL".
+// - PendingAction persisted in DB (PendingAction table) — survives Vercel cold starts
+// - File sending: tool returns [sendFile:UPLOADED_DOC] or [sendFile:GOOGLE_DOC] marker
+//   → chat route parses marker, fetches file content, attaches to response
+// - Multi-provider fallback: Gemini → OpenRouter (auto-rotation on rate limit/timeout)
+// - Multi-account key rotation via comma-separated env vars (GEMINI_API_KEYS, OPENROUTER_API_KEYS)
+// ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DINA_SYSTEM_PROMPT, buildCustomerContext } from '@/lib/agents/dina-knowledge'
-import { detectIntent, executeTools, saveMemory, extractLearning, getActivePendingAction } from '@/lib/agents/dina-tools'
+import { DINA_TOOLS_V3, executeDinaTool, checkPendingConfirmation, executeConfirmedAction } from '@/lib/agents/dina-tools-v3'
+import { callLLMWithTools, appendToolResult, type LLMMessage } from '@/lib/agents/llm-router'
 import { getSessionContext, updateSessionContext, needsTraceback, resolveReference } from '@/lib/agents/session-context'
+import { getActivePendingAction } from '@/lib/agents/dina-tools'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60  // 60s for function calling round trips (Gemini → tool → Gemini)
 
+// ============================================================
+// Helper: fetch GoogleDoc file content from Drive as dataUrl
+// ============================================================
+async function fetchGoogleDocAsDataUrl(docId: string, fileName: string): Promise<{ dataUrl: string; mimeType: string; fileName: string } | null> {
+  try {
+    const { getDriveClientOAuth, isOAuthConfigured, isGoogleConnected } = await import('@/lib/google/auth')
+    if (!isOAuthConfigured() || !(await isGoogleConnected())) return null
+    const drive: any = await getDriveClientOAuth()
+
+    // Try to export as PDF (Google Doc format)
+    let buffer: Buffer
+    let mimeType = 'application/pdf'
+    let finalFileName = fileName
+    try {
+      const exportRes = await drive.files.export({ fileId: docId, mimeType: 'application/pdf' }, { responseType: 'arraybuffer' })
+      buffer = Buffer.from(exportRes.data as ArrayBuffer)
+      finalFileName = (fileName || 'document') + '.pdf'
+    } catch {
+      // Not a Google Doc — download directly (regular file in Drive)
+      const downloadRes = await drive.files.get({ fileId: docId, alt: 'media' }, { responseType: 'arraybuffer' })
+      buffer = Buffer.from(downloadRes.data as ArrayBuffer)
+      const meta = await drive.files.get({ fileId: docId, fields: 'name,mimeType' })
+      mimeType = meta.data.mimeType || 'application/octet-stream'
+      finalFileName = meta.data.name || fileName
+    }
+
+    const base64 = buffer.toString('base64')
+    return { dataUrl: `data:${mimeType};base64,${base64}`, mimeType, fileName: finalFileName }
+  } catch (err: any) {
+    console.error('[dina-v3] Failed to fetch GoogleDoc:', err?.message)
+    return null
+  }
+}
+
+// ============================================================
+// MAIN POST HANDLER
+// ============================================================
 export async function POST(req: NextRequest) {
   try {
-    const { message, customerId: _customerId, channel, senderNumber, senderName, isOwner } = await req.json()
+    const { message, customerId: _customerId, channel, senderNumber, senderName, isOwner, fileInfo } = await req.json()
     let customerId: string | undefined = _customerId
     if (!message) return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 })
-
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not configured' }, { status: 500 })
 
     // Determine channel context
     const isWhatsApp = channel === 'WHATSAPP_GROUP' || channel === 'WHATSAPP_PRIVATE'
     const isGroupChat = channel === 'WHATSAPP_GROUP'
     const isPrivateChat = channel === 'WHATSAPP_PRIVATE'
-    const isOwnerUser = isOwner || (!isWhatsApp) // Dashboard chat = always owner
+    const isOwnerUser = isOwner || (!isWhatsApp)
 
-    // === WHATSAPP BEHAVIOR ===
-    // The WA bot (Baileys) enforces these rules BEFORE calling this API:
-    //   1. Group: DINA only responds if @tagged (the bot won't even call this API otherwise)
-    //   2. Private chat from non-owner:
-    //      - If sender IS in group → bot replies "hanya melayani di grup" without calling API
-    //      - If sender NOT in group → bot silent-ignores (no API call)
-    //   3. Owner private chat → calls API normally
-    //
-    // SAFETY FALLBACK: if somehow a non-owner private chat reaches this API,
-    // return silent=true so the bot knows NOT to reply (defensive — should never happen)
+    const executeContext = {
+      channel: (isWhatsApp ? channel : 'DASHBOARD') as string,
+      senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
+    }
+
+    // === WHATSAPP BEHAVIOR (same as v2 — enforced by WA bot upstream) ===
+    // SAFETY FALLBACK: silent-ignore non-owner private chat
     if (isPrivateChat && !isOwnerUser) {
       return NextResponse.json({
-        success: false,
-        silent: true, // Bot should NOT send any reply
-        response: '',
-        model: 'silent-ignore',
+        success: false, silent: true, response: '', model: 'silent-ignore',
       })
     }
 
-    // Permission check: DELETE in group from non-owner → reject
-    // (Per user requirement: in groups, everyone can READ/UPDATE/CREATE, only owner can DELETE)
-    const intent = detectIntent(message)
-    if (intent.action === 'DELETE_CUSTOMER' && isGroupChat && !isOwnerUser) {
+    // === PERMISSION CHECK 1: DELETE in group from non-owner ===
+    // Detect "hapus" / "delete" intent before LLM call (only for group non-owner)
+    const msgLower = message.toLowerCase().trim()
+    const isDeleteIntent = /^(hapus|delete|hps)\b/.test(msgLower) || (msgLower.includes('hapus konsumen') && msgLower.length < 80)
+    if (isDeleteIntent && isGroupChat && !isOwnerUser) {
       return NextResponse.json({
         success: true,
         response: 'Maaf, hapus konsumen hanya bisa dilakukan oleh owner (Hadi). Silakan hubungi Hadi untuk menghapus konsumen. 🙏',
@@ -67,14 +105,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Permission check: non-owner in group trying to CONFIRM a DELETE they didn't initiate → reject
-    // (Pending actions are scoped to senderNumber — non-owner can only confirm their own pending actions)
-    if (intent.action === 'CONFIRM_DELETE' && isGroupChat && !isOwnerUser) {
-      // Check if there's a pending action for THIS sender
-      const pending = await getActivePendingAction({
-        channel: channel || 'WHATSAPP_GROUP',
-        senderNumber: senderNumber || '',
-      })
+    // === PERMISSION CHECK 2: CONFIRM_DELETE in group from non-owner without their pending ===
+    const isConfirmKeyword = /^(ya|iya|yes|y|konfirmasi|lanjut|ok|oke|setuju|batal|tidak|jangan|cancel|no)\b/.test(msgLower) && msgLower.length <= 25
+    if (isConfirmKeyword && isGroupChat && !isOwnerUser) {
+      const pending = await getActivePendingAction(executeContext)
       if (!pending || pending.type !== 'DELETE') {
         return NextResponse.json({
           success: true,
@@ -84,7 +118,62 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Step 1: Get customer data for context
+    // === PENDING ACTION CONFIRMATION (bypass LLM for speed + reliability) ===
+    // If user types short "ya" / "batal" and there's an active pending action, execute directly.
+    // This avoids LLM hallucination on simple confirmations.
+    if (isConfirmKeyword) {
+      const confirmation = await checkPendingConfirmation(message, executeContext)
+      if (confirmation.type === 'confirm' && confirmation.pendingAction) {
+        console.log('[dina-v3] Direct confirmation bypass for pending action')
+        const result = await executeConfirmedAction(confirmation.pendingAction, executeContext)
+
+        // Save to DB + update session
+        let conversationId: string | undefined
+        try {
+          conversationId = await getOrCreateConversation({ customerId, isWhatsApp, channel, senderNumber })
+          if (conversationId) {
+            await db.message.createMany({ data: [
+              { conversationId, role: 'user', content: message },
+              { conversationId, role: 'assistant', content: result },
+            ]})
+            await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
+          }
+        } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
+
+        return NextResponse.json({
+          success: true,
+          response: result,
+          model: 'pending-confirm-bypass',
+          dbUpdated: true,
+        })
+      } else if (confirmation.type === 'cancel' && confirmation.pendingAction) {
+        console.log('[dina-v3] Direct cancel bypass for pending action')
+        const { cancelPendingAction } = await import('@/lib/agents/dina-tools')
+        await cancelPendingAction(executeContext)
+        const cancelMsg = `✅ Aksi pending (${confirmation.pendingAction.type}${confirmation.pendingAction.targetName ? ' ' + confirmation.pendingAction.targetName : ''}) telah dibatalkan. Tidak ada perubahan yang dilakukan di database.`
+
+        let conversationId: string | undefined
+        try {
+          conversationId = await getOrCreateConversation({ customerId, isWhatsApp, channel, senderNumber })
+          if (conversationId) {
+            await db.message.createMany({ data: [
+              { conversationId, role: 'user', content: message },
+              { conversationId, role: 'assistant', content: cancelMsg },
+            ]})
+            await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
+          }
+        } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
+
+        return NextResponse.json({
+          success: true,
+          response: cancelMsg,
+          model: 'pending-cancel-bypass',
+          dbUpdated: false,
+        })
+      }
+    }
+
+    // === Step 1: Get customer data for context ===
     let customer: any = null
     if (customerId) {
       customer = await db.customer.findUnique({
@@ -93,44 +182,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Step 1.5: Find or create conversation FIRST so we can pass conversationId to executeTools
-    // This ensures pending actions are properly scoped to the right conversation thread.
-    let conversationId: string | undefined
-    let conversation: any
-    try {
-      if (customerId) {
-        conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
-        if (!conversation) {
-          conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
-        }
-      } else if (isWhatsApp && senderNumber) {
-        // WhatsApp: scope by sender + channel (DINA v2 H1 FIX — previously not scoped by senderNumber)
-        conversation = await db.conversation.findFirst({
-          where: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber },
-          orderBy: { updatedAt: 'desc' },
-        })
-        if (!conversation) {
-          conversation = await db.conversation.create({
-            data: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber, status: 'ACTIVE' } as any
-          })
-        }
-      } else {
-        // General dashboard chat — pick MOST RECENTLY ACTIVE dashboard conversation
-        // (there might be multiple from different customer tabs; we want the latest)
-        conversation = await db.conversation.findFirst({
-          where: { channel: 'DASHBOARD' },
-          orderBy: { updatedAt: 'desc' },
-        })
-        if (!conversation) {
-          conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
-        }
-      }
-      conversationId = conversation.id
-    } catch (dbErr) { console.error('Conversation lookup (non-fatal):', dbErr) }
+    // === Step 1.5: Get or create conversation ===
+    const conversationId = await getOrCreateConversation({ customerId, isWhatsApp, channel, senderNumber })
 
-    // === DINA v2: Session Context + Traceback ===
-    // If user message contains referential keywords ("yang tadi", "kemarin", "dia", "lanjutin"),
-    // try to resolve reference via session context (48h) or traceback (LLM extract from history).
+    // === Step 2: Session Context + Traceback (resolve "yang tadi", "dia", etc) ===
     let sessionContextData: any = null
     let tracebackInfo: string | null = null
     try {
@@ -140,10 +195,8 @@ export async function POST(req: NextRequest) {
           channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
           senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
         })
-
         if (sessionCtx && sessionCtx.lastCustomerId) {
           sessionContextData = sessionCtx
-          // Auto-resolve customerId from session
           if (!customerId && sessionCtx.lastCustomerId) {
             customerId = sessionCtx.lastCustomerId
             customer = await db.customer.findUnique({
@@ -152,14 +205,12 @@ export async function POST(req: NextRequest) {
             }).catch(() => null)
           }
         } else {
-          // Traceback via LLM
           const resolution = await resolveReference({
             conversationId,
             channel: isWhatsApp ? (channel as string) : 'DASHBOARD',
             senderNumber: isWhatsApp ? (senderNumber || undefined) : undefined,
             userMessage: message,
           })
-
           if (resolution.resolved && resolution.customerId) {
             if (!customerId) {
               customerId = resolution.customerId
@@ -168,363 +219,202 @@ export async function POST(req: NextRequest) {
                 include: { units: true, bankPipelines: true },
               }).catch(() => null)
             }
-            tracebackInfo = `[TRACEBACK via ${resolution.source}, confidence ${(resolution.confidence * 100).toFixed(0)}%] Resolved to customer: ${resolution.customerName || customerId}`
-          } else if (resolution.source === 'clarify') {
-            tracebackInfo = `[TRACEBACK FAILED] Confidence ${(resolution.confidence * 100).toFixed(0)}% — needs user clarification`
+            tracebackInfo = `[TRACEBACK via ${resolution.source}, confidence ${(resolution.confidence * 100).toFixed(0)}%] Resolved to: ${resolution.customerName || customerId}`
           }
         }
       }
     } catch (ctxErr) { console.error('Session context (non-fatal):', ctxErr) }
 
-    // Step 2: Execute DB tools based on intent — pass executeContext for pending action scoping
-    // For DASHBOARD: scope by channel only (single owner, no need for conversationId scoping)
-    // For WHATSAPP: scope by channel + senderNumber (so each user has own pending state)
-    const executeContext = isWhatsApp
-      ? {
-          channel: channel as string,
-          senderNumber: senderNumber || undefined,
-          // No conversationId — scope by senderNumber instead
-        }
-      : {
-          channel: 'DASHBOARD',
-          // No conversationId — scope by channel only (dashboard = single owner)
-        }
-    const toolExecution = await executeTools(intent, customerId, message, executeContext)
-    const toolResults = toolExecution.results
-
-    // === CHAT COMMAND: "nah tambahin nih ke memory kamu" ===
-    // User can manually add memory via chat (from dashboard or WA)
-    if (message.toLowerCase().includes('tambahin nih ke memory') || message.toLowerCase().includes('tambahkan ke memory') || message.toLowerCase().includes('ingat ini')) {
-      const dinaAgent = await db.agent.findFirst({ where: { name: 'Dina' } }).catch(() => null)
-      // Extract what to remember (everything after the trigger phrase)
-      const memoryText = message.replace(/.*?(tambahin nih ke memory|tambahkan ke memory|ingat ini)\s*(kamu|nya)?\s*[:\-]?\s*/i, '').trim()
-      if (memoryText && memoryText.length > 5) {
-        await db.memory.create({
-          data: {
-            agentId: dinaAgent?.id || null,
-            category: 'BERKAS',
-            memoryType: 'long_term',
-            title: memoryText.substring(0, 50),
-            content: memoryText,
-            resolution: null,
-            importance: 0.7,
-            source: 'CONVERSATION',
-            version: 1,
-            isActive: true,
-          } as any,
+    // === Step 3: Build context (conversation history + memory + skills + customer + channel) ===
+    // Get conversation history (last 15 messages)
+    let history: Array<{ role: 'user' | 'assistant'; content: string }> = []
+    try {
+      if (conversationId) {
+        const convWithMsgs = await db.conversation.findUnique({
+          where: { id: conversationId },
+          include: { messages: { orderBy: { createdAt: 'desc' }, take: 15 } },
         })
-        toolExecution.directResponse = `✅ **Memory baru disimpan!**
-
-📝 "${memoryText.substring(0, 100)}${memoryText.length > 100 ? '...' : ''}"
-
-Memory ini tersimpan di Tab Memory. Kamu bisa edit Title, Description, dan Resolution di sana untuk struktur yang lebih baik.`
-      }
-    }
-
-    // === CONTEXT RECOVERY: If SEND_FILE has no customer name, look at recent messages ===
-    // User flow: "Dina minta berkas Hadi" → DINA lists files → user: "kirim yang nomor 1"
-    // The "kirim yang nomor 1" has no customer name — we need to recover it from context.
-    if (intent.action === 'SEND_FILE' && !intent.customerName && !customerId && conversationId) {
-      try {
-        const recentMsgs = await db.message.findMany({
-          where: { conversationId, role: 'user' },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        })
-        // Scan recent messages for customer names
-        const allCustomers = await db.customer.findMany({ select: { id: true, name: true } })
-        for (const msg of recentMsgs) {
-          const msgLower = msg.content.toLowerCase()
-          // Find first customer whose name (first token, ≥3 chars) appears in this recent message
-          const matched = allCustomers.find(c => {
-            const firstToken = (c.name || '').toLowerCase().split(/\s+/)[0]
-            return firstToken.length >= 3 && msgLower.includes(firstToken)
-          })
-          if (matched) {
-            console.log(`[DINA] Context recovery: found customer "${matched.name}" from recent message`)
-            // Re-run executeTools with recovered customerId
-            const retryExecution = await executeTools(intent, matched.id, message, executeContext)
-            // Replace toolExecution with retry (BOTH results AND directResponse)
-            toolExecution.results = retryExecution.results
-            toolExecution.directResponse = retryExecution.directResponse
-            // CRITICAL: also update toolResults variable so file fetching code sees new results
-            // (file fetching uses toolResults, not toolExecution.results)
-            break
-          }
-        }
-      } catch (ctxErr) {
-        console.error('[DINA] Context recovery error (non-fatal):', ctxErr)
-      }
-    }
-
-    // === FILE SENDING: If SEND_FILE was triggered, fetch files from Google Drive ===
-    // The executeTools pushed `[sendFile:FILES_TO_SEND] [{...}]` to results.
-    // We parse that, fetch each file from Drive, and include as base64 dataUrl in response.
-    // CRITICAL: re-read toolExecution.results here (it may have been updated by context recovery)
-    let filesToSend: Array<{ dataUrl: string; fileName: string; caption: string; mimeType: string }> = []
-    if (intent.action === 'SEND_FILE') {
-      const currentResults = toolExecution.results  // use latest (post-context-recovery)
-      const filesLine = currentResults.split('\n').find(l => l.startsWith('[sendFile:FILES_TO_SEND]'))
-      if (filesLine) {
-        try {
-          const jsonStr = filesLine.replace('[sendFile:FILES_TO_SEND] ', '').trim()
-          const selectedDocs = JSON.parse(jsonStr)
-          console.log(`[DINA] SEND_FILE: fetching ${selectedDocs.length} file(s) from Drive`)
-
-          // Try to get Drive client (only works if owner has OAuth'd)
-          let drive: any = null
-          try {
-            const { getDriveClientOAuth } = await import('@/lib/google/auth')
-            drive = await getDriveClientOAuth()
-          } catch (driveErr: any) {
-            console.error('[DINA] Drive client error:', driveErr?.message)
-          }
-
-          if (!drive) {
-            // Drive not connected — fallback: just tell user the file URL
-            toolExecution.directResponse = `⚠️ Google Drive belum terhubung. Owner perlu login Google terlebih dahulu di dashboard.
-
-File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
-          } else {
-            for (const doc of selectedDocs) {
-              try {
-                // Determine mimeType based on docType
-                let exportMimeType: string | null = null
-                let outputMimeType = 'application/pdf'
-                let fileExtension = 'pdf'
-
-                // Google Docs (sk-slip-gaji, lokasi-kerja, spr, flpp, etc.) need to be exported
-                // Regular files (KTP.jpg, KK.pdf) can be downloaded directly
-                const isGoogleDocType = ['sk-slip-gaji', 'lokasi-kerja', 'spr', 'flpp', 'ajb', 'bphtb', 'notaris'].includes(doc.docType)
-
-                let buffer: Buffer
-                let finalFileName = doc.fileName
-
-                if (isGoogleDocType) {
-                  // Export as PDF
-                  const exportRes = await drive.files.export({
-                    fileId: doc.docId,
-                    mimeType: 'application/pdf',
-                  }, { responseType: 'arraybuffer' })
-                  buffer = Buffer.from(exportRes.data as ArrayBuffer)
-                  finalFileName = (doc.fileName || 'document') + '.pdf'
-                } else {
-                  // Download directly (for uploaded files like KTP.jpg, KK.pdf)
-                  const downloadRes = await drive.files.get({
-                    fileId: doc.docId,
-                    alt: 'media',
-                  }, { responseType: 'arraybuffer' })
-                  buffer = Buffer.from(downloadRes.data as ArrayBuffer)
-
-                  // Get file metadata for mimetype
-                  const meta = await drive.files.get({ fileId: doc.docId, fields: 'name,mimeType' })
-                  outputMimeType = meta.data.mimeType || 'application/octet-stream'
-                  finalFileName = meta.data.name || doc.fileName
-                }
-
-                // Convert to base64 data URL
-                const base64 = buffer.toString('base64')
-                const dataUrl = `data:${outputMimeType};base64,${base64}`
-
-                // Build caption
-                const docTypeLabel: Record<string, string> = {
-                  'sk-slip-gaji': 'SK Kerja + Slip Gaji',
-                  'lokasi-kerja': 'Lokasi Kerja',
-                  'spr': 'SPR', 'flpp': 'FLPP', 'ajb': 'AJB', 'bphtb': 'BPHTB',
-                  'notaris': 'Notaris', 'ktp': 'KTP', 'kk': 'KK', 'npwp': 'NPWP', 'sertifikat': 'Sertifikat',
-                }
-                const label = docTypeLabel[doc.docType] || doc.docType
-                const caption = `📄 ${label} — ${finalFileName}`
-
-                filesToSend.push({ dataUrl, fileName: finalFileName, caption, mimeType: outputMimeType })
-              } catch (fileErr: any) {
-                console.error(`[DINA] Failed to fetch file ${doc.docId}:`, fileErr?.message)
-              }
-            }
-
-            if (filesToSend.length > 0) {
-              toolExecution.directResponse = `✅ Berhasil mengambil ${filesToSend.length} berkas dari Google Drive. File terlampir. 📄`
-            } else if (!toolExecution.directResponse) {
-              toolExecution.directResponse = `❌ GAGAL mengambil berkas dari Google Drive. Cek log untuk detail.`
-            }
-          }
-        } catch (parseErr) {
-          console.error('[DINA] Failed to parse FILES_TO_SEND:', parseErr)
+        if (convWithMsgs?.messages) {
+          history = convWithMsgs.messages.reverse().map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.content,
+          }))
         }
       }
-    }
+    } catch (dbErr) { console.error('History fetch (non-fatal):', dbErr) }
 
-    // === CRITICAL: If executeTools returned a directResponse, BYPASS the LLM call entirely.
-    // This prevents hallucinations on critical operations (DELETE, CONFIRM, CANCEL).
-    // The LLM (especially Nemotron fallback) tends to hallucinate "Berhasil menghapus X"
-    // even when no delete actually happened. Direct response = tool result = truth.
-    if (toolExecution.directResponse) {
-      const aiResponseDirect = toolExecution.directResponse
-      console.log(`[DINA] directResponse bypass: action=${intent.action}, response="${aiResponseDirect.substring(0, 80)}..."`)
-
-      // Save messages to DB (for history continuity)
-      try {
-        if (conversationId) {
-          await db.message.createMany({ data: [
-            { conversationId, role: 'user', content: message },
-            { conversationId, role: 'assistant', content: aiResponseDirect },
-          ]})
-          await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
-        }
-      } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
-
-      // Auto-save memory DISABLED — was creating low-quality "User bertanya:" memories
-      // Memory should be manually curated with Title + Description + Resolution
-      // Use chat command "nah tambahin nih ke memory kamu" or Tab Memory UI to add
-
-      return NextResponse.json({
-        success: true,
-        response: aiResponseDirect,
-        model: 'direct-bypass',
-        toolsExecuted: intent.tools,
-        files: filesToSend,  // For WA bot to send via sendFile()
-        dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
-      })
-    }
-
-    // Step 3: Auto-query memory + skills for context (inject into system prompt)
-    // OPTIMIZATION: Memory is already fetched by getRelevantMemories tool above.
-    // Don't double-fetch from DB. Parse tool results to extract memory context.
-    // Previously: 2 separate DB queries for memory (1 in tool, 1 here) — wasted bandwidth.
-    // Now: only fetch Skills here (memory comes from tool results).
+    // Get DINA agent ID for skills query
     const dinaAgent = await db.agent.findFirst({ where: { name: 'Dina' } }).catch(() => null)
     const relevantSkills = await db.skill.findMany({
       where: { isActive: true, OR: [{ agentId: dinaAgent?.id }, { agentId: null }] },
       select: { displayName: true, prompt: true, category: true },
+      take: 10,
     }).catch(() => [])
 
-    // Extract memory context from tool results (already fetched by getRelevantMemories)
-    // If tool didn't run (e.g., directResponse bypass), memory context will be empty
-    const memoryContext = toolResults.includes('Memory kategori')
-      ? `\n\n## 🧠 MEMORY DINA (dari tool results)\n${toolResults.split('\n').filter(l => l.includes('Memory kategori') || l.startsWith('- [')).join('\n').substring(0, 2000)}`
-      : ''
-    const skillContext = relevantSkills.length > 0
-      ? `\n\n## ⚡ SKILLS DINA (kemampuan yang dimiliki)\n${relevantSkills.map(s => `- **${s.displayName}**: ${s.prompt.substring(0, 100)}...`).join('\n')}`
-      : ''
+    // Get relevant memories (simple keyword-based retrieval)
+    const memories = await db.memory.findMany({
+      where: { isActive: true, OR: [{ category: 'UTAMA' }, { category: 'DECISION' }, { category: 'BERKAS' }] },
+      orderBy: { importance: 'desc' },
+      take: 10,
+    }).catch(() => [])
 
-    // Step 3b: Check if there's a pending action — tell LLM about it so it knows context
-    const pendingAction = await getActivePendingAction(executeContext)
-    const pendingInfo = pendingAction
-      ? `\n\n## ⏳ PENDING ACTION AKTIF\nAda aksi yang menunggu konfirmasi user:\n- Tipe: ${pendingAction.type}\n- Target: ${pendingAction.targetName || '-'}\n- Dibuat oleh: ${pendingAction.senderNumber || 'dashboard'}\n- Channel: ${pendingAction.channel}\n\nJika user mengkonfirmasi dengan "ya"/"iya"/"konfirmasi"/"lanjut" (pesan SINGKAT ≤15 karakter), tool akan otomatis mengeksekusi. Jika user menyebutkan NAMA LAIN, aksi akan DIBATALKAN otomatis demi keamanan. JANGAN halusinasi menjalankan aksi — hanya jalankan jika tool result bilang "Berhasil".`
-      : ''
+    // Get pending action (if any) for context
+    const pendingAction = await getActivePendingAction(executeContext).catch(() => null)
 
-    // Step 4: Build system prompt with customer context + tool results + channel info + pending action + memory + skills
+    // === Step 4: Build messages array ===
     const customerContext = buildCustomerContext(customer)
     const channelInfo = isWhatsApp
       ? `\n## KONTEKS CHANNEL\n- Channel: ${channel}\n- Pengirim: ${senderName || 'Unknown'} (${senderNumber || '-'})\n- Is Owner: ${isOwnerUser ? 'YA' : 'TIDAK'}\n- Is Group: ${isGroupChat ? 'YA' : 'TIDAK'}`
       : ''
+    const memoryContext = memories.length > 0
+      ? `\n\n## 🧠 MEMORY DINA (${memories.length} items)\n${memories.map(m => `- [${m.category}] (importance: ${m.importance}) ${m.content.substring(0, 150)}`).join('\n')}`
+      : ''
+    const skillContext = relevantSkills.length > 0
+      ? `\n\n## ⚡ SKILLS DINA (${relevantSkills.length} skills)\n${relevantSkills.map(s => `- **${s.displayName}**: ${s.prompt.substring(0, 100)}`).join('\n')}`
+      : ''
+    const pendingInfo = pendingAction
+      ? `\n\n## ⏳ PENDING ACTION AKTIF\nAda aksi yang menunggu konfirmasi user:\n- Tipe: ${pendingAction.type}\n- Target: ${pendingAction.targetName || '-'}\n- Dibuat oleh: ${pendingAction.senderNumber || 'dashboard'}\n- Channel: ${pendingAction.channel}\n\nJika user mengkonfirmasi dengan "ya"/"iya"/"konfirmasi"/"lanjut" (pesan SINGKAT ≤25 karakter), sistem akan otomatis mengeksekusi. Jika user menyebutkan NAMA LAIN, aksi akan DIBATALKAN otomatis. JANGAN halusinasi menjalankan aksi — hanya jalankan jika tool result bilang "Berhasil".`
+      : ''
+    const tracebackContext = tracebackInfo
+      ? `\n\n## 🔍 TRACEBACK INFO\n${tracebackInfo}`
+      : ''
+
+    // Build fileInfo context if user uploaded a file
+    const fileInfoContext = fileInfo
+      ? `\n\n## 📎 FILE UPLOAD INFO\nUser mengirim file via chat:\n- FileName: ${fileInfo.fileName || 'unknown'}\n- MimeType: ${fileInfo.mimeType || 'unknown'}\n- Size: ${fileInfo.size || 'unknown'} bytes\n\nFile ini SUDAH tersimpan di backend (bisa diakses di Customer.uploadedDocs untuk konsumen aktif). Jika user menanyakan file ini atau ingin upload ke slot konsumen, gunakan tool upload_berkas.`
+      : ''
+
     const systemPrompt = DINA_SYSTEM_PROMPT
       .replace('{customerContext}', customerContext)
       + channelInfo
       + memoryContext
       + skillContext
       + pendingInfo
-      + (toolResults ? `\n\n## HASIL QUERY DATABASE (gunakan data ini untuk menjawab)\n${toolResults}` : '')
+      + tracebackContext
+      + fileInfoContext
 
-    // Step 5: Get conversation history
-    let history: Array<{ role: string; content: string }> = []
-    if (conversation?.messages) {
-      // Refresh conversation with messages
-      const convWithMsgs = await db.conversation.findUnique({
-        where: { id: conversation.id },
-        include: { messages: { orderBy: { createdAt: 'desc' }, take: 15 } },
-      })
-      if (convWithMsgs?.messages) {
-        history = convWithMsgs.messages.reverse().map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          content: m.content,
-        }))
-      }
-    }
+    // Build messages array for LLM
+    const messages: LLMMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...history,
+      { role: 'user', content: fileInfo ? `${message}\n\n[📎 User attached file: ${fileInfo.fileName || 'unknown'}]` : message },
+    ]
 
-    // Step 6: Call Gemini API
-    const body = {
-      contents: [
-        ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
-        { role: 'user', parts: [{ text: message }] },
-      ],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2000,
-        topP: 0.9,
-      },
-    }
-
+    // === Step 5: Call LLM with function calling (multi-round if needed) ===
     let aiResponse = ''
     let modelUsed = 'gemini-2.0-flash'
+    let filesToSend: Array<{ dataUrl: string; fileName: string; caption: string; mimeType: string }> = []
+    let dbUpdated = false
+    let toolsExecuted: string[] = []
+    const MAX_TOOL_ROUNDS = 5  // safety limit
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-      )
-
-      if (response.ok) {
-        const data = await response.json()
-        aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      } else {
-        throw new Error(`Gemini ${response.status}`)
-      }
-    } catch (geminiErr) {
-      // Fallback to OpenRouter Nemotron
-      console.log('Gemini failed, falling back to OpenRouter...')
-      const openrouterKey = process.env.OPENROUTER_API_KEY
-      if (!openrouterKey) throw new Error('No fallback available')
-
-      const chatMessages = [
-        ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
-        { role: 'user', content: message },
-      ]
-
-      const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openrouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://hadi-kaya-virtual-office.vercel.app',
-          'X-Title': 'Hadi Kaya DINA',
-        },
-        body: JSON.stringify({
-          model: 'nvidia/nemotron-3-nano-30b-a3b:free',
-          messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        console.log(`[dina-v3] Round ${round + 1}: calling LLM with ${DINA_TOOLS_V3.length} tools`)
+        const llmResult = await callLLMWithTools(messages, DINA_TOOLS_V3, {
           temperature: 0.7,
-          max_tokens: 2000,
-        }),
-      })
+          maxTokens: 2048,
+        })
+        modelUsed = llmResult.model
 
-      if (!orResponse.ok) throw new Error(`OpenRouter ${orResponse.status}`)
-      const orData = await orResponse.json()
-      aiResponse = orData.choices[0]?.message?.content || ''
-      modelUsed = 'nemotron-fallback'
+        if (llmResult.toolCalls.length === 0) {
+          // LLM replied with text — done
+          aiResponse = llmResult.text || 'Maaf, saya tidak bisa merespons saat ini.'
+          break
+        }
+
+        // Execute each tool call and append result to messages
+        for (const toolCall of llmResult.toolCalls) {
+          console.log(`[dina-v3] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.args).substring(0, 200)})`)
+          toolsExecuted.push(toolCall.name)
+
+          // Pass customerId if tool needs it and user has it in context
+          const enrichedArgs = { ...toolCall.args }
+          if (!enrichedArgs.customerId && customerId && ['upload_berkas', 'generate_sk_kerja', 'generate_slip_gaji', 'generate_laporan_keuangan', 'get_customer_status', 'update_customer_field', 'delete_customer', 'send_file'].includes(toolCall.name)) {
+            enrichedArgs.customerId = customerId
+          }
+
+          const toolResult = await executeDinaTool(toolCall.name, enrichedArgs, executeContext)
+
+          // Detect file-sending markers in tool result
+          if (toolResult.includes('[sendFile:UPLOADED_DOC]')) {
+            try {
+              const jsonStr = toolResult.split('[sendFile:UPLOADED_DOC]')[1].split('\n')[0].trim()
+              const fileMeta = JSON.parse(jsonStr)
+              // Get full dataUrl from DB
+              const cust = await db.customer.findUnique({ where: { id: fileMeta.customerId }, select: { uploadedDocs: true } })
+              if (cust?.uploadedDocs) {
+                const allDocs = JSON.parse(cust.uploadedDocs)
+                const dataUrl = allDocs[fileMeta.fileType]
+                if (dataUrl) {
+                  const mimeType = dataUrl.match(/data:([^;]+)/)?.[1] || 'application/octet-stream'
+                  filesToSend.push({
+                    dataUrl,
+                    fileName: `${fileMeta.fileType}_${fileMeta.customerName}.${mimeType.split('/')[1] || 'bin'}`,
+                    caption: `📄 ${fileMeta.fileType} — ${fileMeta.customerName}`,
+                    mimeType,
+                  })
+                }
+              }
+            } catch (parseErr) { console.error('[dina-v3] sendFile parse error:', parseErr) }
+          } else if (toolResult.includes('[sendFile:GOOGLE_DOC]')) {
+            try {
+              const jsonStr = toolResult.split('[sendFile:GOOGLE_DOC]')[1].split('\n')[0].trim()
+              const fileMeta = JSON.parse(jsonStr)
+              const fetched = await fetchGoogleDocAsDataUrl(fileMeta.docId, fileMeta.fileName)
+              if (fetched) {
+                filesToSend.push({
+                  dataUrl: fetched.dataUrl,
+                  fileName: fetched.fileName,
+                  caption: `📄 ${fileMeta.docType} — ${fileMeta.customerName}`,
+                  mimeType: fetched.mimeType,
+                })
+              }
+            } catch (parseErr) { console.error('[dina-v3] GoogleDoc send parse error:', parseErr) }
+          }
+
+          // Track if DB was updated
+          if (['create_customer', 'update_customer_field', 'delete_customer'].includes(toolCall.name)) {
+            dbUpdated = true
+          }
+
+          // Append tool result to messages for next LLM round
+          appendToolResult(messages, toolCall, toolResult)
+        }
+
+        // Loop continues — LLM will get tool results and decide next step
+      }
+
+      if (!aiResponse) {
+        // Safety: if we hit MAX_TOOL_ROUNDS without text reply, force a final text response
+        console.warn('[dina-v3] Hit MAX_TOOL_ROUNDS, forcing final text response')
+        const finalResult = await callLLMWithTools(messages, [], {  // no tools → forces text reply
+          temperature: 0.5,
+          maxTokens: 1024,
+        })
+        aiResponse = finalResult.text || 'Maaf, saya tidak bisa menyelesaikan permintaan ini. Coba lagi ya.'
+      }
+    } catch (llmErr: any) {
+      console.error('[dina-v3] LLM call failed:', llmErr?.message)
+      aiResponse = `Maaf, saya lagi ada gangguan teknis (${llmErr?.message?.substring(0, 80) || 'unknown error'}). Coba lagi ya. 😅`
+      modelUsed = 'error-fallback'
     }
 
-    if (!aiResponse) aiResponse = 'Maaf, saya tidak bisa merespons saat ini.'
-
-    // Step 7: Save messages to DB
+    // === Step 6: Save messages to DB ===
     try {
       if (conversationId) {
         await db.message.createMany({ data: [
           { conversationId, role: 'user', content: message },
           { conversationId, role: 'assistant', content: aiResponse },
         ]})
-        // Update lastMessageAt
         await db.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
       }
     } catch (dbErr) { console.error('DB save (non-fatal):', dbErr) }
 
-    // Step 8: Extract learning and save to memory
-    // Auto-save memory DISABLED — use manual curation with Title + Description + Resolution
-
-    // === DINA v2: Update session context (auto-renew 48h TTL) ===
+    // === Step 7: Update session context (auto-renew 48h TTL) ===
     try {
       const sessionUpdates: any = {
-        lastIntent: intent.action,
+        lastIntent: toolsExecuted[0] || 'CHAT',
         lastTopic: message.substring(0, 200),
       }
       if (customerId) {
@@ -540,17 +430,61 @@ File yang diminta: ${selectedDocs.map((d: any) => d.fileName).join(', ')}`
       }
     } catch (sessErr) { console.error('Session update (non-fatal):', sessErr) }
 
+    // === Step 8: Return response ===
     return NextResponse.json({
       success: true,
       response: aiResponse,
       model: modelUsed,
-      toolsExecuted: intent.tools,
-      files: filesToSend,  // Empty array if not SEND_FILE (for WA bot consistency)
-      dbUpdated: intent.action === 'UPDATE_BANK' || intent.action === 'UPDATE_STAGE' || intent.action === 'UPDATE_FIELD' || intent.action === 'CREATE_CUSTOMER' || intent.action === 'DELETE_CUSTOMER' || intent.action === 'CONFIRM_DELETE' || intent.action === 'CONFIRM_CREATE' || intent.action === 'CANCEL_PENDING',
-      tracebackInfo, // DINA v2: for debugging
+      toolsExecuted,
+      files: filesToSend,  // For WA bot to send via sendFile()
+      dbUpdated,
+      tracebackInfo,
     })
   } catch (err: any) {
-    console.error('DINA chat error:', err)
+    console.error('DINA chat v3 error:', err)
     return NextResponse.json({ success: false, error: err?.message || 'Failed' }, { status: 500 })
+  }
+}
+
+// ============================================================
+// Helper: get or create conversation
+// ============================================================
+async function getOrCreateConversation(opts: {
+  customerId?: string
+  isWhatsApp: boolean
+  channel?: string
+  senderNumber?: string
+}): Promise<string | undefined> {
+  try {
+    const { customerId, isWhatsApp, channel, senderNumber } = opts
+    let conversation: any
+    if (customerId) {
+      conversation = await db.conversation.findFirst({ where: { customerId, channel: 'DASHBOARD' } })
+      if (!conversation) {
+        conversation = await db.conversation.create({ data: { customerId, channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+      }
+    } else if (isWhatsApp && senderNumber) {
+      conversation = await db.conversation.findFirst({
+        where: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber },
+        orderBy: { updatedAt: 'desc' },
+      })
+      if (!conversation) {
+        conversation = await db.conversation.create({
+          data: { channel: channel || 'WHATSAPP_PRIVATE', senderNumber, status: 'ACTIVE' } as any
+        })
+      }
+    } else {
+      conversation = await db.conversation.findFirst({
+        where: { channel: 'DASHBOARD' },
+        orderBy: { updatedAt: 'desc' },
+      })
+      if (!conversation) {
+        conversation = await db.conversation.create({ data: { channel: 'DASHBOARD', status: 'ACTIVE' } as any })
+      }
+    }
+    return conversation?.id
+  } catch (dbErr) {
+    console.error('Conversation lookup (non-fatal):', dbErr)
+    return undefined
   }
 }

@@ -458,6 +458,26 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Dynamic banks from BankConfig DB (added below hardcoded BTN/Mandiri/BSB)
   const [dbBanks, setDbBanks] = useState<Array<{ id: string; bankCode: string; bankName: string }>>([])
 
+  // ===== B-STEP 5: Bank Builder Templates =====
+  // Templates from BankConfig.documents.templates (added via Bank Builder UI).
+  // These appear as buttons in the Preview Dokumen panel for banks NOT in [BTN, MANDIRI, BSB_SYARIAH].
+  // When clicked, the PDF is fetched via /api/bank-config/[bankId]/template/pdf-proxy?fileId=xxx
+  // and displayed in the preview area (form data auto-filled based on annotations is handled server-side).
+  type BankTemplate = {
+    id: string
+    name: string
+    fileName?: string
+    fileId?: string
+    webViewLink?: string
+    version?: number
+    stage?: string
+    annotations?: Array<{ page: number; x: number; y: number; width: number; height: number; label: string; fieldMapping?: string }>
+  }
+  const [bankTemplates, setBankTemplates] = useState<BankTemplate[]>([])
+  const [activeBankTemplateId, setActiveBankTemplateId] = useState<string | null>(null)
+  const [bankTemplateBlobUrl, setBankTemplateBlobUrl] = useState<string | null>(null)
+  const [bankTemplateLoading, setBankTemplateLoading] = useState(false)
+
   // Fetch DB banks on mount
   useEffect(() => {
     fetch('/api/bank-config')
@@ -465,6 +485,79 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       .then(d => { if (d.success && d.data) setDbBanks(d.data) })
       .catch(() => {})
   }, [])
+
+  // Fetch templates for selected bank (only if it's a BankConfig bank, not BTN/MANDIRI/BSB_SYARIAH)
+  useEffect(() => {
+    const isHardcodedBank = ['BTN', 'MANDIRI', 'BSB_SYARIAH'].includes(bank)
+    if (isHardcodedBank) {
+      setBankTemplates([])
+      setActiveBankTemplateId(null)
+      setBankTemplateBlobUrl(null)
+      return
+    }
+    const selectedBank = dbBanks.find(b => b.bankCode === bank)
+    if (!selectedBank) {
+      setBankTemplates([])
+      return
+    }
+    fetch(`/api/bank-config/${selectedBank.id}/template`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.templates) {
+          setBankTemplates(d.data.templates)
+        } else {
+          setBankTemplates([])
+        }
+      })
+      .catch(() => setBankTemplates([]))
+  }, [bank, dbBanks])
+
+  // Load bank template PDF preview when activeBankTemplateId changes
+  const bankTemplateLoadingRef = useRef(false)
+  async function loadBankTemplatePreview(templateId: string) {
+    if (bankTemplateLoadingRef.current) return
+    const selectedBank = dbBanks.find(b => b.bankCode === bank)
+    if (!selectedBank) return
+    const tpl = bankTemplates.find(t => t.id === templateId)
+    if (!tpl || !tpl.fileId) {
+      toast.error('Template PDF tidak ditemukan (fileId kosong). Upload template via Bank Builder dulu.')
+      return
+    }
+    bankTemplateLoadingRef.current = true
+    setBankTemplateLoading(true)
+    try {
+      const res = await fetch(`/api/bank-config/${selectedBank.id}/template/pdf-proxy?fileId=${encodeURIComponent(tpl.fileId)}`)
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.error || `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const newUrl = URL.createObjectURL(blob)
+      const oldUrl = bankTemplateBlobUrl
+      setBankTemplateBlobUrl(newUrl)
+      if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
+    } catch (err) {
+      toast.error('Gagal load template PDF: ' + (err instanceof Error ? err.message : 'unknown'))
+      setBankTemplateBlobUrl(null)
+    } finally {
+      bankTemplateLoadingRef.current = false
+      setBankTemplateLoading(false)
+    }
+  }
+
+  // Click handler for bank template buttons
+  function handleBankTemplateClick(templateId: string) {
+    setActiveBankTemplateId(templateId)
+    setGenerateDocId('')  // clear generate doc ID so bank template preview shows
+    loadBankTemplatePreview(templateId)
+  }
+
+  // Refresh bank template preview when form data changes (debounced 2.5s)
+  useEffect(() => {
+    if (!activeBankTemplateId) return
+    const timer = setTimeout(() => { loadBankTemplatePreview(activeBankTemplateId) }, 2500)
+    return () => clearTimeout(timer)
+  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.applicant.companyName, state.applicant.companyAddress, state.applicant.monthlyIncome, state.property.blockLetter, state.property.houseNumber, state.property.landSize, state.property.houseSize, state.dateOfDocument])
 
   const [companySettings, setCompanySettings] = useState<{
     companyName?: string; directorName?: string; directorNik?: string; directorPhone?: string; directorAddress?: string; officeAddress?: string; city?: string
@@ -635,7 +728,6 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, bank, uploadedFiles])
 
   // Download PDF - MERGE mode: combine all uploads + generated docs into ONE PDF
@@ -741,7 +833,39 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // - PDF overlay (FLPP BTN, AJB, Mandiri Pernyataan, BSB, SPR Mandiri) → fetch from API
   // - dok-kerja → buka CombinedDocEditorModal (Google Docs)
   // - lokasi-kerja → generate via create-lokasi API
+  // - Bank Builder templates (B-STEP 5) → fetch from /api/bank-config/[bankId]/template/pdf-proxy
   async function handleDownloadSingleReact() {
+    // === B-STEP 5: Bank Builder template download (download active template PDF as-is) ===
+    if (activeBankTemplateId) {
+      const selectedBank = dbBanks.find(b => b.bankCode === bank)
+      const tpl = bankTemplates.find(t => t.id === activeBankTemplateId)
+      if (!selectedBank || !tpl || !tpl.fileId) {
+        toast.error('Template tidak ditemukan untuk di-download.')
+        return false
+      }
+      setFlppGenerating(true)
+      try {
+        const res = await fetch(`/api/bank-config/${selectedBank.id}/template/pdf-proxy?fileId=${encodeURIComponent(tpl.fileId)}`)
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}))
+          throw new Error(errJson.error || `HTTP ${res.status}`)
+        }
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const customerName = state.applicant.fullName || 'Konsumen'
+        a.download = `${tpl.name || 'Template'}_${customerName}_${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        toast.success(`Template PDF berhasil di-download!`)
+        return true
+      } catch (err) {
+        toast.error('Gagal download template: ' + (err instanceof Error ? err.message : 'unknown'))
+        return false
+      } finally { setFlppGenerating(false) }
+    }
+
     // === PDF Overlay docs (fetch from API) ===
     const pdfOverlayDocs: Record<string, { endpoint: string; name: string; method?: string }> = {
       'flpp': { endpoint: '/api/documents/generate-flpp', name: 'Form_FLPP_BTN' },
@@ -1043,20 +1167,24 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     const skipPdfIds = bank === 'MANDIRI'
       ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
       : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
+    // B-STEP 5: skip FLPP overlay preview when a Bank Builder template is active
+    if (activeBankTemplateId) return
     if (!skipPdfIds.includes(generateDocId) && !flppLoading) loadFlppPreview()
-  }, [previewMode, generateDocId])
+  }, [previewMode, generateDocId, activeBankTemplateId])
 
   // Refresh preview when key form data changes (debounced 2.5s)
   useEffect(() => {
     // Skip auto-refresh for React component docs (SPR + BPHTB + common) - they update live in DOM
     // SPR Mandiri uses PDF overlay (not React), so don't skip it
+    // B-STEP 5: also skip when a Bank Builder template is active (separate preview handler)
+    if (activeBankTemplateId) return
     const reactDocIds = bank === 'MANDIRI'
       ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
       : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
     if (reactDocIds.includes(generateDocId)) return
     const timer = setTimeout(() => { loadFlppPreview() }, 2500)
     return () => clearTimeout(timer)
-  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate])
+  }, [state.applicant.fullName, state.applicant.ktpNumber, state.applicant.address, state.applicant.pob, state.applicant.dob, state.applicant.jobTitle, state.spouse?.fullName, state.spouse?.ktpNumber, state.spouse?.pob, state.spouse?.dob, state.spouse?.job, state.spouse?.address, state.property.projectName, state.property.kavlingNumber, state.property.houseAddress, state.dateOfDocument, state.akadDate, state.lpaDate, activeBankTemplateId])
 
   async function handleUpload(docId: string, file: File) {
     setUploadingId(docId)
@@ -1611,6 +1739,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
               <div className="flex gap-1 mb-3 flex-wrap">
                 {formMode === 'bank' && docStage === 'entry' ? (
                   <>
+                    {/* NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
+                        Bank Builder is an ALTERNATIVE path for new banks + future editing.
+                        Do NOT migrate existing code — just add Bank Builder templates as additional options. */}
                     {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>}
                     {bank === 'BTN' && <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>}
                     {bank === 'MANDIRI' && <button onClick={() => setGenerateDocId('mandiri-pernyataan-pemohon')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'mandiri-pernyataan-pemohon' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan Pemohon</button>}
@@ -1628,6 +1759,21 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja</button>
                     <button onClick={() => setGenerateDocId('lokasi-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'lokasi-kerja' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><MapPin className="w-3 h-3" /> Lokasi Kerja {((state.applicant as any).workplaceFrontPhoto || (state.applicant as any).workplaceMapsLink) ? '✓' : ''}</button>
                     {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (CombinedDocumentEditorModal), bukan di sini */}
+
+                    {/* B-STEP 5: Bank Builder Templates (only for banks NOT in BTN/Mandiri/BSB_SYARIAH).
+                        NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
+                        Bank Builder is an ALTERNATIVE path for new banks + future editing.
+                        Do NOT migrate existing code — just add Bank Builder templates as additional options. */}
+                    {bankTemplates.length > 0 && bankTemplates.map(tpl => (
+                      <button
+                        key={tpl.id}
+                        onClick={() => handleBankTemplateClick(tpl.id)}
+                        title={tpl.fileName || tpl.name}
+                        className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', activeBankTemplateId === tpl.id ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}
+                      >
+                        <FileText className="w-3 h-3" /> {tpl.name?.length > 18 ? tpl.name.substring(0, 18) + '…' : tpl.name}
+                      </button>
+                    ))}
                   </>
                 ) : formMode === 'bank' && docStage === 'ajb' ? (
                   <>
@@ -1853,8 +1999,68 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
               {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (CombinedDocumentEditorModal). */}
 
-              {/* PDF Preview (iframe) - for FLPP + AJB + SPR Mandiri docs */}
-              {(() => {
+              {/* B-STEP 5: Bank Builder Template PDF Preview — shown when a bank template button is active.
+                  Displayed instead of the regular PDF overlay preview when activeBankTemplateId is set. */}
+              {activeBankTemplateId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/20 border border-rose-500/40 rounded-lg p-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <FileText className="w-3.5 h-3.5 text-rose-600" />
+                      <span className="font-semibold text-rose-700 dark:text-rose-300">
+                        {bankTemplates.find(t => t.id === activeBankTemplateId)?.name || 'Template'}
+                      </span>
+                      <span className="text-[10px] text-rose-600/70">
+                        (Bank Builder template — {bankTemplates.find(t => t.id === activeBankTemplateId)?.annotations?.length || 0} annotations)
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => activeBankTemplateId && loadBankTemplatePreview(activeBankTemplateId)}
+                        disabled={bankTemplateLoading}
+                        className="text-[10px] px-2 py-1 rounded border border-rose-500/30 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/30 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <RefreshCw className={cn('w-3 h-3', bankTemplateLoading && 'animate-spin')} /> Refresh
+                      </button>
+                      {bankTemplates.find(t => t.id === activeBankTemplateId)?.webViewLink && (
+                        <a
+                          href={bankTemplates.find(t => t.id === activeBankTemplateId)!.webViewLink!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] px-2 py-1 rounded border border-rose-500/30 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/30 flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Drive
+                        </a>
+                      )}
+                      <button
+                        onClick={() => { setActiveBankTemplateId(null); setBankTemplateBlobUrl(null) }}
+                        className="text-[10px] px-2 py-1 rounded border border-slate-500/30 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
+                    {bankTemplateLoading && !bankTemplateBlobUrl && (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 className="w-6 h-6 animate-spin text-rose-600" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading template PDF...</span>
+                      </div>
+                    )}
+                    {bankTemplateBlobUrl && (
+                      <iframe src={bankTemplateBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="Bank Template Preview" />
+                    )}
+                    {!bankTemplateLoading && !bankTemplateBlobUrl && (
+                      <div className="flex items-center justify-center h-full flex-col gap-2">
+                        <FileText className="w-10 h-10 text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">Klik Refresh untuk load template PDF</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* PDF Preview (iframe) - for FLPP + AJB + SPR Mandiri docs (hidden when bank template preview is active) */}
+              {!activeBankTemplateId && (() => {
                 const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
                 const skipList = bank === 'MANDIRI'
                   ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']

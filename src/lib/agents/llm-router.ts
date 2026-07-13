@@ -508,3 +508,381 @@ export function trackCost(response: LLMResponse): void {
 export function getDailyCostStats() {
   return { ...dailyCostTracker }
 }
+
+// ============================================================
+// FUNCTION CALLING SUPPORT (DINA v3)
+// ============================================================
+// Multi-provider LLM router with tool/function calling support.
+// Strategy:
+//   Primary:   Gemini 2.0 Flash (native functionDeclarations)
+//   Backup 1:  OpenRouter (OpenAI-compatible tools API)
+//   Fallback:  returns error to caller (caller can degrade gracefully)
+//
+// Multi-account rotation: env vars support comma-separated API keys.
+//   GEMINI_API_KEYS=key1,key2,key3  (preferred)  or  GEMINI_API_KEY=key1
+//   OPENROUTER_API_KEYS=k1,k2       (preferred)  or  OPENROUTER_API_KEY=k1
+// Rotation policy: round-robin per call; on rate-limit/timeout, immediately skip to next key.
+// ============================================================
+
+// ---- Tool / function declaration types (provider-agnostic) ----
+export interface ToolParameter {
+  type: string  // "string" | "number" | "boolean" | "array" | "object"
+  description: string
+  enum?: string[]
+  items?: ToolParameter  // for array type
+  properties?: Record<string, ToolParameter>  // for object type
+  required?: string[]
+}
+
+export interface ToolDeclaration {
+  name: string
+  description: string
+  parameters: ToolParameter
+}
+
+export interface ToolCall {
+  name: string
+  args: Record<string, any>
+}
+
+export interface FunctionCallResponse {
+  text: string | null  // LLM's natural-language reply (null if function call)
+  toolCalls: ToolCall[]  // empty array if LLM replied with text
+  usage?: {
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+  }
+  model: string
+  provider: LLMProvider
+  latencyMs: number
+}
+
+// ---- Multi-account key rotation state ----
+interface KeyPool {
+  keys: string[]
+  cursor: number  // round-robin cursor
+}
+
+const geminiKeyPool: KeyPool = { keys: [], cursor: 0 }
+const openrouterKeyPool: KeyPool = { keys: [], cursor: 0 }
+
+function loadGeminiKeys(): string[] {
+  if (geminiKeyPool.keys.length > 0) return geminiKeyPool.keys
+  const multi = (process.env.GEMINI_API_KEYS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const single = (process.env.GEMINI_API_KEY || '').split(',').map(s => s.trim()).filter(Boolean)
+  const all = multi.length > 0 ? multi : single
+  geminiKeyPool.keys = all
+  return all
+}
+
+function loadOpenRouterKeys(): string[] {
+  if (openrouterKeyPool.keys.length > 0) return openrouterKeyPool.keys
+  const multi = (process.env.OPENROUTER_API_KEYS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const single = (process.env.OPENROUTER_API_KEY || '').split(',').map(s => s.trim()).filter(Boolean)
+  const all = multi.length > 0 ? multi : single
+  openrouterKeyPool.keys = all
+  return all
+}
+
+function nextKey(pool: KeyPool, skipKey?: string): string | null {
+  const keys = pool.keys
+  if (keys.length === 0) return null
+  // Try to find a key that's not the one we're skipping
+  if (skipKey && keys.length > 1) {
+    for (let i = 0; i < keys.length; i++) {
+      pool.cursor = (pool.cursor + 1) % keys.length
+      if (keys[pool.cursor] !== skipKey) return keys[pool.cursor]
+    }
+  } else {
+    pool.cursor = (pool.cursor + 1) % keys.length
+  }
+  return keys[pool.cursor]
+}
+
+// ============================================================
+// Helper: detect whether an HTTP error suggests retrying with another key
+// ============================================================
+function isRetryableError(status: number | undefined, errMsg: string): boolean {
+  if (status === 429) return true  // rate limit
+  if (status === 403 && /quota|rate|limit/i.test(errMsg)) return true
+  if (status === 500 || status === 502 || status === 503 || status === 504) return true
+  if (/timeout|timed out|ETIMEDOUT|ECONNRESET|ENOTFOUND|fetch failed/i.test(errMsg)) return true
+  return false
+}
+
+// ============================================================
+// Gemini function calling (native functionDeclarations)
+// ============================================================
+async function callGeminiWithTools(
+  messages: LLMMessage[],
+  tools: ToolDeclaration[],
+  config?: { temperature?: number; maxTokens?: number; systemPrompt?: string; model?: string }
+): Promise<FunctionCallResponse> {
+  const keys = loadGeminiKeys()
+  if (keys.length === 0) {
+    throw new Error('No Gemini API key configured (GEMINI_API_KEY or GEMINI_API_KEYS)')
+  }
+  const model = config?.model || 'gemini-2.0-flash'
+  const systemMessage = messages.find(m => m.role === 'system')
+  const chatMessages = messages.filter(m => m.role !== 'system')
+
+  const body: any = {
+    contents: chatMessages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+    generationConfig: {
+      temperature: config?.temperature ?? 0.7,
+      maxOutputTokens: config?.maxTokens ?? 2048,
+      topP: 0.9,
+    },
+    tools: [{
+      functionDeclarations: tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: geminiConvertSchema(t.parameters),
+      })),
+    }],
+  }
+  if (systemMessage) {
+    body.systemInstruction = { parts: [{ text: systemMessage.content }] }
+  }
+
+  let lastErr: any = null
+  let lastKeyTried: string | undefined
+
+  // Try each key (round-robin, with rotation on retryable errors)
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const key = attempt === 0 ? keys[geminiKeyPool.cursor] : nextKey(geminiKeyPool, lastKeyTried)
+    if (!key) continue
+    lastKeyTried = key
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      )
+      if (!res.ok) {
+        const errText = await res.text()
+        if (isRetryableError(res.status, errText)) {
+          lastErr = new Error(`Gemini ${res.status}: ${errText.substring(0, 200)}`)
+          continue  // try next key
+        }
+        throw new Error(`Gemini ${res.status}: ${errText.substring(0, 500)}`)
+      }
+      const data = await res.json()
+      const candidate = data.candidates?.[0]
+      const parts = candidate?.content?.parts || []
+      let text: string | null = null
+      const toolCalls: ToolCall[] = []
+      for (const p of parts) {
+        if (p.text) {
+          text = (text || '') + p.text
+        } else if (p.functionCall) {
+          toolCalls.push({ name: p.functionCall.name, args: p.functionCall.args || {} })
+        }
+      }
+      // Advance cursor for next call (round-robin)
+      nextKey(geminiKeyPool)
+      return {
+        text,
+        toolCalls,
+        model,
+        provider: 'google',
+        latencyMs: 0,
+        usage: data.usageMetadata ? {
+          promptTokens: data.usageMetadata.promptTokenCount,
+          completionTokens: data.usageMetadata.candidatesTokenCount,
+          totalTokens: data.usageMetadata.totalTokenCount,
+        } : undefined,
+      }
+    } catch (err: any) {
+      lastErr = err
+      if (isRetryableError(undefined, err?.message || '')) continue
+      throw err  // non-retryable, throw immediately
+    }
+  }
+  throw lastErr || new Error('All Gemini keys exhausted')
+}
+
+// Convert provider-agnostic schema → Gemini schema
+function geminiConvertSchema(p: ToolParameter): any {
+  const out: any = { type: p.type.toUpperCase(), description: p.description }
+  if (p.enum) out.enum = p.enum
+  if (p.items) out.items = geminiConvertSchema(p.items)
+  if (p.properties) {
+    out.properties = Object.fromEntries(
+      Object.entries(p.properties).map(([k, v]) => [k, geminiConvertSchema(v)])
+    )
+  }
+  if (p.required) out.required = p.required
+  return out
+}
+
+// ============================================================
+// OpenRouter (OpenAI-compatible) function calling
+// ============================================================
+async function callOpenRouterWithTools(
+  messages: LLMMessage[],
+  tools: ToolDeclaration[],
+  config?: { temperature?: number; maxTokens?: number; systemPrompt?: string; model?: string; apiKey?: string }
+): Promise<FunctionCallResponse> {
+  const keys = loadOpenRouterKeys()
+  if (keys.length === 0) {
+    throw new Error('No OpenRouter API key configured (OPENROUTER_API_KEY or OPENROUTER_API_KEYS)')
+  }
+  const model = config?.model || 'nvidia/nemotron-3-nano-30b-a3b:free'
+
+  // OpenAI tool format
+  const openaiTools = tools.map(t => ({
+    type: 'function',
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: openaiConvertSchema(t.parameters),
+    },
+  }))
+
+  const body: any = {
+    model,
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+    tools: openaiTools,
+    tool_choice: 'auto',
+    temperature: config?.temperature ?? 0.7,
+    max_tokens: config?.maxTokens ?? 2048,
+  }
+
+  let lastErr: any = null
+  let lastKeyTried: string | undefined
+
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const key = attempt === 0 ? keys[openrouterKeyPool.cursor] : nextKey(openrouterKeyPool, lastKeyTried)
+    if (!key) continue
+    lastKeyTried = key
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          'X-Title': 'Hadi Kaya DINA v3',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const errText = await res.text()
+        if (isRetryableError(res.status, errText)) {
+          lastErr = new Error(`OpenRouter ${res.status}: ${errText.substring(0, 200)}`)
+          continue
+        }
+        throw new Error(`OpenRouter ${res.status}: ${errText.substring(0, 500)}`)
+      }
+      const data = await res.json()
+      const choice = data.choices?.[0]
+      const msg = choice?.message
+      const text = msg?.content || null
+      const toolCalls: ToolCall[] = (msg?.tool_calls || []).map((tc: any) => ({
+        name: tc.function?.name,
+        args: (() => {
+          try { return JSON.parse(tc.function?.arguments || '{}') }
+          catch { return {} }
+        })(),
+      })).filter((tc: ToolCall) => tc.name)
+      nextKey(openrouterKeyPool)
+      return {
+        text,
+        toolCalls,
+        model,
+        provider: 'openrouter',
+        latencyMs: 0,
+        usage: data.usage ? {
+          promptTokens: data.usage.prompt_tokens,
+          completionTokens: data.usage.completion_tokens,
+          totalTokens: data.usage.total_tokens,
+        } : undefined,
+      }
+    } catch (err: any) {
+      lastErr = err
+      if (isRetryableError(undefined, err?.message || '')) continue
+      throw err
+    }
+  }
+  throw lastErr || new Error('All OpenRouter keys exhausted')
+}
+
+function openaiConvertSchema(p: ToolParameter): any {
+  const out: any = { type: p.type, description: p.description }
+  if (p.enum) out.enum = p.enum
+  if (p.items) out.items = openaiConvertSchema(p.items)
+  if (p.properties) {
+    out.properties = Object.fromEntries(
+      Object.entries(p.properties).map(([k, v]) => [k, openaiConvertSchema(v)])
+    )
+  }
+  if (p.required) out.required = p.required
+  return out
+}
+
+// ============================================================
+// MAIN FUNCTION CALLING ROUTER (with auto-fallback)
+// ============================================================
+// Returns text reply OR a function call request.
+// Caller (chat route) is responsible for:
+//   1. Executing the function call if toolCalls.length > 0
+//   2. Re-calling this function with the tool result appended to messages
+//   3. Loop until text reply is received (or max iterations)
+// ============================================================
+export async function callLLMWithTools(
+  messages: LLMMessage[],
+  tools: ToolDeclaration[],
+  config?: { temperature?: number; maxTokens?: number; systemPrompt?: string }
+): Promise<FunctionCallResponse> {
+  const start = Date.now()
+  const geminiKeys = loadGeminiKeys()
+  const openrouterKeys = loadOpenRouterKeys()
+
+  if (geminiKeys.length === 0 && openrouterKeys.length === 0) {
+    throw new Error('No LLM provider configured. Set GEMINI_API_KEY or OPENROUTER_API_KEY.')
+  }
+
+  // Try Gemini first (primary)
+  if (geminiKeys.length > 0) {
+    try {
+      const r = await callGeminiWithTools(messages, tools, config)
+      return { ...r, latencyMs: Date.now() - start }
+    } catch (err: any) {
+      console.warn(`[llm-router] Gemini failed (${err?.message?.substring(0, 100)}), trying OpenRouter fallback...`)
+      // Fall through to OpenRouter
+    }
+  }
+
+  // Fallback: OpenRouter
+  if (openrouterKeys.length > 0) {
+    const r = await callOpenRouterWithTools(messages, tools, config)
+    return { ...r, latencyMs: Date.now() - start }
+  }
+
+  // No fallback available
+  throw new Error('All LLM providers failed (Gemini + OpenRouter)')
+}
+
+// ============================================================
+// Helper: append a tool result to messages (provider-agnostic format)
+// ============================================================
+export function appendToolResult(
+  messages: LLMMessage[],
+  toolCall: ToolCall,
+  result: string
+): LLMMessage[] {
+  // For Gemini: tool result is sent as a user message with functionResponse part
+  // For OpenAI: tool result is sent as a tool role message
+  // We use a hybrid format that both providers can consume via our adapters above.
+  return [
+    ...messages,
+    // The assistant's function call (so LLM knows what it asked)
+    { role: 'assistant', content: `[Function call: ${toolCall.name}(${JSON.stringify(toolCall.args)})]` },
+    // The tool result
+    { role: 'user', content: `[Function result for ${toolCall.name}]: ${result}` },
+  ]
+}
