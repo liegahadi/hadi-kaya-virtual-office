@@ -1044,49 +1044,44 @@ Lihat: `/home/z/my-project/download/DINA-FINAL-DESIGN.md` untuk detail lengkap (
 
 HADI KAYA VIRTUAL OFFICE adalah **1 sistem terpusat** yang menampung **multiple teams/companies**. Bayangkan seperti 1 gedung kantor dengan banyak lantai — setiap lantai adalah perusahaan/franchise berbeda, tapi owner-nya sama (kamu).
 
-### 16.2 Arsitektur Multi-Team
+### 16.2 Arsitektur Multi-Team (CONTOH — BUKAN FIX)
+
+**⚠️ PENTING:** Diagram di bawah adalah CONTOH untuk illustrasi fleksibilitas sistem. **BUKAN konfigurasi fix.** Owner bisa bikin tim apapun, dengan jenis usaha apapun, dengan memory sharing apapun.
 
 ```
 HADI KAYA VIRTUAL OFFICE (1 sistem, 1 codebase, 1 DB)
 │
-├── Tim 1: PT. Marlindo Bangun Persada — ANJAYO 16 (CURRENT)
-│   ├── Agents: DINA, RINA, MITRA, RATNA, RANGGA + 10 marketing
-│   ├── Memory: isolated (hanya untuk tim ini)
-│   ├── Skills: isolated
-│   └── Bank config: BTN, Mandiri, BSB Syariah, BNI
+├── Tim A: [PT apa saja, jenis usaha apa saja]
+│   ├── Agents: bebas (bisa pakai agents yang sama dengan tim lain, atau agents baru)
+│   ├── Memory: bebas (isolated, combined, open access, custom)
+│   └── Akses data: bebas (bisa akses tim lain, atau isolated)
 │
-├── Tim 2: PT. Marlindo Bangun Persada — Project lain (ANJAYO 17, dll)
-│   ├── Agents: SAMA dengan Tim 1 (karena masih 1 PT)
-│   ├── Memory: PERGABUNGAN Tim 1 + Tim 2 (shared)
-│   └── Bisa akses data Tim 1
+├── Tim B: [PT apa saja, jenis usaha apa saja]
+│   ├── Konfigurasi bebas
+│   └── ...
 │
-├── Tim 3: [PT perumahan saingan A] (future)
-│   ├── Agents: agents baru, basic prompt sendiri
-│   ├── Memory: ISOLATED (tidak bisa akses Tim lain)
-│   └── Tidak bisa akses data dari Tim manapun
+├── Tim C: [PT apa saja, jenis usaha apa saja]
+│   └── ...
 │
-├── Tim 4: [PT perumahan saingan B] (future)
-│   ├── Agents: agents baru
-│   ├── Memory: ISOLATED
-│   └── Tidak bisa akses data dari Tim manapun
-│
-├── Tim 5: [PT SAAS] (future)
-│   ├── Agents: agents SAAS context
-│   ├── Memory: ISOLATED
-│   └── Tidak ada hubungan dengan perumahan
-│
-├── Tim 6: [PT supporting perumahan] (future)
-│   ├── Project: konstruksi, distributor bahan baku, dll
-│   ├── Agents: agents baru
-│   ├── Memory: BISA AKSES SEMUA TIM PERUMAHAN (Tim 1, 2, 3, 4)
-│   └── Supporting role untuk semua tim perumahan
-│
-├── Tim 7: [PT F&B] (future)
-│   ├── Memory: ISOLATED
-│   └── Tidak ada hubungan dengan perumahan
-│
-└── Tim N: [PT future lainnya] (unlimited)
+└── Tim N: [unlimited tim, konfigurasi fleksibel]
 ```
+
+**Contoh skenario (BUKAN FIX):**
+- Tim 1: PT Marlindo (perumahan ANJAYO 16)
+- Tim 2: PT Marlindo (project lain) — memory gabungan dengan Tim 1
+- Tim 3: PT perumahan saingan — isolated
+- Tim 4: PT SAAS — isolated
+- Tim 5: PT F&B — isolated
+- Tim 6: PT supporting perumahan — bisa akses semua tim perumahan
+
+**Tapi bisa juga:**
+- Tim 1: PT SAAS
+- Tim 2: PT F&B
+- Tim 3: PT Marlindo
+- Tim 4: PT supporting SAAS + F&B
+- dst.
+
+**Sistem tidak peduli urutan/jenis tim. Yang penting: owner bisa konfigurasi sesuka hati.**
 
 ### 16.3 Memory Sharing Models (FLEXIBLE)
 
@@ -1143,24 +1138,55 @@ model Team {
 ### 17.1 Purpose
 
 Bank Builder adalah **tool satu kali pakai** untuk:
-1. **Tambah bank baru** — setup template + annotation + dokumen wajib
+1. **Tambah bank baru** — setup template PDF + annotation
 2. **Edit bank existing** — update format, tambah dokumen baru, revise annotation
-3. **Connect ke Tab Berkas** — dokumen yang di-setup di Bank Builder langsung muncul di preview Tab Berkas
+3. **Connect ke Preview Dokumen** — template yang di-setup di Bank Builder langsung muncul di panel "Preview Dokumen" Tab Berkas (panel kanan, auto-generate dari form box)
 
-### 17.2 Flow (Mirip BTN/Mandiri/BSB Existing)
+### 17.2 3 Kategori Dokumen di Tab Berkas (IMPORTANT)
+
+Sistem saat ini punya 3 kategori dokumen yang BEDA:
+
+| Kategori | Lokasi di UI | Cara Dapat | Contoh |
+|----------|-------------|------------|--------|
+| **1. DOKUMEN WAJIB (Upload)** | Sidebar kiri "DOKUMEN WAJIB" | User upload foto/PDF dari luar | KTP, KK, NPWP, Akta Nikah, Slip Gaji, SK Kerja |
+| **2. Dokumen Cetak & TTD** | Sidebar kiri "Dokumen Cetak & TTD" | User upload signed version | FLPP signed, SPR signed, SP3K, SPPK |
+| **3. Preview Dokumen (Generated)** | Panel kanan "Preview Dokumen" | Sistem generate real-time dari form box | SPR, Surat Pernyataan Tidak Punya Rumah, Surat Pernyataan Penghasilan, BPHTB, Notaris |
+
+**Yang harus dipahami:**
+- **KTP, KK, NPWP, Akta Nikah** = kategori 1 (UPLOAD) — user upload dari luar
+- **Surat Tidak Punya Rumah, Surat Penghasilan** = kategori 3 (GENERATED) — sistem generate dari form box
+- **INI BEDA BANGET.** Jangan dicampur.
+
+**Code reference:**
+- Kategori 1: `BASE_REQUIRED_UPLOADS` + `SPOUSE_UPLOADS` di berkas-view-v2.tsx
+- Kategori 2: `SIGNED_DOCS` di berkas-view-v2.tsx
+- Kategori 3: `reactDocs` + `pdfOverlayDocs` di berkas-view-v2.tsx
+
+### 17.3 BankConfig.documents.requiredDocuments — Clarification
+
+**SAAT INI (di Bank Builder code yang aku buat):**
+- `requiredDocuments` = daftar ID dokumen UPLOAD (kategori 1) yang dicentang per bank
+- Contoh: `['ktp', 'kk', 'npwp', 'akta-nikah', 'slip-gaji', 'sk-kerja']`
+
+**TAPI ini SALAH PEMAHAMAN.** Bank Builder + annotation seharusnya untuk **kategori 3 (GENERATED)**, bukan filter kategori 1 (UPLOAD).
+
+**Yang seharusnya Bank Builder lakukan:**
+- Setup template PDF + annotation → muncul di **Preview Dokumen** (kategori 3, panel kanan)
+- Bukan filter dokumen upload di sidebar kiri (kategori 1)
+
+### 17.4 Flow Bank Builder (Mirip BTN/Mandiri/BSB Existing)
 
 ```mermaid
 flowchart TD
     A[User buka Bank Builder] --> B[Setup Info Bank]
-    B --> C[Pilih Dokumen Wajib + FormBox fields]
-    C --> D[Upload Template PDF — BISA MULTIPLE]
-    D --> E[Annotate koordinat field di PDF]
-    E --> F[Save]
-    F --> G[User buka Tab Berkas]
-    G --> H[Pilih bank tersebut]
-    H --> I[Isi form box di sidebar kiri]
-    I --> J[Real-time preview dokumen ter-fill otomatis]
-    J --> K[Klik Single → download PDF]
+    B --> C[Upload Template PDF — BISA MULTIPLE]
+    C --> D[Annotate koordinat field di PDF]
+    D --> E[Save]
+    E --> F[User buka Tab Berkas]
+    F --> G[Pilih bank tersebut]
+    G --> H[Isi form box di sidebar kiri]
+    H --> I[Real-time preview dokumen ter-fill otomatis di panel kanan]
+    I --> J[Klik Single → download PDF]
 ```
 
 **Key points:**
@@ -1169,7 +1195,7 @@ flowchart TD
 - ✅ Annotation di-set sekali di Bank Builder, bukan saat isi form
 - ✅ Template PDF + annotation = pre-set, user tinggal isi form
 
-### 17.3 Multi-Template Support
+### 17.5 Multi-Template Support
 
 - 1 bank bisa punya **MULTIPLE template PDF** dengan nama file berbeda
 - Contoh: BTN punya FLPP, SPR, AJB, LPA, AKAD (5 templates)
@@ -1177,7 +1203,7 @@ flowchart TD
 - User bisa **REPLACE template** (kalau format lama tidak berlaku)
 - Setiap template punya annotation sendiri
 
-### 17.4 Pre-Bank vs Post-SP3K Stages
+### 17.6 Pre-Bank vs Post-SP3K Stages
 
 **Saat ini (hardcoded):**
 - BTN: ada "Entry (Pre-Bank)" + "AJB (Post SP3K)" stages
@@ -1189,22 +1215,17 @@ flowchart TD
 - Bisa tambah "Post SP3K" stage untuk Mandiri/BSB kalau bank minta
 - Bisa tambah stage lain (mis. "Post Akad", "Serah Terima")
 - Schema: `BankConfig.stages` = array of stage configs
+- User bisa add stage baru untuk bank manapun
 
-### 17.5 SPR Per-Bank (IMPORTANT)
+### 17.7 SPR Per-Bank (IMPORTANT)
 
 - **SPR (Surat Pemesanan Rumah) berbeda untuk setiap bank**
 - BTN punya format SPR sendiri
 - Mandiri punya format SPR sendiri
 - BSB Syariah punya format SPR sendiri
-- **HAPUS SPR dari BASE_REQUIRED_UPLOADS** (hardcoded)
-- SPR harus di-setup per-bank via Bank Builder
+- SPR harus di-setup per-bank via Bank Builder (template PDF + annotation)
 
-**Yang tetap generic (boleh di BASE_REQUIRED_UPLOADS):**
-- Surat Tidak Punya Rumah (format sama untuk semua bank)
-- Surat Penghasilan (format sama untuk semua bank)
-- KTP, KK, NPWP, Akta Nikah (dokumen upload, bukan generated)
-
-### 17.6 Connect Existing Banks to Bank Builder
+### 17.8 Connect Existing Banks to Bank Builder
 
 **Existing banks yang harus di-connect ke Bank Builder:**
 - **BTN**: FLPP, SPR (Pre-Bank) + AJB, LPA, AKAD (Post SP3K)
@@ -1258,23 +1279,23 @@ User message →
   LLM generate natural response
 ```
 
-**Tools yang DINA punya:**
-- `upload_berkas(customerId, fileType, fileName)` 
-- `generate_sk_kerja(customerId, data)`
-- `generate_slip_gaji(customerId, data)`
-- `get_customer_status(customerId)`
-- `update_customer_field(customerId, field, value)`
-- `create_customer(data)`
-- `delete_customer(customerId)` — with confirmation
-- `send_file(customerId, fileType)`
-- `query_experience(pattern)` — lintas konsumen
-
 **Key principle:** LLM yang decide, bukan regex. LLM baca konteks, paham maksud, pilih tool.
 
-### 18.4 No Regex (Update from v2.0)
+### 18.4 No Regex untuk SEMUA Agentic AI (TANPA TERKECUALI)
 
 **v2.0:** Pakai regex untuk task simple (ya/batal/stats)
 **v2.1 (NOW):** Hapus regex. SEMUA task lewat LLM Function Calling.
+
+**ATURAN BERLAKU UNTUK SEMUA AGENTIC AI:**
+- DINA (Document AI)
+- RINA (Finance AI)
+- MITRA (Material AI)
+- RATNA (CAO)
+- RANGGA (Marketing Leader)
+- 10 Marketing AI (Ayu, Bima, Citra, Dian, Eka, Fajar, Gita, Hadi, Indah, Joko)
+- Future agents apapun
+
+**TANPA TERKECUALI.** Semua agentic AI harus pakai Function Calling. Tidak boleh ada regex untuk intent detection.
 
 **Alasan:**
 - Regex terlalu kaku untuk bahasa dinamis
@@ -1282,6 +1303,30 @@ User message →
 - LLM dengan function calling bisa handle semua case dengan context
 - Cost LLM function calling sangat murah (~$0.001/call)
 - Lebih natural, lebih human-like
+
+### 18.5 DINA Tools (Updated)
+
+**Tools yang DINA punya (10 tools):**
+
+1. **`upload_berkas(file, customerId)`** — FLOW BARU
+   - DINA terima file (PDF/image) dari user
+   - DINA scan file (VLM/OCR) untuk determine kategori
+   - DINA tentukan: ini KTP? KK? NPWP? FLPP? dll
+   - DINA upload ke slot yang benar di "DOKUMEN WAJIB" sidebar kiri
+   - Sistem auto-upload ke Google Drive
+   - Tidak perlu tanya user "ini file apa?"
+
+2. **`generate_sk_kerja(customerId, data)`** — generate SK Kerja
+3. **`generate_slip_gaji(customerId, data)`** — generate Slip Gaji (3 bulan, karyawan)
+4. **`generate_laporan_keuangan(customerId, data)`** — generate Laporan Keuangan 6 bulan (wirausaha)
+5. **`get_customer_status(customerId)`** — query status konsumen
+6. **`update_customer_field(customerId, field, value)`** — update field konsumen
+7. **`create_customer(data)`** — tambah konsumen baru
+8. **`delete_customer(customerId)`** — hapus konsumen (with confirmation)
+9. **`send_file(customerId, fileType)`** — kirim file dari Drive ke chat
+10. **`query_experience(pattern)`** — query pengalaman lintas konsumen
+
+**Key principle:** LLM yang decide, bukan regex. LLM baca konteks, paham maksud, pilih tool.
 
 ---
 
