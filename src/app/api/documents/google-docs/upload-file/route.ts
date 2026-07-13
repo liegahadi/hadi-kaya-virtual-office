@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // === DINA v2: Anti-duplicate check ===
     // Compute hash and check if same file already exists for this customer
-    const fileHash = computeFileHash(buffer)
+    const fileHash = await computeFileHash(buffer)
     if (customerId) {
       const duplicate = await checkDuplicateFile(db, customerId, fileHash)
       if (duplicate) {

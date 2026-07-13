@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
 
     // Convert to .docx
     const docxBuffer = await textToDocx(content)
-    const fileHash = computeFileHash(docxBuffer)
+    const fileHash = await computeFileHash(docxBuffer)
 
     // Get Drive client + folder
     const drive = await getDriveClientOAuth()

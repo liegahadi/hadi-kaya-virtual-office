@@ -7,12 +7,15 @@
 // 3. Always set permission: anyone with link = VIEWER (not editor)
 // ============================================================
 
-import crypto from 'crypto'
+// NOTE: crypto import is lazy-loaded to avoid breaking client-side bundles
+// (Node.js 'crypto' module is not available in browser)
 
 /**
  * Compute SHA-256 hash of a file buffer.
+ * Server-side only (uses Node.js crypto).
  */
-export function computeFileHash(buffer: Buffer): string {
+export async function computeFileHash(buffer: Buffer): Promise<string> {
+  const crypto = await import('crypto')
   return crypto.createHash('sha256').update(buffer).digest('hex')
 }
 

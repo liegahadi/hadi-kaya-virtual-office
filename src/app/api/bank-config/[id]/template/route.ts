@@ -40,7 +40,7 @@ export async function POST(
     }
     const mimeType = match[1]
     const buffer = Buffer.from(match[2], 'base64')
-    const fileHash = computeFileHash(buffer)
+    const fileHash = await computeFileHash(buffer)
 
     // Upload to Google Drive (if connected)
     let driveFileId: string | null = null
