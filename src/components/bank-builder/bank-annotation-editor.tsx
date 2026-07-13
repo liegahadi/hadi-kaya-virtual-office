@@ -132,8 +132,9 @@ export function BankAnnotationEditor({
         }
 
         const pdfjs: any = await import('pdfjs-dist')
-        // Use CDN worker for reliability (avoid bundler issues)
-        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs`
+        // Use CDN worker with MATCHING version (must match package.json version exactly)
+        // Package version: 6.0.227 → worker must also be 6.0.227
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@6.0.227/build/pdf.worker.min.mjs`
 
         const loadingTask = pdfjs.getDocument({ url: proxyUrl })
         const pdf = await loadingTask.promise
