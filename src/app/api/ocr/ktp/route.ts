@@ -12,6 +12,14 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+// Timeout wrapper untuk VLM call
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+  )
+  return Promise.race([promise, timeout]) as Promise<T>
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { image } = await req.json()
@@ -23,6 +31,8 @@ export async function POST(req: NextRequest) {
     }
 
     // === PRIMARY: z.ai VLM (Vision Language Model) ===
+    // NOTE: Vercel free tier has 10s function timeout. VLM call can take 5-15s.
+    // We use 8s timeout — if VLM doesn't respond in 8s, fall back to Tesseract.
     try {
       const ZAI = (await import('z-ai-web-dev-sdk')).default
       const zai = await ZAI.create()
@@ -48,27 +58,29 @@ Return HANYA JSON (tanpa markdown, tanpa penjelasan), dengan field berikut:
 
 Jika field tidak terbaca, isi dengan string kosong "".`
 
-      const response = await zai.chat.completions.createVision({
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: image } },
-            ],
-          },
-        ],
-        thinking: { type: 'disabled' },
-      })
+      // Wrap VLM call with 25s timeout (Vercel Pro allows 60s, free tier 10s)
+      const response: any = await withTimeout(
+        zai.chat.completions.createVision({
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: image } },
+              ],
+            },
+          ],
+          thinking: { type: 'disabled' },
+        } as any),
+        25000 // 25s timeout — leaves buffer for response parsing
+      )
 
       const content = response.choices?.[0]?.message?.content || ''
       console.log('VLM KTP response:', content.substring(0, 300))
 
-      // Parse JSON from VLM response (strip markdown if present)
+      // Parse JSON from VLM response
       let jsonStr = content.trim()
-      // Remove markdown code fences if present
       jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '')
-      // Try to extract JSON object
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
       if (jsonMatch) jsonStr = jsonMatch[0]
 
@@ -80,8 +92,9 @@ Jika field tidak terbaca, isi dengan string kosong "".`
         rawText: content.substring(0, 1000),
         engine: 'vlm',
       })
-    } catch (vlmErr) {
-      console.log('VLM failed, falling back to Tesseract:', vlmErr instanceof Error ? vlmErr.message : 'unknown')
+    } catch (vlmErr: any) {
+      console.log('VLM failed:', vlmErr?.message || 'unknown')
+      // Continue to Tesseract fallback
     }
 
     // === FALLBACK: Tesseract.js (legacy) ===

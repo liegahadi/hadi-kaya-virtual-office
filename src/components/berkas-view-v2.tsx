@@ -408,6 +408,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   const [state, setState] = useState<BerkasState>(buildInitialState)
   const [bank, setBank] = useState<string>(customer.bankName || customer.bankPipelines?.[0]?.bankName || 'BTN')
   const [saving, setSaving] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
   const [flppGenerating, setFlppGenerating] = useState(false)
   // Load uploaded files from DB (persisted as JSON string in customer.uploadedDocs)
   const loadUploadedFiles = (): Record<string, string> => {
@@ -555,6 +557,74 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     } catch (err) { toast.error('Network error: ' + (err instanceof Error ? err.message : 'unknown')); console.error('Save network error:', err) }
     finally { setSaving(false) }
   }
+
+  // === AUTO-SAVE: Debounced save saat state berubah (2s setelah perubahan terakhir) ===
+  // User tidak perlu klik tombol Save manual — form auto-save ke DB
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+
+    setAutoSaveStatus('idle')
+
+    // Debounce 2 detik — user mungkin masih ngetik
+    autoSaveTimer.current = setTimeout(async () => {
+      setAutoSaveStatus('saving')
+      try {
+        const res = await fetch(`/api/customers/${customer.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: state.applicant.fullName, phone: state.applicant.phone, whatsappNumber: state.applicant.phone,
+            nik: state.applicant.ktpNumber, birthPlace: state.applicant.pob, birthDate: state.applicant.dob,
+            occupation: state.applicant.jobType, ktpAddress: state.applicant.address,
+            companyName: state.applicant.companyName, companyAddress: state.applicant.companyAddress,
+            workPosition: state.applicant.jobTitle, monthlyIncome: state.applicant.monthlyIncome,
+            maritalStatus: state.maritalStatus === 'Sudah Menikah' ? 'MENIKAH' : 'SINGLE',
+            spouseName: state.spouse?.fullName, spouseNik: state.spouse?.ktpNumber,
+            spouseBirthPlace: state.spouse?.pob, spouseBirthDate: state.spouse?.dob, spouseOccupation: state.spouse?.job,
+            spouseAddress: state.spouse?.address,
+            dateOfDocument: state.dateOfDocument,
+            akadDate: state.akadDate, akadNumber: state.akadNumber,
+            lpaDate: state.lpaDate, lpaNumber: state.lpaNumber,
+            sp3kDate: state.sp3kDate,
+            npwpNumber: state.applicant.npwpNumber,
+            btnAccountNumber: state.applicant.btnAccountNumber,
+            blockLetter: state.property.blockLetter,
+            houseNumber: state.property.houseNumber,
+            landSize: state.property.landSize,
+            houseSize: state.property.houseSize,
+            shmNumber: state.property.shmNumber,
+            nibNumber: state.property.nibNumber,
+            atasanName: (state.applicant as any).atasanName,
+            atasanNip: (state.applicant as any).atasanNip,
+            workplaceMapsLink: (state.applicant as any).workplaceMapsLink,
+            workplaceMapsShortLink: (state.applicant as any).workplaceMapsShortLink,
+            workplaceJamOperasional: (state.applicant as any).workplaceJamOperasional,
+            workplaceWaktuHubungi: (state.applicant as any).workplaceWaktuHubungi,
+            workplaceFrontPhoto: (state.applicant as any).workplaceFrontPhoto,
+            workplaceInsidePhoto: (state.applicant as any).workplaceInsidePhoto,
+            gajiPokok: (state.applicant as any).gajiPokok,
+            slipGajiData: (state.applicant as any).slipGajiData ? JSON.stringify((state.applicant as any).slipGajiData) : null,
+            uploadedDocs: JSON.stringify(uploadedFiles),
+            bankName: bank,
+          }),
+        })
+        const d = await res.json()
+        if (d.success) {
+          setAutoSaveStatus('saved')
+          // Reset status setelah 2s
+          setTimeout(() => setAutoSaveStatus('idle'), 2000)
+        }
+      } catch (err) {
+        console.error('Auto-save error:', err)
+        setAutoSaveStatus('idle')
+      }
+    }, 2000)
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, bank, uploadedFiles])
 
   // Download PDF - MERGE mode: combine all uploads + generated docs into ONE PDF
   async function handleDownloadFlpp() {
@@ -1164,6 +1234,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />} Simpan</Button>
+          {autoSaveStatus === 'saving' && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> Auto-save...</span>}
+          {autoSaveStatus === 'saved' && <span className="text-[9px] text-emerald-500">✓ Tersimpan</span>}
           <Button size="sm" onClick={handleDownloadSingleReact} disabled={flppGenerating} className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs" title="Download dokumen yang sedang di-preview saja">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}Single</Button>
           <Button size="sm" onClick={handleDownloadFlpp} disabled={flppGenerating} className="bg-orange-600 hover:bg-orange-700 h-8 text-xs" title="Download semua berkas dalam 1 PDF">{flppGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3 mr-1" />}{flppGenerating ? 'Generating...' : 'Download All'}</Button>
         </div>

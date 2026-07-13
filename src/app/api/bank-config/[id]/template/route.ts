@@ -21,7 +21,7 @@ export async function POST(
   try {
     const { id: bankId } = await params
     const body = await req.json()
-    const { templatePdf, annotations, version } = body
+    const { templatePdf, annotations, version, originalFileName } = body
 
     if (!templatePdf) {
       return NextResponse.json({ success: false, error: 'templatePdf required' }, { status: 400 })
@@ -112,8 +112,18 @@ export async function POST(
         }
 
         // Upload template PDF
+        // Naming: gunakan nama file asli yang diupload user + version suffix
+        // Contoh: user upload "form_kosong_btn.pdf" → "form_kosong_btn v1.pdf"
         const templateVersion = version || 1
-        const templateName = `Template ${bank.bankCode} v${templateVersion}.pdf`
+        let templateName: string
+        if (originalFileName) {
+          // Strip extension dari original name, lalu append version
+          const baseName = originalFileName.replace(/\.[^.]+$/, '')
+          const ext = originalFileName.match(/\.[^.]+$/)?.[0] || '.pdf'
+          templateName = `${baseName} v${templateVersion}${ext}`
+        } else {
+          templateName = `Template ${bank.bankCode} v${templateVersion}.pdf`
+        }
 
         const uploadRes = await drive.files.create({
           requestBody: {

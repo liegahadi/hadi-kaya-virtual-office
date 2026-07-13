@@ -119,7 +119,9 @@ export function BankAnnotationEditor({
         // We need to fetch the PDF content. Use Google Drive export endpoint via our proxy.
         // For simplicity, use webViewLink converted to direct download
         const fileId = template.fileId
-        const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`
+        // Use our own proxy endpoint to avoid CORS issues with pdfjs
+        // Direct Google Drive URLs cause CORS errors saat pdfjs fetch PDF
+        const directUrl = `/api/bank-config/${bank.id}/template/pdf-proxy`
 
         const pdfjs: any = await import('pdfjs-dist')
         pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs')).default

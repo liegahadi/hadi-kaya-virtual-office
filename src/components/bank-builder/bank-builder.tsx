@@ -284,10 +284,13 @@ function BankEditor({
         </Badge>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — urutan: Info Bank → Dokumen Wajib → Template PDF → Annotation */}
       <div className="flex gap-2 border-b border-border pb-2">
         <TabBtn active={editMode === 'info'} onClick={() => setEditMode('info')} icon={<Edit3 className="w-3.5 h-3.5" />}>
           Info Bank
+        </TabBtn>
+        <TabBtn active={editMode === 'documents'} onClick={() => setEditMode('documents')} icon={<FileText className="w-3.5 h-3.5" />}>
+          Dokumen Wajib
         </TabBtn>
         <TabBtn active={editMode === 'template'} onClick={() => setEditMode('template')} icon={<Upload className="w-3.5 h-3.5" />}>
           Template PDF
@@ -299,9 +302,6 @@ function BankEditor({
           disabled={!template?.fileId}
         >
           Annotations {template?.annotations?.length ? `(${template.annotations.length})` : ''}
-        </TabBtn>
-        <TabBtn active={editMode === 'documents'} onClick={() => setEditMode('documents')} icon={<FileText className="w-3.5 h-3.5" />}>
-          Dokumen Wajib
         </TabBtn>
       </div>
 
@@ -601,7 +601,7 @@ function TabBtn({
 }
 
 // ============================================================
-// BANK DOCUMENTS CONFIG — Customize required documents per bank
+// BANK DOCUMENTS CONFIG — Customize required documents + formbox per bank
 // ============================================================
 const ALL_DOC_TYPES = [
   { id: 'ktp', label: 'KTP', default: true },
@@ -620,22 +620,69 @@ const ALL_DOC_TYPES = [
   { id: 'lainnya', label: 'Dokumen Lainnya', default: false },
 ]
 
+// Default formbox fields (yang ada di Tab Berkas sidebar kiri)
+const DEFAULT_FORMBOX_FIELDS = [
+  { id: 'applicant.fullName', label: 'Nama Lengkap Debitur', default: true },
+  { id: 'applicant.ktpNumber', label: 'NIK (No KTP)', default: true },
+  { id: 'applicant.pob', label: 'Tempat Lahir', default: true },
+  { id: 'applicant.dob', label: 'Tanggal Lahir', default: true },
+  { id: 'applicant.address', label: 'Alamat KTP', default: true },
+  { id: 'applicant.rtRw', label: 'RT/RW', default: true },
+  { id: 'applicant.kelurahan', label: 'Kelurahan/Desa', default: true },
+  { id: 'applicant.kecamatan', label: 'Kecamatan', default: true },
+  { id: 'applicant.city', label: 'Kota', default: true },
+  { id: 'applicant.postalCode', label: 'Kode Pos', default: true },
+  { id: 'applicant.phone', label: 'No HP/Telp', default: true },
+  { id: 'applicant.jobTitle', label: 'Pekerjaan/Jabatan', default: true },
+  { id: 'applicant.companyName', label: 'Nama Perusahaan', default: true },
+  { id: 'applicant.companyAddress', label: 'Alamat Perusahaan', default: true },
+  { id: 'applicant.companyPhone', label: 'Telp Perusahaan', default: false },
+  { id: 'applicant.monthlyIncome', label: 'Penghasilan/Bulan', default: true },
+  { id: 'applicant.btnAccountNumber', label: 'No Rekening BTN', default: false },
+  { id: 'applicant.npwpNumber', label: 'NPWP', default: true },
+  { id: 'spouse.fullName', label: 'Nama Pasangan', default: false },
+  { id: 'spouse.ktpNumber', label: 'NIK Pasangan', default: false },
+  { id: 'spouse.dob', label: 'Tanggal Lahir Pasangan', default: false },
+  { id: 'spouse.job', label: 'Pekerjaan Pasangan', default: false },
+  { id: 'property.projectName', label: 'Nama Perumahan', default: true },
+  { id: 'property.blockLetter', label: 'Blok Rumah', default: true },
+  { id: 'property.houseNumber', label: 'No Rumah', default: true },
+  { id: 'property.kavlingNumber', label: 'No Kavling', default: false },
+  { id: 'property.houseAddress', label: 'Alamat Rumah', default: false },
+  { id: 'property.landSize', label: 'Luas Tanah', default: true },
+  { id: 'property.houseSize', label: 'Luas Bangunan', default: true },
+  { id: 'property.price', label: 'Harga Rumah', default: true },
+  { id: 'property.dpAmount', label: 'DP', default: true },
+  { id: 'property.plafonKpr', label: 'Plafon KPR', default: true },
+  { id: 'property.tenor', label: 'Tenor (tahun)', default: true },
+  { id: 'dateOfDocument', label: 'Tanggal Dokumen', default: true },
+  { id: 'akadDate', label: 'Tanggal Akad', default: false },
+  { id: 'lpaDate', label: 'Tanggal LPA', default: false },
+]
+
 function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => void }) {
   const [requiredDocs, setRequiredDocs] = useState<string[]>([])
+  const [formboxFields, setFormboxFields] = useState<string[]>([])
+  const [customDocs, setCustomDocs] = useState<Array<{ id: string; label: string }>>([])
+  const [newDocLabel, setNewDocLabel] = useState('')
+  const [newFieldLabel, setNewFieldLabel] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    // Load current required docs from bank.documents JSON
     try {
       if (bank.documents) {
         const docs = JSON.parse(bank.documents)
         setRequiredDocs(docs.requiredDocuments || ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+        setFormboxFields(docs.formboxFields || DEFAULT_FORMBOX_FIELDS.filter(d => d.default).map(d => d.id))
+        setCustomDocs(docs.customDocs || [])
       } else {
         setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+        setFormboxFields(DEFAULT_FORMBOX_FIELDS.filter(d => d.default).map(d => d.id))
       }
     } catch {
       setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+      setFormboxFields(DEFAULT_FORMBOX_FIELDS.filter(d => d.default).map(d => d.id))
     }
     setLoading(false)
   }, [bank.id, bank.documents])
@@ -646,16 +693,46 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
     )
   }
 
+  function toggleField(fieldId: string) {
+    setFormboxFields(prev =>
+      prev.includes(fieldId) ? prev.filter(f => f !== fieldId) : [...prev, fieldId]
+    )
+  }
+
+  function addCustomDoc() {
+    if (!newDocLabel.trim()) return
+    const id = `custom-${Date.now()}`
+    setCustomDocs(prev => [...prev, { id, label: newDocLabel.trim() }])
+    setRequiredDocs(prev => [...prev, id])
+    setNewDocLabel('')
+  }
+
+  function addCustomField() {
+    if (!newFieldLabel.trim()) return
+    const id = `custom-field-${Date.now()}`
+    // Add to formbox list + auto-enable
+    setFormboxFields(prev => [...prev, id])
+    // We need to track custom fields too — append to DEFAULT_FORMBOX_FIELDS dynamically
+    DEFAULT_FORMBOX_FIELDS.push({ id, label: newFieldLabel.trim(), default: false })
+    setNewFieldLabel('')
+  }
+
+  function removeCustomDoc(id: string) {
+    setCustomDocs(prev => prev.filter(d => d.id !== id))
+    setRequiredDocs(prev => prev.filter(d => d !== id))
+  }
+
   async function save() {
     setSaving(true)
     try {
-      // Get existing documents JSON
       let existingDocs: any = {}
       try {
         if (bank.documents) existingDocs = JSON.parse(bank.documents)
       } catch {}
 
       existingDocs.requiredDocuments = requiredDocs
+      existingDocs.formboxFields = formboxFields
+      existingDocs.customDocs = customDocs
       existingDocs.updatedAt = new Date().toISOString()
 
       const res = await fetch('/api/bank-config', {
@@ -668,13 +745,13 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
       })
       const data = await res.json()
       if (data.success) {
-        toast.success('Dokumen wajib disimpan')
+        toast.success('Dokumen wajib + formbox disimpan')
         onUpdated()
       } else {
         toast.error(data.error || 'Gagal simpan')
       }
     } catch (err) {
-      toast.error('Gagal simpan dokumen wajib')
+      toast.error('Gagal simpan')
     } finally {
       setSaving(false)
     }
@@ -683,40 +760,84 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Memuat...</div>
 
   return (
-    <Card className="p-4 max-w-lg space-y-3">
+    <Card className="p-4 max-w-2xl space-y-4 max-h-[70vh] overflow-y-auto">
+      {/* Dokumen Wajib (Upload) */}
       <div>
-        <h3 className="text-sm font-semibold">Dokumen Wajib per Bank</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Pilih dokumen yang wajib diupload untuk bank {bank.bankName}. Dokumen yang tidak diceklis tidak akan muncul di checklist Tab Berkas.
+        <h3 className="text-sm font-semibold">📄 Dokumen Wajib (Upload)</h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-2">
+          Pilih dokumen yang wajib diupload untuk bank {bank.bankName}.
         </p>
+        <div className="space-y-1.5">
+          {ALL_DOC_TYPES.map(doc => (
+            <label key={doc.id} className="flex items-center gap-2 p-2 rounded border border-border hover:bg-muted/30 cursor-pointer">
+              <input type="checkbox" checked={requiredDocs.includes(doc.id)} onChange={() => toggleDoc(doc.id)} className="w-4 h-4 rounded" />
+              <span className="text-sm flex-1">{doc.label}</span>
+              {doc.default && <Badge variant="secondary" className="text-[9px]">Default</Badge>}
+            </label>
+          ))}
+          {customDocs.map(doc => (
+            <label key={doc.id} className="flex items-center gap-2 p-2 rounded border border-violet-500/30 bg-violet-500/5 cursor-pointer">
+              <input type="checkbox" checked={requiredDocs.includes(doc.id)} onChange={() => toggleDoc(doc.id)} className="w-4 h-4 rounded" />
+              <span className="text-sm flex-1">{doc.label}</span>
+              <Badge variant="outline" className="text-[9px]">Custom</Badge>
+              <button onClick={(e) => { e.preventDefault(); removeCustomDoc(doc.id) }} className="text-red-500 hover:text-red-700">
+                <X className="w-3 h-3" />
+              </button>
+            </label>
+          ))}
+        </div>
+        {/* Add custom doc */}
+        <div className="flex gap-1 mt-2">
+          <Input
+            placeholder="Tambah dokumen custom (mis. Surat Keterangan Penghasilan Ortu)"
+            value={newDocLabel}
+            onChange={e => setNewDocLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addCustomDoc()}
+            className="text-xs h-8"
+          />
+          <Button size="sm" onClick={addCustomDoc} className="h-8">
+            <Plus className="w-3 h-3" />
+          </Button>
+        </div>
       </div>
 
-      <div className="space-y-1.5">
-        {ALL_DOC_TYPES.map(doc => (
-          <label
-            key={doc.id}
-            className="flex items-center gap-2 p-2 rounded border border-border hover:bg-muted/30 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={requiredDocs.includes(doc.id)}
-              onChange={() => toggleDoc(doc.id)}
-              className="w-4 h-4 rounded"
-            />
-            <span className="text-sm">{doc.label}</span>
-            {doc.default && (
-              <Badge variant="secondary" className="text-[9px] ml-auto">Default</Badge>
-            )}
-          </label>
-        ))}
+      <div className="border-t border-border pt-3">
+        <h3 className="text-sm font-semibold">📝 Form Box Fields (Data Input)</h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-2">
+          Pilih field form yang akan muncul di sidebar kiri Tab Berkas. Field ini juga bisa di-drag ke PDF untuk annotation.
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {DEFAULT_FORMBOX_FIELDS.map(field => (
+            <label key={field.id} className="flex items-center gap-1.5 p-1.5 rounded border border-border hover:bg-muted/30 cursor-pointer text-xs">
+              <input type="checkbox" checked={formboxFields.includes(field.id)} onChange={() => toggleField(field.id)} className="w-3 h-3 rounded shrink-0" />
+              <span className="truncate">{field.label}</span>
+            </label>
+          ))}
+        </div>
+        {/* Add custom field */}
+        <div className="flex gap-1 mt-2">
+          <Input
+            placeholder="Tambah field custom (mis. No Paspor)"
+            value={newFieldLabel}
+            onChange={e => setNewFieldLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addCustomField()}
+            className="text-xs h-8"
+          />
+          <Button size="sm" onClick={addCustomField} className="h-8">
+            <Plus className="w-3 h-3" />
+          </Button>
+        </div>
       </div>
 
-      <div className="flex gap-2 pt-2">
+      <div className="flex gap-2 pt-2 border-t border-border">
         <Button onClick={save} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
           Simpan
         </Button>
-        <Button variant="outline" onClick={() => setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))}>
+        <Button variant="outline" onClick={() => {
+          setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+          setFormboxFields(DEFAULT_FORMBOX_FIELDS.filter(d => d.default).map(d => d.id))
+        }}>
           Reset ke Default
         </Button>
       </div>
