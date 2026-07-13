@@ -110,35 +110,47 @@ export function BankAnnotationEditor({
 
   // Load PDF
   useEffect(() => {
-    if (!template.webViewLink) return
+    if (!template?.fileId) {
+      setLoadError('Belum ada template PDF. Upload template di tab "Template PDF" dulu.')
+      return
+    }
 
     let cancelled = false
     async function loadPdf() {
       try {
         setLoadError(null)
-        // We need to fetch the PDF content. Use Google Drive export endpoint via our proxy.
-        // For simplicity, use webViewLink converted to direct download
-        const fileId = template.fileId
+        setPdfLoaded(false)
+        
         // Use our own proxy endpoint to avoid CORS issues with pdfjs
-        // Direct Google Drive URLs cause CORS errors saat pdfjs fetch PDF
-        const directUrl = `/api/bank-config/${bank.id}/template/pdf-proxy`
+        const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy`
+
+        // Test proxy first — if it returns error, show real error message
+        const testRes = await fetch(proxyUrl)
+        if (!testRes.ok) {
+          const errData = await testRes.json().catch(() => ({}))
+          throw new Error(errData.error || `Proxy returned ${testRes.status}`)
+        }
 
         const pdfjs: any = await import('pdfjs-dist')
-        pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs')).default
+        // Use CDN worker for reliability (avoid bundler issues)
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs`
 
-        const loadingTask = pdfjs.getDocument({ url: directUrl })
+        const loadingTask = pdfjs.getDocument({ url: proxyUrl })
         const pdf = await loadingTask.promise
 
         if (cancelled) return
 
         setNumPages(pdf.numPages)
-        setPdfUrl(directUrl)
+        setPdfUrl(proxyUrl)
         renderPage(pdf, currentPage)
       } catch (err: any) {
         console.error('PDF load error:', err)
-        setLoadError('Gagal memuat PDF. Pastikan permission Drive = anyone with link can view.')
+        setLoadError(`Gagal memuat PDF: ${err?.message || 'unknown error'}`)
       }
     }
+    loadPdf()
+    return () => { cancelled = true }
+  }, [template?.fileId, template?.webViewLink, currentPage])
 
     async function renderPage(pdf: any, pageNum: number) {
       try {
@@ -167,10 +179,6 @@ export function BankAnnotationEditor({
         console.error('Render page error:', err)
       }
     }
-
-    loadPdf()
-    return () => { cancelled = true }
-  }, [template.fileId, template.webViewLink, currentPage])
 
   // Handle click on PDF to add annotation
   function handlePdfClick(e: React.MouseEvent<HTMLCanvasElement>) {

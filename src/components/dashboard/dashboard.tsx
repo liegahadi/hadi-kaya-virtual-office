@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, Map, BookOpen, Settings, Bot, MessageSquare,
   Bell, CheckCircle2, AlertCircle, Sparkles, Zap, ShieldCheck,
-  TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database, Landmark, RefreshCw,
+  TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database, RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +19,6 @@ import { VirtualOfficeMapWrapper } from '@/components/dashboard/virtual-office-m
 import { BerkasViewV2 } from '@/components/berkas-view-v2'
 import { MemoryTab } from '@/components/dashboard/memory-tab'
 import { DatabaseTab } from '@/components/dashboard/database-tab'
-import { BankBuilder } from '@/components/bank-builder/bank-builder'
 import { ChatPanel } from '@/components/chat/chat-panel'
 
 // ============================================================
@@ -97,7 +96,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<
-    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'bank' | 'settings'
+    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'settings'
   >('office')
 
   // Check Google Drive connection status on mount
@@ -215,12 +214,6 @@ export default function Dashboard() {
               label="Database"
             />
             <TabButton
-              active={activeTab === 'bank'}
-              onClick={() => setActiveTab('bank')}
-              icon={<Landmark className="w-4 h-4" />}
-              label="Bank Builder"
-            />
-            <TabButton
               active={activeTab === 'settings'}
               onClick={() => setActiveTab('settings')}
               icon={<Settings className="w-4 h-4" />}
@@ -240,7 +233,6 @@ export default function Dashboard() {
           {activeTab === 'berkas' && <BerkasViewV2 projectId={stats.projects[0]?.id || ''} />}
           {activeTab === 'memory' && <MemoryTab />}
           {activeTab === 'database' && <DatabaseTab />}
-          {activeTab === 'bank' && <BankBuilder />}
           {activeTab === 'settings' && <SettingsView stats={stats} onRefresh={fetchStats} />}
         </div>
       </main>

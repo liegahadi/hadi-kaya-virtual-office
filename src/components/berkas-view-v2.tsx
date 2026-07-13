@@ -6,7 +6,7 @@ import {
   Save, Loader2, Download, X, Building2, FileText, FileDown,
   RefreshCw, Eye, Printer, Upload, Send, MessageSquare,
   LayoutGrid, Files, Calendar, Banknote, CheckCircle2, Circle, MapPin,
-  ExternalLink, History,
+  ExternalLink, History, Landmark,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { HistoryLogView } from '@/components/berkas/history-log-view'
 import { DinaChat } from '@/components/berkas/dina-chat'
+import { BankBuilderModal } from '@/components/bank-builder/bank-builder-modal'
 import { toast } from 'sonner'
 
 import {
@@ -110,6 +111,7 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showBankBuilder, setShowBankBuilder] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -134,9 +136,14 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
             <h2 className="text-2xl font-bold text-foreground">Berkas Konsumen</h2>
             <p className="text-sm text-muted-foreground">Isi data sekali → dokumen auto-generate → download PDF</p>
           </div>
-          <Button onClick={() => setShowAddForm(true)} className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-1" /> Konsumen Baru
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowBankBuilder(true)}>
+              <Landmark className="w-4 h-4 mr-1" /> Bank Builder
+            </Button>
+            <Button onClick={() => setShowAddForm(true)} className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4 mr-1" /> Konsumen Baru
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -161,6 +168,11 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
             onCreated={() => { fetchCustomers(); setShowAddForm(false) }} />
         )}
       </div>
+
+      {/* BANK BUILDER MODAL */}
+      {showBankBuilder && (
+        <BankBuilderModal onClose={() => setShowBankBuilder(false)} />
+      )}
 
       {/* DINA CHAT - PERSISTENT - WhatsApp-style with file upload + reply + history */}
       <DinaChat customer={selectedCustomer} onDbUpdate={fetchCustomers} />
