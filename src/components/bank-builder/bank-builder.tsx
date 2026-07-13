@@ -240,7 +240,7 @@ function BankEditor({
   onBack: () => void
   onUpdated: () => void
 }) {
-  const [editMode, setEditMode] = useState<'info' | 'template' | 'annotations'>('info')
+  const [editMode, setEditMode] = useState<'info' | 'template' | 'annotations' | 'documents'>('info')
   const [bankName, setBankName] = useState(bank.bankName)
   const [description, setDescription] = useState(bank.description || '')
   const [savingInfo, setSavingInfo] = useState(false)
@@ -300,6 +300,9 @@ function BankEditor({
         >
           Annotations {template?.annotations?.length ? `(${template.annotations.length})` : ''}
         </TabBtn>
+        <TabBtn active={editMode === 'documents'} onClick={() => setEditMode('documents')} icon={<FileText className="w-3.5 h-3.5" />}>
+          Dokumen Wajib
+        </TabBtn>
       </div>
 
       {/* Content */}
@@ -349,6 +352,10 @@ function BankEditor({
             template={template}
             onUpdated={onUpdated}
           />
+        )}
+
+        {editMode === 'documents' && (
+          <BankDocumentsConfig bank={bank} onUpdated={onUpdated} />
         )}
       </div>
     </div>
@@ -590,5 +597,129 @@ function TabBtn({
       {icon}
       {children}
     </button>
+  )
+}
+
+// ============================================================
+// BANK DOCUMENTS CONFIG — Customize required documents per bank
+// ============================================================
+const ALL_DOC_TYPES = [
+  { id: 'ktp', label: 'KTP', default: true },
+  { id: 'kk', label: 'Kartu Keluarga (KK)', default: true },
+  { id: 'npwp', label: 'NPWP', default: true },
+  { id: 'akta-nikah', label: 'Akta Nikah / Surat Belum Menikah', default: true },
+  { id: 'slip-gaji', label: 'Slip Gaji (3 bulan)', default: true },
+  { id: 'sk-kerja', label: 'SK Kerja / NIB', default: true },
+  { id: 'surat-belum-rumah', label: 'Surat Belum Memiliki Rumah', default: true },
+  { id: 'sertifikat', label: 'Sertifikat Rumah', default: false },
+  { id: 'pbb', label: 'PBB', default: false },
+  { id: 'laporan-keuangan', label: 'Laporan Keuangan (6 bulan, wirausaha)', default: false },
+  { id: 'mutasi-rekening', label: 'Mutasi Rekening (3 bulan)', default: false },
+  { id: 'bpjs', label: 'BPJS Ketenagakerjaan', default: false },
+  { id: 'domisili', label: 'Surat Keterangan Domisili', default: false },
+  { id: 'lainnya', label: 'Dokumen Lainnya', default: false },
+]
+
+function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => void }) {
+  const [requiredDocs, setRequiredDocs] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    // Load current required docs from bank.documents JSON
+    try {
+      if (bank.documents) {
+        const docs = JSON.parse(bank.documents)
+        setRequiredDocs(docs.requiredDocuments || ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+      } else {
+        setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+      }
+    } catch {
+      setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))
+    }
+    setLoading(false)
+  }, [bank.id, bank.documents])
+
+  function toggleDoc(docId: string) {
+    setRequiredDocs(prev =>
+      prev.includes(docId) ? prev.filter(d => d !== docId) : [...prev, docId]
+    )
+  }
+
+  async function save() {
+    setSaving(true)
+    try {
+      // Get existing documents JSON
+      let existingDocs: any = {}
+      try {
+        if (bank.documents) existingDocs = JSON.parse(bank.documents)
+      } catch {}
+
+      existingDocs.requiredDocuments = requiredDocs
+      existingDocs.updatedAt = new Date().toISOString()
+
+      const res = await fetch('/api/bank-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: bank.id,
+          documents: JSON.stringify(existingDocs),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Dokumen wajib disimpan')
+        onUpdated()
+      } else {
+        toast.error(data.error || 'Gagal simpan')
+      }
+    } catch (err) {
+      toast.error('Gagal simpan dokumen wajib')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Memuat...</div>
+
+  return (
+    <Card className="p-4 max-w-lg space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold">Dokumen Wajib per Bank</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Pilih dokumen yang wajib diupload untuk bank {bank.bankName}. Dokumen yang tidak diceklis tidak akan muncul di checklist Tab Berkas.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        {ALL_DOC_TYPES.map(doc => (
+          <label
+            key={doc.id}
+            className="flex items-center gap-2 p-2 rounded border border-border hover:bg-muted/30 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={requiredDocs.includes(doc.id)}
+              onChange={() => toggleDoc(doc.id)}
+              className="w-4 h-4 rounded"
+            />
+            <span className="text-sm">{doc.label}</span>
+            {doc.default && (
+              <Badge variant="secondary" className="text-[9px] ml-auto">Default</Badge>
+            )}
+          </label>
+        ))}
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <Button onClick={save} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+          Simpan
+        </Button>
+        <Button variant="outline" onClick={() => setRequiredDocs(ALL_DOC_TYPES.filter(d => d.default).map(d => d.id))}>
+          Reset ke Default
+        </Button>
+      </div>
+    </Card>
   )
 }

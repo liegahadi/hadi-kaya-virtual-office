@@ -95,9 +95,20 @@ interface StatsData {
 export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<
     'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'bank' | 'settings'
   >('office')
+
+  // Check Google Drive connection status on mount
+  useEffect(() => {
+    fetch('/api/auth/google/status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) setGoogleConnected(d.connected)
+      })
+      .catch(() => {})
+  }, [])
 
   // OPTIMIZATION: Polling 5 menit (was 30s) — saves ~90% dashboard bandwidth
   // User can manually refresh via RefreshCw button in header
@@ -132,6 +143,18 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Toaster />
       <Header stats={stats} onRefresh={fetchStats} />
+
+      {/* Google Drive connection banner */}
+      {googleConnected === false && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 text-center">
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            ⚠️ Google Drive belum terhubung. Upload berkas tidak akan tersimpan di Drive.{' '}
+            <a href="/api/auth/google/login" className="font-bold underline hover:no-underline">
+              Klik di sini untuk menghubungkan
+            </a>
+          </span>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <nav className="sticky top-[72px] z-30 bg-card/80 backdrop-blur-md border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">

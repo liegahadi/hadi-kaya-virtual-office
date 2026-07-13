@@ -1169,9 +1169,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5">
-        {/* LEFT: Form */}
-        <div className="lg:col-span-2 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-12">
+        {/* LEFT: Form — wider (5/12) */}
+        <div className="lg:col-span-5 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
           {/* Data Perusahaan - SELALU TAMPIL (default untuk Anjayo 16), editable, disimpan global */}
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan (Global)">
             <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />
@@ -1502,7 +1502,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             </div>
           )}
         </div>
-        <div className="lg:col-span-3 bg-slate-200 dark:bg-slate-800 p-4 max-h-[70vh] overflow-auto">
+        <div className="lg:col-span-7 bg-slate-200 dark:bg-slate-800 p-4 max-h-[70vh] overflow-auto">
           <div className="flex bg-white dark:bg-slate-900 rounded-lg p-0.5 mb-3 shadow-sm">
             <button onClick={() => setPreviewMode('generate')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'generate' ? 'bg-emerald-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><FileText className="w-3.5 h-3.5" /> Preview Dokumen</button>
             <button onClick={() => setPreviewMode('uploads')} className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium', previewMode === 'uploads' ? 'bg-amber-600 text-white shadow' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="w-3.5 h-3.5" /> Review Berkas ({totalUploadCount}/{totalDocs})</button>

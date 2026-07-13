@@ -35,6 +35,7 @@ interface DinaMessage {
     mimeType: string
     driveLink?: string
     driveFileName?: string
+    ocrData?: any
   }>
   replyTo?: {
     id: string
@@ -204,6 +205,33 @@ export function DinaChat({ customer, onDbUpdate }: DinaChatProps) {
         } else {
           toast.success(`${file.name} siap dikirim (tidak ada konsumen aktif)`)
         }
+
+        // === AUTO OCR: If file is KTP, extract data automatically ===
+        if (file.name.toLowerCase().includes('ktp') && file.type.startsWith('image/')) {
+          toast.loading(`🔍 OCR KTP: membaca data...`, { id: `ocr-${file.name}` })
+          try {
+            const ocrRes = await fetch('/api/ocr/ktp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: dataUrl }),
+            })
+            const ocrData = await ocrRes.json()
+            if (ocrData.success && ocrData.data) {
+              const ocr = ocrData.data
+              toast.success(`✅ KTP terbaca: ${ocr.nama || 'nama tidak terbaca'}`, { id: `ocr-${file.name}` })
+              // Add OCR result as a note in attachment
+              setPendingAttachments(prev => (prev || []).map(a =>
+                a.fileName === file.name
+                  ? { ...a, ocrData: ocr }
+                  : a
+              ))
+            } else {
+              toast.error(`OCR gagal: ${ocrData.error || 'tidak terbaca'}`, { id: `ocr-${file.name}` })
+            }
+          } catch (err) {
+            toast.error(`OCR timeout atau gagal`, { id: `ocr-${file.name}` })
+          }
+        }
       }
       reader.onerror = () => toast.error(`Gagal baca ${file.name}`)
       reader.readAsDataURL(file)
@@ -284,6 +312,7 @@ export function DinaChat({ customer, onDbUpdate }: DinaChatProps) {
             fileName: a.fileName,
             mimeType: a.mimeType,
             fileSize: a.fileSize,
+            ocrData: a.ocrData,
           })),
           replyTo: reply ? {
             content: reply.content.substring(0, 200),
