@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { HistoryLogView } from '@/components/berkas/history-log-view'
+import { DinaChat } from '@/components/berkas/dina-chat'
 import { toast } from 'sonner'
 
 import {
@@ -161,8 +162,8 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      {/* DINA SIDEBAR - PERSISTENT */}
-      <DinaSidebar customer={selectedCustomer} onDbUpdate={fetchCustomers} />
+      {/* DINA CHAT - PERSISTENT - WhatsApp-style with file upload + reply + history */}
+      <DinaChat customer={selectedCustomer} onDbUpdate={fetchCustomers} />
     </div>
   )
 }
