@@ -376,41 +376,33 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
   const replaceFileRef = useRef<HTMLInputElement>(null)
   const [replaceTemplateId, setReplaceTemplateId] = useState<string | null>(null)
 
-  // Load templates from BankConfig.documents
+  // Load templates from BankConfig
   useEffect(() => {
     async function loadTemplates() {
       setLoading(true)
       try {
         const res = await fetch(`/api/bank-config/${bank.id}/template`)
         const data = await res.json()
-        if (data.success && data.data.template) {
-          // Existing single template (backward compat)
-          setTemplates([{
-            id: 'legacy',
-            name: data.data.template.fileName || 'Template',
-            stage: 'entry',
-            fileId: data.data.template.fileId,
-            fileName: data.data.template.fileName,
-            webViewLink: data.data.template.webViewLink,
-            version: data.data.template.version,
-            annotations: data.data.template.annotations || [],
-          }])
-        }
-        // Also check documents JSON for multi-template
-        const docsRes = await fetch('/api/bank-config')
-        const docsData = await docsRes.json()
-        if (docsData.success) {
-          const b = docsData.data.find((x: any) => x.id === bank.id)
-          if (b?.documents) {
-            try {
-              const docs = JSON.parse(b.documents)
-              if (docs.templates && docs.templates.length > 0) {
-                setTemplates(docs.templates)
-              }
-              if (docs.stages) {
-                // Use custom stages if available
-              }
-            } catch {}
+        if (data.success) {
+          // Priority 1: multi-template array
+          if (data.data.templates && data.data.templates.length > 0) {
+            setTemplates(data.data.templates)
+          }
+          // Priority 2: legacy single template
+          else if (data.data.template) {
+            setTemplates([{
+              id: 'legacy',
+              name: data.data.template.fileName || 'Template',
+              stage: 'entry',
+              fileId: data.data.template.fileId,
+              fileName: data.data.template.fileName,
+              webViewLink: data.data.template.webViewLink,
+              version: data.data.template.version,
+              annotations: data.data.template.annotations || [],
+            }])
+          }
+          else {
+            setTemplates([])
           }
         }
       } catch (err) {
@@ -420,7 +412,7 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
       }
     }
     loadTemplates()
-  }, [bank.id, onUpdated])
+  }, [bank.id])
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
