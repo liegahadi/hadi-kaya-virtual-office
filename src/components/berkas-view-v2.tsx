@@ -420,6 +420,72 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   }
   const [state, setState] = useState<BerkasState>(buildInitialState)
   const [bank, setBank] = useState<string>(customer.bankName || customer.bankPipelines?.[0]?.bankName || 'BTN')
+  // Bank-specific docs + formbox from BankConfig (for Mandiri + future banks)
+  const [bankSpecificUploads, setBankSpecificUploads] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
+  const [bankSpecificSignedDocs, setBankSpecificSignedDocs] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
+
+  // Fetch bank-specific document config when bank changes (for non-hardcoded banks)
+  useEffect(() => {
+    const isHardcodedBank = ['BTN', 'BSB_SYARIAH'].includes(bank)
+    if (isHardcodedBank) {
+      setBankSpecificUploads(null)
+      setBankSpecificSignedDocs(null)
+      return
+    }
+    // For Mandiri + future banks: fetch from BankConfig
+    fetch('/api/bank-config')
+      .then(r => r.json())
+      .then(async d => {
+        if (!d.success) return
+        const bankConfig = d.data.find((b: any) => b.bankCode === bank)
+        if (!bankConfig?.documents) return
+        try {
+          const docs = JSON.parse(bankConfig.documents)
+          const reqDocIds: string[] = docs.requiredDocuments || []
+          const customDocs: Array<{ id: string; label: string; category: string }> = docs.customDocs || []
+
+          // Build upload list from ALL_DOC_TYPES equivalents + custom docs
+          const allDocLabels: Record<string, string> = {
+            'ktp': 'KTP', 'kk': 'Kartu Keluarga (KK)', 'npwp': 'NPWP',
+            'akta-nikah': 'Akta Nikah / Surat Belum Menikah', 'slip-gaji': 'Slip Gaji (3 bulan)',
+            'sk-kerja': 'SK Kerja / NIB', 'surat-belum-rumah': 'Surat Belum Memiliki Rumah',
+            'sertifikat': 'Sertifikat Rumah', 'pbb': 'PBB',
+            'laporan-keuangan': 'Laporan Keuangan (6 bulan)', 'mutasi-rekening': 'Mutasi Rekening (3 bulan)',
+            'bpjs': 'BPJS Ketenagakerjaan', 'domisili': 'Surat Keterangan Domisili',
+          }
+          const uploadDocs: Array<{ id: string; label: string; desc: string }> = []
+          const signedDocs: Array<{ id: string; label: string; desc: string }> = []
+          const signedIds = ['flpp-signed', 'spr-signed', 'aplikasi-signed', 'pernyataan-penghasilan-signed', 'rekening-koran-signed']
+          const signedLabels: Record<string, string> = {
+            'flpp-signed': 'Form FLPP (signed)', 'spr-signed': 'SPR (signed)',
+            'aplikasi-signed': 'Form Aplikasi (signed)',
+            'pernyataan-penghasilan-signed': 'Surat Pernyataan Penghasilan (signed)',
+            'rekening-koran-signed': 'Rekening Koran / Buku Tabungan',
+          }
+
+          for (const docId of reqDocIds) {
+            // Check if custom
+            const custom = customDocs.find(c => c.id === docId)
+            const label = custom?.label || allDocLabels[docId] || docId
+            if (signedIds.includes(docId)) {
+              signedDocs.push({ id: docId, label: signedLabels[docId] || label, desc: '' })
+            } else {
+              uploadDocs.push({ id: docId, label, desc: '' })
+            }
+          }
+
+          // Add spouse uploads if married
+          if (state.maritalStatus === MaritalStatus.MARRIED && state.spouse?.jobType) {
+            const spouseUploads = SPOUSE_UPLOADS[state.spouse.jobType]
+            if (spouseUploads) uploadDocs.push(...spouseUploads)
+          }
+
+          setBankSpecificUploads(uploadDocs)
+          setBankSpecificSignedDocs(signedDocs)
+        } catch {}
+      })
+      .catch(() => {})
+  }, [bank, state.maritalStatus, state.spouse?.jobType])
   const [saving, setSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
@@ -1388,11 +1454,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     finally { setUploadingId(null) }
   }
 
-  const requiredUploads = getRequiredUploads(state.maritalStatus, state.spouse?.jobType)
+  // Use bank-specific docs if available (Mandiri + future), otherwise hardcoded (BTN/BSB)
+  const hardcodedUploads = getRequiredUploads(state.maritalStatus, state.spouse?.jobType)
+  const requiredUploads = bankSpecificUploads || hardcodedUploads
+  const activeSignedDocs = bankSpecificSignedDocs || SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank)
+
   const uploadedCount = Object.keys(uploadedFiles).filter(k => requiredUploads.some(u => u.id === k)).length
-  const signedCount = Object.keys(uploadedFiles).filter(k => SIGNED_DOCS.some(u => u.id === k && (!u.showWhen || u.showWhen === bank))).length
+  const signedCount = Object.keys(uploadedFiles).filter(k => activeSignedDocs.some(u => u.id === k)).length
   const totalUploadCount = uploadedCount + signedCount
-  const totalDocs = requiredUploads.length + SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank).length
+  const totalDocs = requiredUploads.length + activeSignedDocs.length
 
   // Check if workplace data is filled (for Lokasi Kerja button status indicator)
   const a_workplaceHasData = !!(state.applicant as any).workplaceMapsLink || !!(state.applicant as any).workplaceFrontPhoto || !!(state.applicant as any).companyAddress
@@ -1629,9 +1699,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             </div>
           </div>
           <div>
-            <h4 className="text-[10px] font-bold text-violet-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Dokumen Cetak & TTD ({signedCount}/{SIGNED_DOCS.filter(d => !d.showWhen || d.showWhen === bank).length})</h4>
+            <h4 className="text-[10px] font-bold text-violet-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3 h-3" /> Dokumen Cetak & TTD ({signedCount}/{activeSignedDocs.length})</h4>
             <div className="space-y-1.5">
-              {SIGNED_DOCS.filter(doc => !doc.showWhen || doc.showWhen === bank).map(doc => {
+              {activeSignedDocs.map(doc => {
                 const isUploaded = !!uploadedFiles[doc.id]
                 return (
                   <div key={doc.id} className={cn('flex items-center gap-2 p-1.5 rounded border', isUploaded ? 'border-violet-700/30 bg-violet-950/10' : 'border-slate-200 dark:border-slate-700')}>
@@ -2161,7 +2231,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 <div className="bg-white dark:bg-slate-900 rounded-lg p-8 text-center"><Files className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" /><p className="text-sm text-muted-foreground">Belum ada berkas terupload.</p></div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {[...requiredUploads, ...SIGNED_DOCS].filter(doc => uploadedFiles[doc.id]).map(doc => {
+                  {[...requiredUploads, ...activeSignedDocs].filter(doc => uploadedFiles[doc.id]).map(doc => {
                     const fileUrl = uploadedFiles[doc.id]
                     const isImg = fileUrl.startsWith('data:image') || fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                     return (
