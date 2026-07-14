@@ -6,9 +6,9 @@ import { BankBuilder } from './bank-builder'
 
 export function BankBuilderModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-hidden" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
       <div
-        className="bg-background rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-background rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -19,11 +19,9 @@ export function BankBuilderModal({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
 
-        {/* Content — proper height chain for scroll */}
+        {/* Content — h-full + overflow-hidden for proper height chain */}
         <div className="flex-1 min-h-0 overflow-hidden p-4">
-          <div className="h-full">
-            <BankBuilder />
-          </div>
+          <BankBuilder />
         </div>
       </div>
     </div>
