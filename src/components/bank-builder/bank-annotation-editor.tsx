@@ -479,8 +479,9 @@ export function BankAnnotationEditor({
           </div>
         </div>
 
-        {/* PDF Canvas + Annotations overlay */}
-        <div ref={containerRef} className="flex-1 overflow-auto p-4 bg-slate-300 dark:bg-slate-900 relative">
+        {/* PDF Canvas + Annotations overlay — overflow hidden, scroll hanya via page nav buttons */}
+        <div ref={containerRef} className="flex-1 overflow-hidden p-4 bg-slate-300 dark:bg-slate-900 relative flex items-start justify-center">
+          <div className="overflow-auto max-h-full">
           {loadError ? (
             <div className="p-8 text-center text-red-600 dark:text-red-400 text-sm">
               <p>{loadError}</p>
@@ -583,6 +584,7 @@ export function BankAnnotationEditor({
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           )}
+          </div>
         </div>
 
         {/* Hint */}
