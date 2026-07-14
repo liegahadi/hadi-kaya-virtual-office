@@ -125,19 +125,29 @@ export function BankTemplatePreview({
     if (pdfDoc) renderPage(pdfDoc, currentPage, zoom)
   }, [currentPage, pdfDoc, zoom])
 
-  // Re-render overlay when formData changes (NO re-fetch PDF, just redraw canvas overlay)
-  // We use a separate overlay canvas on top of PDF canvas
+  // Delay overlay render to wait for PDF canvas to finish async render
+  const [overlayReady, setOverlayReady] = useState(false)
+  useEffect(() => {
+    if (!pdfLoaded) return
+    setOverlayReady(false)
+    const t = setTimeout(() => setOverlayReady(true), 200)
+    return () => clearTimeout(t)
+  }, [pdfLoaded, currentPage, zoom])
+
+  // Re-render overlay when formData, zoom, or page changes
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    if (!pdfLoaded || !canvasRef.current || !overlayCanvasRef.current) return
+    if (!pdfLoaded || !overlayReady || !canvasRef.current || !overlayCanvasRef.current) return
 
     const pdfCanvas = canvasRef.current
     const overlayCanvas = overlayCanvasRef.current
 
-    // Match overlay canvas size to PDF canvas
+    // Match overlay canvas size to PDF canvas (AFTER zoom re-render)
     overlayCanvas.width = pdfCanvas.width
     overlayCanvas.height = pdfCanvas.height
+    overlayCanvas.style.width = pdfCanvas.style.width
+    overlayCanvas.style.height = pdfCanvas.style.height
 
     const ctx = overlayCanvas.getContext('2d')
     if (!ctx) return
@@ -189,7 +199,7 @@ export function BankTemplatePreview({
       }
       if (line) ctx.fillText(line, x + 2, yPos)
     }
-  }, [formData, annotations, currentPage, pdfLoaded])
+  }, [formData, annotations, currentPage, pdfLoaded, zoom, overlayReady])
 
   if (loadError) {
     return (

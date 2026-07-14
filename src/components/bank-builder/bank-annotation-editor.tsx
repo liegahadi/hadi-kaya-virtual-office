@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Save, Plus, Trash2, Loader2, MousePointerClick, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { Save, Plus, Trash2, Loader2, MousePointerClick, ChevronLeft, ChevronRight, Eye, ZoomIn, ZoomOut, Grid3x3 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,70 +23,100 @@ interface AnnotationExt extends Annotation {
   fontSize?: number
 }
 
-// Common fields available in Customer table for mapping
-const FIELD_MAPPINGS = [
-  // Identity
-  { value: 'customer.name', label: 'Nama Lengkap' },
-  { value: 'customer.nik', label: 'NIK' },
-  { value: 'customer.birthPlace', label: 'Tempat Lahir' },
-  { value: 'customer.birthDate', label: 'Tanggal Lahir' },
-  { value: 'customer.gender', label: 'Jenis Kelamin' },
-  { value: 'customer.religion', label: 'Agama' },
-  { value: 'customer.maritalStatus', label: 'Status Pernikahan' },
-  // Address
-  { value: 'customer.ktpAddress', label: 'Alamat KTP' },
-  { value: 'customer.rtRw', label: 'RT/RW' },
-  { value: 'customer.kelurahan', label: 'Kelurahan' },
-  { value: 'customer.kecamatan', label: 'Kecamatan' },
-  { value: 'customer.city', label: 'Kota' },
-  { value: 'customer.postalCode', label: 'Kode Pos' },
-  // Work
-  { value: 'customer.occupation', label: 'Pekerjaan' },
-  { value: 'customer.companyName', label: 'Nama Perusahaan' },
-  { value: 'customer.companyAddress', label: 'Alamat Perusahaan' },
-  { value: 'customer.companyPhone', label: 'Telp Perusahaan' },
-  { value: 'customer.workPosition', label: 'Jabatan' },
-  { value: 'customer.workDuration', label: 'Lama Bekerja' },
-  { value: 'customer.monthlyIncome', label: 'Penghasilan/Bulan' },
-  // Family
-  { value: 'customer.spouseName', label: 'Nama Pasangan' },
-  { value: 'customer.spouseNik', label: 'NIK Pasangan' },
-  { value: 'customer.motherMaidenName', label: 'Nama Ibu Kandung' },
-  { value: 'customer.dependents', label: 'Jumlah Tanggungan' },
-  // Property
-  { value: 'customer.blockLetter', label: 'Blok Rumah' },
-  { value: 'customer.houseNumber', label: 'No Rumah' },
-  { value: 'customer.landSize', label: 'Luas Tanah' },
-  { value: 'customer.houseSize', label: 'Luas Bangunan' },
-  // Bank
-  { value: 'customer.bankName', label: 'Nama Bank' },
-  { value: 'customer.bankAccount', label: 'No Rekening' },
-  { value: 'customer.npwpNumber', label: 'NPWP' },
-  { value: 'customer.btnAccountNumber', label: 'No Rekening BTN' },
-  // Documents
-  { value: 'customer.shmNumber', label: 'No SHM' },
-  { value: 'customer.nibNumber', label: 'No NIB' },
-  // Dates
-  { value: 'customer.closingDate', label: 'Tanggal Closing' },
-  { value: 'customer.sp3kDate', label: 'Tanggal SP3K' },
-  { value: 'customer.akadDate', label: 'Tanggal Akad' },
-  { value: 'customer.akadNumber', label: 'No Akad' },
-  { value: 'system.todayDate', label: 'Tanggal Hari Ini (realtime, DD/MM/YYYY)' },
-  { value: 'system.todayDateLong', label: 'Tanggal Hari Ini (panjang, e.g. 13 Juli 2026)' },
-  { value: 'system.todayDay', label: 'Hari (e.g. Senin)' },
-  { value: 'system.currentYear', label: 'Tahun Berjalan (e.g. 2026)' },
-  { value: 'system.currentMonth', label: 'Bulan Berjalan (e.g. Juli)' },
-  // Company (global)
-  { value: 'company.companyName', label: 'Nama PT (Developer)' },
-  { value: 'company.directorName', label: 'Nama Direktur' },
-  { value: 'company.directorNik', label: 'NIK Direktur' },
-  { value: 'company.officeAddress', label: 'Alamat Kantor' },
-  { value: 'company.city', label: 'Kota Kantor' },
-  // Custom
-  { value: 'custom.text', label: 'Custom Text (diisi manual)' },
-  { value: 'custom.date', label: 'Custom Date (diisi manual)' },
-  { value: 'custom.signature', label: 'Tanda Tangan (kosong)' },
-] as const
+// Grouped field mappings — urut per abjad dalam setiap kategori
+const FIELD_MAPPINGS_GROUPED = [
+  {
+    group: 'Data Perusahaan (Global)',
+    fields: [
+      { value: 'company.companyName', label: 'Nama PT (Developer)' },
+      { value: 'company.directorName', label: 'Nama Direktur' },
+      { value: 'company.directorNik', label: 'NIK Direktur' },
+      { value: 'company.officeAddress', label: 'Alamat Kantor' },
+      { value: 'company.city', label: 'Kota Kantor' },
+    ],
+  },
+  {
+    group: 'Data Nasabah',
+    fields: [
+      { value: 'customer.name', label: 'Nama Lengkap' },
+      { value: 'customer.nik', label: 'NIK' },
+      { value: 'customer.birthPlace', label: 'Tempat Lahir' },
+      { value: 'customer.birthDate', label: 'Tanggal Lahir' },
+      { value: 'customer.gender', label: 'Jenis Kelamin' },
+      { value: 'customer.religion', label: 'Agama' },
+      { value: 'customer.maritalStatus', label: 'Status Pernikahan' },
+      { value: 'customer.ktpAddress', label: 'Alamat KTP' },
+      { value: 'customer.rtRw', label: 'RT/RW' },
+      { value: 'customer.kelurahan', label: 'Kelurahan' },
+      { value: 'customer.kecamatan', label: 'Kecamatan' },
+      { value: 'customer.city', label: 'Kota' },
+      { value: 'customer.postalCode', label: 'Kode Pos' },
+      { value: 'customer.phone', label: 'No HP/Telp' },
+      { value: 'customer.npwpNumber', label: 'NPWP' },
+      { value: 'customer.bankName', label: 'Nama Bank' },
+      { value: 'customer.bankAccount', label: 'No Rekening' },
+      { value: 'customer.btnAccountNumber', label: 'No Rekening BTN' },
+      { value: 'customer.shmNumber', label: 'No SHM' },
+      { value: 'customer.nibNumber', label: 'No NIB' },
+      { value: 'customer.closingDate', label: 'Tanggal Closing' },
+      { value: 'customer.sp3kDate', label: 'Tanggal SP3K' },
+      { value: 'customer.akadDate', label: 'Tanggal Akad' },
+      { value: 'customer.akadNumber', label: 'No Akad' },
+    ],
+  },
+  {
+    group: 'Data Pasangan Nasabah',
+    fields: [
+      { value: 'customer.spouseName', label: 'Nama Pasangan' },
+      { value: 'customer.spouseNik', label: 'NIK Pasangan' },
+      { value: 'customer.motherMaidenName', label: 'Nama Ibu Kandung' },
+      { value: 'customer.dependents', label: 'Jumlah Tanggungan' },
+    ],
+  },
+  {
+    group: 'Data Pekerjaan / Wirausaha',
+    fields: [
+      { value: 'customer.occupation', label: 'Pekerjaan' },
+      { value: 'customer.companyName', label: 'Nama Perusahaan' },
+      { value: 'company.companyName', label: 'Nama PT (Developer)' },
+      { value: 'customer.companyAddress', label: 'Alamat Perusahaan' },
+      { value: 'customer.companyPhone', label: 'Telp Perusahaan' },
+      { value: 'customer.workPosition', label: 'Jabatan' },
+      { value: 'customer.workDuration', label: 'Lama Bekerja' },
+      { value: 'customer.monthlyIncome', label: 'Penghasilan/Bulan' },
+    ],
+  },
+  {
+    group: 'Unit Properti',
+    fields: [
+      { value: 'customer.blockLetter', label: 'Blok Rumah' },
+      { value: 'customer.houseNumber', label: 'No Rumah' },
+      { value: 'customer.landSize', label: 'Luas Tanah' },
+      { value: 'customer.houseSize', label: 'Luas Bangunan' },
+    ],
+  },
+  {
+    group: 'Sistem (Realtime)',
+    fields: [
+      { value: 'system.todayDate', label: 'Tanggal Hari Ini (DD/MM/YYYY)' },
+      { value: 'system.todayDateLong', label: 'Tanggal Hari Ini (panjang)' },
+      { value: 'system.todayDay', label: 'Hari (e.g. Senin)' },
+      { value: 'system.currentYear', label: 'Tahun Berjalan' },
+      { value: 'system.currentMonth', label: 'Bulan Berjalan' },
+    ],
+  },
+  {
+    group: 'Custom',
+    fields: [
+      { value: 'custom.text', label: 'Custom Text (diisi manual)' },
+      { value: 'custom.date', label: 'Custom Date (diisi manual)' },
+      { value: 'custom.signature', label: 'Tanda Tangan (kosong)' },
+    ],
+  },
+]
+
+// Flatten for backward compat
+const FIELD_MAPPINGS = FIELD_MAPPINGS_GROUPED.flatMap(g => g.fields)
 
 interface BankTemplate {
   fileId?: string
@@ -138,6 +168,8 @@ export function BankAnnotationEditor({
   const [pageWidth, setPageWidth] = useState(600)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(1.0)
+  const [showGrid, setShowGrid] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -230,9 +262,9 @@ export function BankAnnotationEditor({
     }
     loadPdf()
     return () => { cancelled = true }
-  }, [selectedTemplateId, templates, template?.fileId, template?.webViewLink, currentPage, bank.id])
+  }, [selectedTemplateId, templates, template?.fileId, template?.webViewLink, currentPage, bank.id, zoom, showGrid])
 
-    async function renderPage(pdf: any, pageNum: number) {
+    async function renderPage(pdf: any, pageNum: number, zoomLevel: number = 1.0) {
       try {
         const page = await pdf.getPage(pageNum)
         const canvas = canvasRef.current
@@ -241,7 +273,8 @@ export function BankAnnotationEditor({
         const container = containerRef.current
         const maxWidth = container?.clientWidth ? container.clientWidth - 32 : 600
         const viewport = page.getViewport({ scale: 1 })
-        const scale = maxWidth / viewport.width
+        const baseScale = maxWidth / viewport.width
+        const scale = baseScale * zoomLevel
         const scaledViewport = page.getViewport({ scale })
 
         canvas.width = scaledViewport.width
@@ -254,6 +287,29 @@ export function BankAnnotationEditor({
         if (!ctx) return
 
         await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise
+        
+        // Draw grid overlay if enabled (30% opacity)
+        if (showGrid) {
+          ctx.save()
+          ctx.globalAlpha = 0.3
+          ctx.strokeStyle = '#999'
+          ctx.lineWidth = 0.5
+          const gridSize = 20 * zoomLevel
+          for (let x = 0; x < canvas.width; x += gridSize) {
+            ctx.beginPath()
+            ctx.moveTo(x, 0)
+            ctx.lineTo(x, canvas.height)
+            ctx.stroke()
+          }
+          for (let y = 0; y < canvas.height; y += gridSize) {
+            ctx.beginPath()
+            ctx.moveTo(0, y)
+            ctx.lineTo(canvas.width, y)
+            ctx.stroke()
+          }
+          ctx.restore()
+        }
+        
         setPdfLoaded(true)
       } catch (err) {
         console.error('Render page error:', err)
@@ -472,11 +528,21 @@ export function BankAnnotationEditor({
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {annotations.length} total • {pageAnnotations.length} di page ini
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} disabled={zoom <= 0.5} className="h-7 w-7 p-0">
+              <ZoomOut className="w-3.5 h-3.5" />
+            </Button>
+            <span className="text-[10px] text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <Button variant="outline" size="sm" onClick={() => setZoom(z => Math.min(3.0, z + 0.25))} disabled={zoom >= 3.0} className="h-7 w-7 p-0">
+              <ZoomIn className="w-3.5 h-3.5" />
+            </Button>
+            <Button variant={showGrid ? 'default' : 'outline'} size="sm" onClick={() => setShowGrid(!showGrid)} className="h-7 w-7 p-0" title="Toggle grid">
+              <Grid3x3 className="w-3.5 h-3.5" />
+            </Button>
+            <Badge variant="outline" className="text-xs ml-1">
+              {annotations.length} total
             </Badge>
-            <Button size="sm" onClick={saveAnnotations} disabled={saving}>
+            <Button size="sm" onClick={saveAnnotations} disabled={saving} className="ml-1">
               {saving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
               Simpan
             </Button>
@@ -669,10 +735,17 @@ export function BankAnnotationEditor({
                     >
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {FIELD_MAPPINGS.map((f) => (
-                          <SelectItem key={f.value} value={f.value} className="text-xs">
-                            {f.label}
-                          </SelectItem>
+                        {FIELD_MAPPINGS_GROUPED.map((group) => (
+                          <div key={group.group}>
+                            <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase bg-muted/50 sticky top-0">
+                              {group.group}
+                            </div>
+                            {group.fields.map((f) => (
+                              <SelectItem key={f.value} value={f.value} className="text-xs">
+                                {f.label}
+                              </SelectItem>
+                            ))}
+                          </div>
                         ))}
                       </SelectContent>
                     </Select>
