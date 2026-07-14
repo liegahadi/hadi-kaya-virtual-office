@@ -1844,11 +1844,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                       <button onClick={() => setGenerateDocId('bsb-pernyataan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-pernyataan' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Pernyataan</button>
                       <button onClick={() => setGenerateDocId('bsb-sbum')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-sbum' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SBUM</button>
                     </>}
-                    {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
-                    {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
+                    {bank !== 'BSB_SYARIAH' && bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
+                    {bank !== 'BSB_SYARIAH' && bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
                     {/* NEW: Dokumen Kerja preview tab (shows saved SK+Slip HTML + Denah from Lokasi Kerja) */}
-                    <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja</button>
-                    <button onClick={() => setGenerateDocId('lokasi-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'lokasi-kerja' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><MapPin className="w-3 h-3" /> Lokasi Kerja {((state.applicant as any).workplaceFrontPhoto || (state.applicant as any).workplaceMapsLink) ? '✓' : ''}</button>
+                    {bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja</button>}
+                    {bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('lokasi-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'lokasi-kerja' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><MapPin className="w-3 h-3" /> Lokasi Kerja {((state.applicant as any).workplaceFrontPhoto || (state.applicant as any).workplaceMapsLink) ? '✓' : ''}</button>}
                     {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (CombinedDocumentEditorModal), bukan di sini */}
 
                     {/* B-STEP 5: Bank Builder Templates (only for banks NOT in BTN/Mandiri/BSB_SYARIAH).
@@ -2132,29 +2132,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 fd['system.currentMonth'] = today.toLocaleDateString('id-ID', { month: 'long' })
                 
                 return (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/20 border border-rose-500/40 rounded-lg p-2">
-                      <div className="flex items-center gap-2 text-xs">
-                        <FileText className="w-3.5 h-3.5 text-rose-600" />
-                        <span className="font-semibold text-rose-700 dark:text-rose-300">{tpl.name}</span>
-                        <button
-                          onClick={() => setActiveBankTemplateId(null)}
-                          className="text-[10px] px-2 py-0.5 rounded border border-slate-500/30 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 ml-2"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
-                      <BankTemplatePreview
-                        bankId={selectedBank.id}
-                        templateId={tpl.id}
-                        templatePath={tpl.templatePath}
-                        fileId={tpl.fileId}
-                        annotations={tpl.annotations || []}
-                        formData={fd}
-                      />
-                    </div>
+                  <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
+                    <BankTemplatePreview
+                      bankId={selectedBank.id}
+                      templateId={tpl.id}
+                      templatePath={tpl.templatePath}
+                      fileId={tpl.fileId}
+                      annotations={tpl.annotations || []}
+                      formData={fd}
+                    />
                   </div>
                 )
               })()}

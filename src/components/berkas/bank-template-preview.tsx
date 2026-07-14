@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,7 @@ export function BankTemplatePreview({
   const [currentPage, setCurrentPage] = useState(1)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pdfDoc, setPdfDoc] = useState<any>(null)
+  const [zoom, setZoom] = useState(1.0) // 0.5 - 3.0
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -91,8 +92,8 @@ export function BankTemplatePreview({
     return () => { cancelled = true }
   }, [bankId, templateId])
 
-  // Render page on canvas
-  async function renderPage(pdf: any, pageNum: number) {
+  // Render page on canvas with zoom
+  async function renderPage(pdf: any, pageNum: number, zoomLevel: number = zoom) {
     try {
       const page = await pdf.getPage(pageNum)
       const canvas = canvasRef.current
@@ -101,7 +102,8 @@ export function BankTemplatePreview({
       const container = containerRef.current
       const maxWidth = container?.clientWidth ? container.clientWidth - 16 : 600
       const viewport = page.getViewport({ scale: 1 })
-      const scale = Math.min(maxWidth / viewport.width, 1.5)
+      const baseScale = Math.min(maxWidth / viewport.width, 1.5)
+      const scale = baseScale * zoomLevel
       const scaledViewport = page.getViewport({ scale })
 
       canvas.width = scaledViewport.width
@@ -118,10 +120,10 @@ export function BankTemplatePreview({
     }
   }
 
-  // Re-render when page changes
+  // Re-render when page or zoom changes
   useEffect(() => {
-    if (pdfDoc) renderPage(pdfDoc, currentPage)
-  }, [currentPage, pdfDoc])
+    if (pdfDoc) renderPage(pdfDoc, currentPage, zoom)
+  }, [currentPage, pdfDoc, zoom])
 
   // Re-render overlay when formData changes (NO re-fetch PDF, just redraw canvas overlay)
   // We use a separate overlay canvas on top of PDF canvas
@@ -210,9 +212,15 @@ export function BankTemplatePreview({
             <ChevronRight className="w-3.5 h-3.5" />
           </Button>
         </div>
-        <Badge variant="outline" className="text-[9px]">
-          {annotations.filter(a => a.page === currentPage).length} fields di page ini
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} disabled={zoom <= 0.5} className="h-7 w-7 p-0">
+            <ZoomOut className="w-3.5 h-3.5" />
+          </Button>
+          <span className="text-[10px] text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
+          <Button variant="outline" size="sm" onClick={() => setZoom(z => Math.min(3.0, z + 0.25))} disabled={zoom >= 3.0} className="h-7 w-7 p-0">
+            <ZoomIn className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* PDF Canvas + Overlay */}
