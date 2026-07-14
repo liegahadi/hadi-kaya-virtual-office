@@ -58,6 +58,7 @@ export function BankBuilder() {
   const [banks, setBanks] = useState<Bank[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null)
+  const [selectedDocumentType, setSelectedDocumentType] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [templateData, setTemplateData] = useState<BankTemplate | null>(null)
 
@@ -93,6 +94,26 @@ export function BankBuilder() {
 
   function handleBack() {
     setSelectedBank(null)
+    setSelectedDocumentType(null)
+    setTemplateData(null)
+  }
+
+  function selectDocument(docType: string) {
+    // For now, create a pseudo-bank entry for BPHTB/Notaris
+    // These are document categories, not banks — but use same BankEditor UI
+    setSelectedDocumentType(docType)
+    // Create pseudo bank object
+    const pseudoBank: Bank = {
+      id: `doc-${docType}`,
+      bankCode: docType.toUpperCase(),
+      bankName: docType === 'bphtb' ? 'BPHTB' : 'Notaris',
+      description: docType === 'bphtb' ? 'Surat Pernyataan + Kuasa BPHTB' : 'BAST, Tanda Terima, Kuasa, SHGB Notaris',
+      documents: null,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    setSelectedBank(pseudoBank)
     setTemplateData(null)
   }
 
@@ -116,54 +137,74 @@ export function BankBuilder() {
   }
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <div className="h-full flex flex-col gap-3 overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-semibold">Bank Builder</h2>
-          <Badge variant="secondary" className="text-xs">{banks.length} banks</Badge>
         </div>
-        <Button size="sm" onClick={() => setShowAddForm(true)}>
-          <Plus className="w-4 h-4 mr-1" />
-          Tambah Bank
-        </Button>
       </div>
 
-      {/* Info banner */}
-      <Card className="p-3 bg-blue-500/5 border-blue-500/20">
-        <div className="flex items-start gap-2 text-xs text-muted-foreground">
-          <FileText className="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" />
-          <div>
-            <p className="font-medium text-blue-700 dark:text-blue-400 mb-1">Cara kerja Bank Builder</p>
-            <ol className="list-decimal list-inside space-y-0.5">
-              <li>Tambah bank baru (atau pilih existing)</li>
-              <li>Upload template PDF (form kosong dari bank)</li>
-              <li>Klik di PDF untuk menandai field (annotation)</li>
-              <li>Map setiap annotation ke field database</li>
-              <li>Save — DINA bisa auto-generate dokumen untuk bank ini</li>
-            </ol>
-            <p className="mt-2 text-red-600 dark:text-red-400">⚠️ Bank tidak bisa dihapus (permanen). Hanya bisa dinonaktifkan.</p>
-          </div>
+      {/* === ROW 1: DOCUMENTS (BPHTB + Notaris + future) === */}
+      <div className="shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase">Documents</h3>
         </div>
-      </Card>
+        <div className="grid grid-cols-2 gap-2">
+          {/* BPHTB */}
+          <Card className="p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => selectDocument('bphtb')}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">BPHTB</div>
+                <div className="text-[10px] text-muted-foreground">Surat Pernyataan + Kuasa</div>
+              </div>
+            </div>
+          </Card>
+          {/* Notaris */}
+          <Card className="p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => selectDocument('notaris')}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-violet-600" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">Notaris</div>
+                <div className="text-[10px] text-muted-foreground">BAST, Tanda Terima, Kuasa, SHGB</div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
 
-      {/* Bank list */}
-      <Card className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
-              Memuat...
-            </div>
-          ) : banks.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground text-sm">
-              <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              Belum ada bank. Klik "Tambah Bank" untuk mulai.
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {banks.map((bank) => {
+      {/* === ROW 2: BANKS === */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase">Banks ({banks.length})</h3>
+          <Button size="sm" onClick={() => setShowAddForm(true)} className="h-7">
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Tambah Bank
+          </Button>
+        </div>
+
+        {/* Bank list — scrollable */}
+        <Card className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            {loading ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                Memuat...
+              </div>
+            ) : banks.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                Belum ada bank.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {banks.map((bank) => {
                 let hasTemplate = false
                 let annotationCount = 0
                 try {
@@ -211,6 +252,7 @@ export function BankBuilder() {
           )}
         </ScrollArea>
       </Card>
+      </div>
 
       {/* Add Form */}
       <AddBankDialog
@@ -508,8 +550,8 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
   if (loading) return <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-6 h-6 mx-auto animate-spin" /></div>
 
   return (
-    <Card className="p-4 max-w-2xl space-y-4">
-      <div>
+    <Card className="p-4 max-w-2xl space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto">
+      <div className="shrink-0">
         <h3 className="text-sm font-semibold">Template PDF</h3>
         <p className="text-xs text-muted-foreground mt-1">
           Upload form kosong dari bank (PDF). 1 bank bisa punya multiple template (FLPP, SPR, AJB, dll). Nama file = nama asli upload + version.

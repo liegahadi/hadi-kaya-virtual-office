@@ -200,8 +200,8 @@ export function BankAnnotationEditor({
         setLoadError(null)
         setPdfLoaded(false)
 
-        // Use proxy with fileId param for multi-template support
-        const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy?fileId=${activeFileId}`
+        // Use proxy with templateId for multi-template + local path support
+        const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy?templateId=${selectedTpl?.id || selectedTemplateId}`
 
         // Test proxy first — if it returns error, show real error message
         const testRes = await fetch(proxyUrl)
