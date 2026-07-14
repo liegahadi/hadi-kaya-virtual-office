@@ -369,7 +369,6 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
   const [uploading, setUploading] = useState(false)
   const [templates, setTemplates] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [newTemplateName, setNewTemplateName] = useState('')
   const [newTemplateStage, setNewTemplateStage] = useState('entry')
   const [showAddForm, setShowAddForm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -418,10 +417,6 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
       toast.error('File harus PDF')
       return
     }
-    if (!newTemplateName.trim()) {
-      toast.error('Nama template wajib diisi (mis. FLPP, SPR, AJB)')
-      return
-    }
 
     setUploading(true)
     try {
@@ -436,15 +431,14 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
               templatePdf: dataUrl,
               originalFileName: file.name,
               version: 1,
-              templateName: newTemplateName.trim(),
+              templateName: file.name.replace(/\.pdf$/i, ''), // nama template = nama file tanpa .pdf
               stage: newTemplateStage,
-              mode: 'add', // add new template
+              mode: 'add',
             }),
           })
           const data = await res.json()
           if (data.success) {
-            toast.success(`Template "${newTemplateName}" berhasil diupload`)
-            setNewTemplateName('')
+            toast.success(`Template "${file.name}" berhasil diupload`)
             setShowAddForm(false)
             onUpdated()
           } else {
@@ -484,7 +478,7 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
               templatePdf: dataUrl,
               originalFileName: file.name,
               version: (templates.find(t => t.id === replaceTemplateId)?.version || 1) + 1,
-              templateName: templates.find(t => t.id === replaceTemplateId)?.name,
+              templateName: file.name.replace(/\.pdf$/i, ''), // nama = nama file baru
               stage: templates.find(t => t.id === replaceTemplateId)?.stage || 'entry',
               mode: 'replace',
               replaceTemplateId,
@@ -548,42 +542,6 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
                 </a>
               )}
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[10px] px-1.5"
-                onClick={async () => {
-                  const newName = window.prompt('Rename template:', tpl.name)
-                  if (newName && newName.trim() && newName !== tpl.name) {
-                    // Update template name via API
-                    try {
-                      const docsRes = await fetch(`/api/bank-config/${bank.id}/template`)
-                      const docsData = await docsRes.json()
-                      if (docsData.success) {
-                        let docs = docsData.data.documents || {}
-                        if (docs.templates) {
-                          docs.templates = docs.templates.map((t: any) =>
-                            t.id === tpl.id ? { ...t, name: newName.trim() } : t
-                          )
-                          await fetch('/api/bank-config', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: bank.id, documents: JSON.stringify(docs) }),
-                          })
-                          toast.success('Template renamed')
-                          // Reload
-                          loadTemplates()
-                        }
-                      }
-                    } catch (err) {
-                      toast.error('Gagal rename')
-                    }
-                  }
-                }}
-                title="Rename template"
-              >
-                <Edit3 className="w-3 h-3" />
-              </Button>
-              <Button
                 variant="outline"
                 size="sm"
                 className="h-7 text-[10px]"
@@ -604,15 +562,9 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
       {showAddForm ? (
         <div className="p-3 rounded-md border border-violet-500/30 bg-violet-500/5 space-y-2">
           <h4 className="text-xs font-semibold">Tambah Template Baru</h4>
-          <div>
-            <label className="text-[10px] text-muted-foreground">Nama Template</label>
-            <Input
-              placeholder="mis. FLPP, SPR, AJB, LPA"
-              value={newTemplateName}
-              onChange={e => setNewTemplateName(e.target.value)}
-              className="h-8 text-xs"
-            />
-          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Nama template otomatis = nama file yang diupload. Stage menentukan kapan template muncul (Pre-Bank / Post-SP3K / dll).
+          </p>
           <div>
             <label className="text-[10px] text-muted-foreground">Stage</label>
             <select
@@ -638,7 +590,7 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || !newTemplateName.trim()}
+              disabled={uploading}
               className="h-8"
             >
               {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1" />}
