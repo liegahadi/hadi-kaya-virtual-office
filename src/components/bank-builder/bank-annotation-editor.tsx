@@ -118,6 +118,33 @@ const FIELD_MAPPINGS_GROUPED = [
 // Flatten for backward compat
 const FIELD_MAPPINGS = FIELD_MAPPINGS_GROUPED.flatMap(g => g.fields)
 
+// Build grouped dropdown options — merge custom fields from BankConfig
+function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string; category: string }>, formboxFields: string[]) {
+  // Only include custom fields that are checked in formboxFields
+  const activeCustoms = customFields.filter(f => formboxFields.includes(f.id))
+  
+  return FIELD_MAPPINGS_GROUPED.map(group => {
+    // Map category IDs: 'perusahaan' → 'Data Perusahaan (Global)', etc
+    const catMap: Record<string, string> = {
+      'perusahaan': 'Data Perusahaan (Global)',
+      'nasabah': 'Data Nasabah',
+      'pasangan': 'Data Pasangan Nasabah',
+      'pekerjaan': 'Data Pekerjaan / Wirausaha',
+      'properti': 'Unit Properti',
+    }
+    const groupLabel = Object.entries(catMap).find(([_, v]) => v === group.group)?.[0]
+    const customsForGroup = activeCustoms.filter(f => f.category === groupLabel)
+    
+    return {
+      ...group,
+      fields: [
+        ...group.fields,
+        ...customsForGroup.map(f => ({ value: f.id, label: `${f.label} (Custom)` })),
+      ],
+    }
+  })
+}
+
 interface BankTemplate {
   fileId?: string
   fileName?: string
@@ -148,6 +175,8 @@ export function BankAnnotationEditor({
   const [testFieldValues, setTestFieldValues] = useState<Record<string, string>>({})
   const [testCustomerId, setTestCustomerId] = useState<string>('')
   const [customers, setCustomers] = useState<any[]>([])
+  const [bankCustomFields, setBankCustomFields] = useState<Array<{ id: string; label: string; category: string }>>([])
+  const [bankFormboxFields, setBankFormboxFields] = useState<string[]>([])
 
   const dragRef = useRef<{
     annId: string
@@ -212,6 +241,19 @@ export function BankAnnotationEditor({
         }
       } catch (err) {
         console.error('Load customers error:', err)
+      }
+
+      // Load custom fields + formbox fields from BankConfig
+      try {
+        const res = await fetch(`/api/bank-config/${bank.id}/template`)
+        const data = await res.json()
+        if (data.success && data.data.bank?.documents) {
+          const docs = JSON.parse(data.data.bank.documents)
+          setBankCustomFields(docs.customFields || [])
+          setBankFormboxFields(docs.formboxFields || [])
+        }
+      } catch (err) {
+        console.error('Load custom fields error:', err)
       }
     }
     loadAll()
@@ -735,12 +777,12 @@ export function BankAnnotationEditor({
                     >
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {FIELD_MAPPINGS_GROUPED.map((group) => (
+                        {buildGroupedWithCustoms(bankCustomFields, bankFormboxFields).map((group) => (
                           <div key={group.group}>
                             <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase bg-muted/50 sticky top-0">
                               {group.group}
                             </div>
-                            {group.fields.map((f) => (
+                            {group.fields.map((f: any) => (
                               <SelectItem key={f.value} value={f.value} className="text-xs">
                                 {f.label}
                               </SelectItem>
