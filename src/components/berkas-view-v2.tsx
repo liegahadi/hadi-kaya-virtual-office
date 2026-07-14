@@ -963,7 +963,6 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       'flpp': { endpoint: '/api/documents/generate-flpp', name: 'Form_FLPP_BTN' },
       'ajb-bank': { endpoint: '/api/documents/generate-ajb', name: 'AJB_Bank' },
       'surat-lpa-akad': { endpoint: '/api/documents/generate-ajb', name: 'Surat_LPA_Akad' },
-      'mandiri-pernyataan-pemohon': { endpoint: '/api/documents/generate-mandiri', name: 'Surat_Pernyataan_Pemohon_Mandiri' },
       'bsb-flpp': { endpoint: '/api/documents/generate-bsb', name: 'FLPP_BSB' },
       'bsb-spr': { endpoint: '/api/documents/generate-bsb', name: 'SPR_BSB' },
       'bsb-permohonan': { endpoint: '/api/documents/generate-bsb', name: 'Permohonan_BSB' },
@@ -972,20 +971,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       'bsb-sbum': { endpoint: '/api/documents/generate-bsb', name: 'SBUM_BSB' },
     }
 
-    // SPR Mandiri special case
-    if (generateDocId === 'spr' && bank === 'MANDIRI') {
-      pdfOverlayDocs['spr'] = { endpoint: '/api/documents/generate-spr-mandiri', name: 'SPR_Mandiri' }
-    }
-
     if (pdfOverlayDocs[generateDocId]) {
       const { endpoint, name } = pdfOverlayDocs[generateDocId]
       setFlppGenerating(true)
       try {
         const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
         const isBsb = generateDocId.startsWith('bsb-')
-        const isMandiri = generateDocId.startsWith('mandiri-')
+        
         const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
-        const body = (isAjb || isMandiri || isBsb) ? { state, docId: realDocId } : { state }
+        const body = (isAjb || isBsb) ? { state, docId: realDocId } : { state }
         const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
@@ -1092,18 +1086,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     flppLoadingRef.current = true
     setFlppLoading(true)
     try {
-      // SPR Mandiri uses its own overlay endpoint
-      const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
       const isAjb = ['ajb-bank', 'surat-lpa-akad'].includes(generateDocId)
-      const isMandiri = generateDocId.startsWith('mandiri-')
       const isBsb = generateDocId.startsWith('bsb-')
-      const endpoint = isSprMandiri ? '/api/documents/preview-spr-mandiri'
-        : isBsb ? '/api/documents/preview-bsb'
-        : isMandiri ? '/api/documents/preview-mandiri'
+      const endpoint = isBsb ? '/api/documents/preview-bsb'
         : isAjb ? '/api/documents/preview-ajb'
         : '/api/documents/preview-flpp'
       const realDocId = generateDocId === 'surat-lpa-akad' ? 'surat-lpa' : generateDocId
-      const body = (isAjb || isMandiri || isBsb) ? { state, docId: realDocId } : { state }
+      const body = (isAjb || isBsb) ? { state, docId: realDocId } : { state }
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
       const blob = await res.blob()
@@ -1886,15 +1875,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 )}
                 {/* Show Refresh button for PDF overlay docs (including SPR Mandiri) */}
                 {(() => {
-                  const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
+                  
                   const reactSkipList = ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa']
-                  const showRefresh = isSprMandiri || !reactSkipList.includes(generateDocId)
+                  const showRefresh = !reactSkipList.includes(generateDocId)
                   return showRefresh && <button onClick={loadFlppPreview} disabled={flppLoading} className="ml-auto px-2 py-1.5 rounded text-[9px] font-medium border bg-white dark:bg-slate-700 text-muted-foreground border-border hover:text-foreground disabled:opacity-50 flex items-center gap-1"><RefreshCw className={cn('w-3 h-3', flppLoading && 'animate-spin')} /> Refresh</button>
                 })()}
               </div>
 
               {/* SPR Preview - BTN uses React component, Mandiri uses PDF overlay */}
-              {generateDocId === 'spr' && bank !== 'MANDIRI' && (
+              {generateDocId === 'spr' && bank === 'BTN' && (
                 <div ref={previewRef} className="flex justify-center">
                   <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', width: '210mm', flexShrink: 0 }}>
                     <SPR_BTN data={state} />
@@ -2147,11 +2136,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
               {/* PDF Preview (iframe) - for FLPP + AJB + SPR Mandiri docs (hidden when bank template preview is active) */}
               {!activeBankTemplateId && (() => {
-                const isSprMandiri = generateDocId === 'spr' && bank === 'MANDIRI'
+                
                 const skipList = bank === 'MANDIRI'
                   ? ['pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
                   : ['spr', 'pernyataan-rumah', 'pernyataan-penghasilan', 'bphtb-pernyataan', 'bphtb-kuasa', 'notaris-bast', 'notaris-tanda-terima', 'notaris-pernyataan', 'notaris-kuasa', 'slip-gaji', 'sk-kerja', 'dok-kerja', 'lokasi-kerja']
-                return (isSprMandiri || !skipList.includes(generateDocId)) && (
+                return (!skipList.includes(generateDocId)) && (
                   <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
                     {flppLoading && !flppBlobUrl && <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /><span className="ml-2 text-sm text-muted-foreground">Loading PDF...</span></div>}
                     {flppBlobUrl && <iframe src={flppBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="PDF Preview" />}
