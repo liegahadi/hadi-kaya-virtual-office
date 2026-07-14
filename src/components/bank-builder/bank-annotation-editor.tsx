@@ -571,12 +571,12 @@ export function BankAnnotationEditor({
         </div>
       </Card>
 
-      {/* Annotation List + Editor */}
+      {/* Annotation List + Editor — semua dalam ScrollArea agar bisa scroll */}
       <Card className="overflow-hidden flex flex-col">
-        <div className="p-2 border-b border-border bg-muted/30">
+        <div className="p-2 border-b border-border bg-muted/30 shrink-0">
           <h3 className="text-xs font-semibold">Annotations</h3>
         </div>
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1" >
           <div className="p-2 space-y-2">
             {annotations.length === 0 ? (
               <div className="text-center text-xs text-muted-foreground py-4">
@@ -616,9 +616,8 @@ export function BankAnnotationEditor({
               ))
             )}
           </div>
-        </ScrollArea>
 
-        {/* Selected annotation editor + Test Field */}
+          {/* Selected annotation editor + Test Field */}
         {selectedId && (
           <div className="p-2 border-t border-border bg-muted/30 space-y-2">
             <h4 className="text-xs font-semibold">Edit Field</h4>
@@ -767,6 +766,7 @@ export function BankAnnotationEditor({
             ))}
           </select>
         </div>
+        </ScrollArea>
       </Card>
     </div>
   )
