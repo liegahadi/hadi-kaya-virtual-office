@@ -408,6 +408,10 @@ export function BankAnnotationEditor({
       const data = await res.json()
       if (data.success) {
         toast.success(`${annotations.length} annotation disimpan untuk template ini`)
+        // Update local templates state so annotation count refreshes without Ctrl+R
+        setTemplates(prev => prev.map(t =>
+          t.id === selectedTemplateId ? { ...t, annotations } : t
+        ))
         onUpdated()
       } else {
         toast.error(data.error || 'Gagal simpan')

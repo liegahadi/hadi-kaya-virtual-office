@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { HistoryLogView } from '@/components/berkas/history-log-view'
 import { DinaChat } from '@/components/berkas/dina-chat'
+import { BankTemplatePreview } from '@/components/berkas/bank-template-preview'
 import { BankBuilderModal } from '@/components/bank-builder/bank-builder-modal'
 import { toast } from 'sonner'
 
@@ -467,11 +468,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     id: string
     name: string
     fileName?: string
-    fileId?: string
-    webViewLink?: string
+    fileId?: string | null
+    templatePath?: string | null
+    webViewLink?: string | null
     version?: number
     stage?: string
-    annotations?: Array<{ page: number; x: number; y: number; width: number; height: number; label: string; fieldMapping?: string }>
+    annotations?: Array<any>
   }
   const [bankTemplates, setBankTemplates] = useState<BankTemplate[]>([])
   const [activeBankTemplateId, setActiveBankTemplateId] = useState<string | null>(null)
@@ -881,33 +883,77 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // - lokasi-kerja → generate via create-lokasi API
   // - Bank Builder templates (B-STEP 5) → fetch from /api/bank-config/[bankId]/template/pdf-proxy
   async function handleDownloadSingleReact() {
-    // === B-STEP 5: Bank Builder template download (download active template PDF as-is) ===
+    // === B-STEP 5: Bank Builder template download (server-side overlay with form data) ===
     if (activeBankTemplateId) {
       const selectedBank = dbBanks.find(b => b.bankCode === bank)
       const tpl = bankTemplates.find(t => t.id === activeBankTemplateId)
-      if (!selectedBank || !tpl || !tpl.fileId) {
+      if (!selectedBank || !tpl) {
         toast.error('Template tidak ditemukan untuk di-download.')
         return false
       }
       setFlppGenerating(true)
       try {
-        const res = await fetch(`/api/bank-config/${selectedBank.id}/template/pdf-proxy?fileId=${encodeURIComponent(tpl.fileId)}`)
+        // Build form data (same as preview)
+        const a = state.applicant as any
+        const p = state.property as any
+        const sp = state.spouse as any
+        const fd: Record<string, string> = {}
+        if (a.fullName) fd['customer.name'] = a.fullName
+        if (a.ktpNumber) fd['customer.nik'] = a.ktpNumber
+        if (a.pob) fd['customer.birthPlace'] = a.pob
+        if (a.dob) fd['customer.birthDate'] = a.dob
+        if (a.address) fd['customer.ktpAddress'] = a.address
+        if (a.rtRw) fd['customer.rtRw'] = a.rtRw
+        if (a.kelurahan) fd['customer.kelurahan'] = a.kelurahan
+        if (a.kecamatan) fd['customer.kecamatan'] = a.kecamatan
+        if (a.city) fd['customer.city'] = a.city
+        if (a.postalCode) fd['customer.postalCode'] = a.postalCode
+        if (a.phone) fd['customer.phone'] = a.phone
+        if (a.jobTitle) fd['customer.workPosition'] = a.jobTitle
+        if (a.companyName) fd['customer.companyName'] = a.companyName
+        if (a.companyAddress) fd['customer.companyAddress'] = a.companyAddress
+        if (a.monthlyIncome) fd['customer.monthlyIncome'] = String(a.monthlyIncome)
+        if (a.npwpNumber) fd['customer.npwpNumber'] = a.npwpNumber
+        if (a.btnAccountNumber) fd['customer.btnAccountNumber'] = a.btnAccountNumber
+        if (p.blockLetter) fd['customer.blockLetter'] = p.blockLetter
+        if (p.houseNumber) fd['customer.houseNumber'] = p.houseNumber
+        if (p.landSize) fd['customer.landSize'] = String(p.landSize)
+        if (p.houseSize) fd['customer.houseSize'] = String(p.houseSize)
+        if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
+        const today = new Date()
+        fd['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        fd['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+        fd['system.todayDay'] = today.toLocaleDateString('id-ID', { weekday: 'long' })
+        fd['system.currentYear'] = String(today.getFullYear())
+        fd['system.currentMonth'] = today.toLocaleDateString('id-ID', { month: 'long' })
+
+        // Call render endpoint — overlays annotation data onto PDF (server-side, returns PDF with text)
+        const res = await fetch(`/api/bank-config/${selectedBank.id}/template/render`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId: tpl.fileId,
+            templatePath: tpl.templatePath, // local path for imported templates
+            templateId: tpl.id,
+            annotations: tpl.annotations || [],
+            formData: fd,
+          }),
+        })
         if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}))
-          throw new Error(errJson.error || `HTTP ${res.status}`)
+          throw new Error('Gagal render PDF')
         }
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
+        const dl = document.createElement('a')
+        dl.href = url
         const customerName = state.applicant.fullName || 'Konsumen'
-        a.download = `${tpl.name || 'Template'}_${customerName}_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        dl.download = `${tpl.name || 'Template'}_${customerName}_${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(dl); dl.click(); document.body.removeChild(dl)
         setTimeout(() => URL.revokeObjectURL(url), 1000)
-        toast.success(`Template PDF berhasil di-download!`)
+        toast.success(`PDF berhasil di-download dengan ${tpl.annotations?.length || 0} fields terisi!`)
         return true
       } catch (err) {
-        toast.error('Gagal download template: ' + (err instanceof Error ? err.message : 'unknown'))
+        toast.error('Gagal download: ' + (err instanceof Error ? err.message : 'unknown'))
         return false
       } finally { setFlppGenerating(false) }
     }
@@ -1788,9 +1834,8 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     {/* NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
                         Bank Builder is an ALTERNATIVE path for new banks + future editing.
                         Do NOT migrate existing code — just add Bank Builder templates as additional options. */}
-                    {(bank === 'BTN' || bank === 'MANDIRI') && <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>}
+                    {bank === 'BTN' && <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>}
                     {bank === 'BTN' && <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>}
-                    {bank === 'MANDIRI' && <button onClick={() => setGenerateDocId('mandiri-pernyataan-pemohon')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'mandiri-pernyataan-pemohon' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan Pemohon</button>}
                     {bank === 'BSB_SYARIAH' && <>
                       <button onClick={() => setGenerateDocId('bsb-flpp')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> FLPP</button>
                       <button onClick={() => setGenerateDocId('bsb-spr')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'bsb-spr' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>
@@ -1810,7 +1855,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                         NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
                         Bank Builder template buttons ONLY appear for banks without hardcoded buttons (BNI + future).
                         For BTN/Mandiri/BSB, annotation editing is via Bank Builder modal (not Preview Dokumen). */}
-                    {bankTemplates.length > 0 && !['BTN', 'MANDIRI', 'BSB_SYARIAH'].includes(bank) && bankTemplates.filter(tpl => !(tpl as any).isReact).map(tpl => (
+                    {bankTemplates.length > 0 && !['BTN', 'BSB_SYARIAH'].includes(bank) && bankTemplates.filter(tpl => !(tpl as any).isReact).map(tpl => (
                       <button
                         key={tpl.id}
                         onClick={() => handleBankTemplateClick(tpl.id)}
@@ -2045,65 +2090,74 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
               {/* NOTE: Slip Gaji & SK Kerja preview dihapus dari sini. Diakses via tombol di action bar (CombinedDocumentEditorModal). */}
 
-              {/* B-STEP 5: Bank Builder Template PDF Preview — shown when a bank template button is active.
-                  Displayed instead of the regular PDF overlay preview when activeBankTemplateId is set. */}
-              {activeBankTemplateId && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/20 border border-rose-500/40 rounded-lg p-2">
-                    <div className="flex items-center gap-2 text-xs">
-                      <FileText className="w-3.5 h-3.5 text-rose-600" />
-                      <span className="font-semibold text-rose-700 dark:text-rose-300">
-                        {bankTemplates.find(t => t.id === activeBankTemplateId)?.name || 'Template'}
-                      </span>
-                      <span className="text-[10px] text-rose-600/70">
-                        (Bank Builder template — {bankTemplates.find(t => t.id === activeBankTemplateId)?.annotations?.length || 0} annotations)
-                      </span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => activeBankTemplateId && loadBankTemplatePreview(activeBankTemplateId)}
-                        disabled={bankTemplateLoading}
-                        className="text-[10px] px-2 py-1 rounded border border-rose-500/30 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/30 flex items-center gap-1 disabled:opacity-50"
-                      >
-                        <RefreshCw className={cn('w-3 h-3', bankTemplateLoading && 'animate-spin')} /> Refresh
-                      </button>
-                      {bankTemplates.find(t => t.id === activeBankTemplateId)?.webViewLink && (
-                        <a
-                          href={bankTemplates.find(t => t.id === activeBankTemplateId)!.webViewLink!}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] px-2 py-1 rounded border border-rose-500/30 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/30 flex items-center gap-1"
+              {/* Bank Builder Template Preview — React canvas overlay (instant auto-fill) */}
+              {activeBankTemplateId && (() => {
+                const tpl = bankTemplates.find(t => t.id === activeBankTemplateId)
+                if (!tpl) return null
+                const selectedBank = dbBanks.find(b => b.bankCode === bank)
+                if (!selectedBank) return null
+                
+                // Build form data from state (same as annotation editor test)
+                const a = state.applicant as any
+                const p = state.property as any
+                const sp = state.spouse as any
+                const fd: Record<string, string> = {}
+                if (a.fullName) fd['customer.name'] = a.fullName
+                if (a.ktpNumber) fd['customer.nik'] = a.ktpNumber
+                if (a.pob) fd['customer.birthPlace'] = a.pob
+                if (a.dob) fd['customer.birthDate'] = a.dob
+                if (a.address) fd['customer.ktpAddress'] = a.address
+                if (a.rtRw) fd['customer.rtRw'] = a.rtRw
+                if (a.kelurahan) fd['customer.kelurahan'] = a.kelurahan
+                if (a.kecamatan) fd['customer.kecamatan'] = a.kecamatan
+                if (a.city) fd['customer.city'] = a.city
+                if (a.postalCode) fd['customer.postalCode'] = a.postalCode
+                if (a.phone) fd['customer.phone'] = a.phone
+                if (a.jobTitle) fd['customer.workPosition'] = a.jobTitle
+                if (a.companyName) fd['customer.companyName'] = a.companyName
+                if (a.companyAddress) fd['customer.companyAddress'] = a.companyAddress
+                if (a.monthlyIncome) fd['customer.monthlyIncome'] = String(a.monthlyIncome)
+                if (a.npwpNumber) fd['customer.npwpNumber'] = a.npwpNumber
+                if (a.btnAccountNumber) fd['customer.btnAccountNumber'] = a.btnAccountNumber
+                if (p.blockLetter) fd['customer.blockLetter'] = p.blockLetter
+                if (p.houseNumber) fd['customer.houseNumber'] = p.houseNumber
+                if (p.landSize) fd['customer.landSize'] = String(p.landSize)
+                if (p.houseSize) fd['customer.houseSize'] = String(p.houseSize)
+                if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
+                const today = new Date()
+                fd['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                fd['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                fd['system.todayDay'] = today.toLocaleDateString('id-ID', { weekday: 'long' })
+                fd['system.currentYear'] = String(today.getFullYear())
+                fd['system.currentMonth'] = today.toLocaleDateString('id-ID', { month: 'long' })
+                
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/20 border border-rose-500/40 rounded-lg p-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        <FileText className="w-3.5 h-3.5 text-rose-600" />
+                        <span className="font-semibold text-rose-700 dark:text-rose-300">{tpl.name}</span>
+                        <button
+                          onClick={() => setActiveBankTemplateId(null)}
+                          className="text-[10px] px-2 py-0.5 rounded border border-slate-500/30 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 ml-2"
                         >
-                          <ExternalLink className="w-3 h-3" /> Drive
-                        </a>
-                      )}
-                      <button
-                        onClick={() => { setActiveBankTemplateId(null); setBankTemplateBlobUrl(null) }}
-                        className="text-[10px] px-2 py-1 rounded border border-slate-500/30 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
+                      <BankTemplatePreview
+                        bankId={selectedBank.id}
+                        templateId={tpl.id}
+                        templatePath={tpl.templatePath}
+                        fileId={tpl.fileId}
+                        annotations={tpl.annotations || []}
+                        formData={fd}
+                      />
                     </div>
                   </div>
-                  <div className="bg-white rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700" style={{ height: '70vh' }}>
-                    {bankTemplateLoading && !bankTemplateBlobUrl && (
-                      <div className="flex items-center justify-center h-full">
-                        <Loader2 className="w-6 h-6 animate-spin text-rose-600" />
-                        <span className="ml-2 text-sm text-muted-foreground">Loading template PDF...</span>
-                      </div>
-                    )}
-                    {bankTemplateBlobUrl && (
-                      <iframe src={bankTemplateBlobUrl + '#toolbar=0'} className="w-full h-full border-0" title="Bank Template Preview" />
-                    )}
-                    {!bankTemplateLoading && !bankTemplateBlobUrl && (
-                      <div className="flex items-center justify-center h-full flex-col gap-2">
-                        <FileText className="w-10 h-10 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">Klik Refresh untuk load template PDF</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* PDF Preview (iframe) - for FLPP + AJB + SPR Mandiri docs (hidden when bank template preview is active) */}
               {!activeBankTemplateId && (() => {
