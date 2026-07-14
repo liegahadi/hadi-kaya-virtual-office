@@ -306,7 +306,7 @@ function BankEditor({
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {editMode === 'info' && (
           <Card className="p-4 max-w-lg space-y-3">
             <div>
@@ -376,43 +376,40 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
   const replaceFileRef = useRef<HTMLInputElement>(null)
   const [replaceTemplateId, setReplaceTemplateId] = useState<string | null>(null)
 
-  // Load templates from BankConfig
-  useEffect(() => {
-    async function loadTemplates() {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/bank-config/${bank.id}/template`)
-        const data = await res.json()
-        if (data.success) {
-          // Priority 1: multi-template array
-          if (data.data.templates && data.data.templates.length > 0) {
-            setTemplates(data.data.templates)
-          }
-          // Priority 2: legacy single template
-          else if (data.data.template) {
-            setTemplates([{
-              id: 'legacy',
-              name: data.data.template.fileName || 'Template',
-              stage: 'entry',
-              fileId: data.data.template.fileId,
-              fileName: data.data.template.fileName,
-              webViewLink: data.data.template.webViewLink,
-              version: data.data.template.version,
-              annotations: data.data.template.annotations || [],
-            }])
-          }
-          else {
-            setTemplates([])
-          }
+  // Load templates from BankConfig (extracted for reuse in rename)
+  const loadTemplates = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/bank-config/${bank.id}/template`)
+      const data = await res.json()
+      if (data.success) {
+        if (data.data.templates && data.data.templates.length > 0) {
+          setTemplates(data.data.templates)
+        } else if (data.data.template) {
+          setTemplates([{
+            id: 'legacy',
+            name: data.data.template.fileName || 'Template',
+            stage: 'entry',
+            fileId: data.data.template.fileId,
+            fileName: data.data.template.fileName,
+            webViewLink: data.data.template.webViewLink,
+            version: data.data.template.version,
+            annotations: data.data.template.annotations || [],
+          }])
+        } else {
+          setTemplates([])
         }
-      } catch (err) {
-        console.error('Load templates error:', err)
-      } finally {
-        setLoading(false)
       }
+    } catch (err) {
+      console.error('Load templates error:', err)
+    } finally {
+      setLoading(false)
     }
-    loadTemplates()
   }, [bank.id])
+
+  useEffect(() => {
+    loadTemplates()
+  }, [loadTemplates])
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -550,6 +547,42 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
                   Lihat
                 </a>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[10px] px-1.5"
+                onClick={async () => {
+                  const newName = window.prompt('Rename template:', tpl.name)
+                  if (newName && newName.trim() && newName !== tpl.name) {
+                    // Update template name via API
+                    try {
+                      const docsRes = await fetch(`/api/bank-config/${bank.id}/template`)
+                      const docsData = await docsRes.json()
+                      if (docsData.success) {
+                        let docs = docsData.data.documents || {}
+                        if (docs.templates) {
+                          docs.templates = docs.templates.map((t: any) =>
+                            t.id === tpl.id ? { ...t, name: newName.trim() } : t
+                          )
+                          await fetch('/api/bank-config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: bank.id, documents: JSON.stringify(docs) }),
+                          })
+                          toast.success('Template renamed')
+                          // Reload
+                          loadTemplates()
+                        }
+                      }
+                    } catch (err) {
+                      toast.error('Gagal rename')
+                    }
+                  }
+                }}
+                title="Rename template"
+              >
+                <Edit3 className="w-3 h-3" />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

@@ -507,7 +507,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       .catch(() => setBankTemplates([]))
   }, [bank, dbBanks])
 
-  // Load bank template PDF preview when activeBankTemplateId changes
+  // Load bank template PDF preview with annotation data overlaid (auto-fill from form)
   const bankTemplateLoadingRef = useRef(false)
   async function loadBankTemplatePreview(templateId: string) {
     if (bankTemplateLoadingRef.current) return
@@ -521,16 +521,67 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     bankTemplateLoadingRef.current = true
     setBankTemplateLoading(true)
     try {
-      const res = await fetch(`/api/bank-config/${selectedBank.id}/template/pdf-proxy?fileId=${encodeURIComponent(tpl.fileId)}`)
+      // Build form data from state (same mapping as handleSave)
+      const a = state.applicant as any
+      const p = state.property as any
+      const sp = state.spouse as any
+      const formData: Record<string, string> = {}
+      if (a.fullName) formData['customer.name'] = a.fullName
+      if (a.ktpNumber) formData['customer.nik'] = a.ktpNumber
+      if (a.pob) formData['customer.birthPlace'] = a.pob
+      if (a.dob) formData['customer.birthDate'] = a.dob
+      if (a.address) formData['customer.ktpAddress'] = a.address
+      if (a.rtRw) formData['customer.rtRw'] = a.rtRw
+      if (a.kelurahan) formData['customer.kelurahan'] = a.kelurahan
+      if (a.kecamatan) formData['customer.kecamatan'] = a.kecamatan
+      if (a.city) formData['customer.city'] = a.city
+      if (a.postalCode) formData['customer.postalCode'] = a.postalCode
+      if (a.phone) formData['customer.phone'] = a.phone
+      if (a.jobTitle) formData['customer.workPosition'] = a.jobTitle
+      if (a.companyName) formData['customer.companyName'] = a.companyName
+      if (a.companyAddress) formData['customer.companyAddress'] = a.companyAddress
+      if (a.monthlyIncome) formData['customer.monthlyIncome'] = String(a.monthlyIncome)
+      if (a.npwpNumber) formData['customer.npwpNumber'] = a.npwpNumber
+      if (a.btnAccountNumber) formData['customer.btnAccountNumber'] = a.btnAccountNumber
+      if (p.blockLetter) formData['customer.blockLetter'] = p.blockLetter
+      if (p.houseNumber) formData['customer.houseNumber'] = p.houseNumber
+      if (p.landSize) formData['customer.landSize'] = String(p.landSize)
+      if (p.houseSize) formData['customer.houseSize'] = String(p.houseSize)
+      if (sp?.fullName) formData['customer.spouseName'] = sp.fullName
+      // System fields
+      const today = new Date()
+      formData['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      formData['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+      formData['system.todayDay'] = today.toLocaleDateString('id-ID', { weekday: 'long' })
+      formData['system.currentYear'] = String(today.getFullYear())
+      formData['system.currentMonth'] = today.toLocaleDateString('id-ID', { month: 'long' })
+
+      // Call render endpoint — overlays annotation data onto PDF
+      const res = await fetch(`/api/bank-config/${selectedBank.id}/template/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: tpl.fileId,
+          annotations: tpl.annotations || [],
+          formData,
+        }),
+      })
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.error || `HTTP ${res.status}`)
+        // Fallback: try plain pdf-proxy (no overlay)
+        const fallbackRes = await fetch(`/api/bank-config/${selectedBank.id}/template/pdf-proxy?fileId=${encodeURIComponent(tpl.fileId)}`)
+        if (!fallbackRes.ok) throw new Error('Gagal load PDF')
+        const blob = await fallbackRes.blob()
+        const newUrl = URL.createObjectURL(blob)
+        const oldUrl = bankTemplateBlobUrl
+        setBankTemplateBlobUrl(newUrl)
+        if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
+      } else {
+        const blob = await res.blob()
+        const newUrl = URL.createObjectURL(blob)
+        const oldUrl = bankTemplateBlobUrl
+        setBankTemplateBlobUrl(newUrl)
+        if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
       }
-      const blob = await res.blob()
-      const newUrl = URL.createObjectURL(blob)
-      const oldUrl = bankTemplateBlobUrl
-      setBankTemplateBlobUrl(newUrl)
-      if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 500)
     } catch (err) {
       toast.error('Gagal load template PDF: ' + (err instanceof Error ? err.message : 'unknown'))
       setBankTemplateBlobUrl(null)

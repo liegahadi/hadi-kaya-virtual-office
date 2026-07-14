@@ -533,9 +533,11 @@ export function BankAnnotationEditor({
                           color: '#1e40af',
                           fontWeight: 500,
                           lineHeight: 1.2,
+                          wordBreak: 'break-word',
+                          whiteSpace: 'normal',
                         }}
                       >
-                        <span className="truncate">{testFieldValues[ann.fieldMapping]}</span>
+                        <span>{testFieldValues[ann.fieldMapping]}</span>
                       </div>
                     )}
                     {/* Resize handles (only when selected) */}

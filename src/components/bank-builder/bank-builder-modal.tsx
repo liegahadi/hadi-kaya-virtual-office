@@ -19,9 +19,11 @@ export function BankBuilderModal({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
 
-        {/* Content — overflow-hidden prevent scroll leak to background */}
-        <div className="flex-1 overflow-hidden p-4 min-h-0">
-          <BankBuilder />
+        {/* Content — proper height chain for scroll */}
+        <div className="flex-1 min-h-0 overflow-hidden p-4">
+          <div className="h-full">
+            <BankBuilder />
+          </div>
         </div>
       </div>
     </div>
