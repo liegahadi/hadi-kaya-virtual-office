@@ -1808,9 +1808,9 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
                     {/* B-STEP 5: Bank Builder Templates (only for banks NOT in BTN/Mandiri/BSB_SYARIAH).
                         NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
-                        Bank Builder is an ALTERNATIVE path for new banks + future editing.
-                        Do NOT migrate existing code — just add Bank Builder templates as additional options. */}
-                    {bankTemplates.length > 0 && bankTemplates.map(tpl => (
+                        Bank Builder template buttons ONLY appear for banks without hardcoded buttons (BNI + future).
+                        For BTN/Mandiri/BSB, annotation editing is via Bank Builder modal (not Preview Dokumen). */}
+                    {bankTemplates.length > 0 && !['BTN', 'MANDIRI', 'BSB_SYARIAH'].includes(bank) && bankTemplates.filter(tpl => !(tpl as any).isReact).map(tpl => (
                       <button
                         key={tpl.id}
                         onClick={() => handleBankTemplateClick(tpl.id)}
