@@ -486,15 +486,10 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
       .catch(() => {})
   }, [])
 
-  // Fetch templates for selected bank (only if it's a BankConfig bank, not BTN/MANDIRI/BSB_SYARIAH)
+  // Fetch templates for selected bank — ALL banks including BTN/MANDIRI/BSB_SYARIAH
+  // BTN/Mandiri/BSB still use their hardcoded React components (additive)
+  // Bank Builder templates appear as ADDITIONAL buttons
   useEffect(() => {
-    const isHardcodedBank = ['BTN', 'MANDIRI', 'BSB_SYARIAH'].includes(bank)
-    if (isHardcodedBank) {
-      setBankTemplates([])
-      setActiveBankTemplateId(null)
-      setBankTemplateBlobUrl(null)
-      return
-    }
     const selectedBank = dbBanks.find(b => b.bankCode === bank)
     if (!selectedBank) {
       setBankTemplates([])
@@ -503,7 +498,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     fetch(`/api/bank-config/${selectedBank.id}/template`)
       .then(r => r.json())
       .then(d => {
-        if (d.success && d.data?.templates) {
+        if (d.success && d.data?.templates && d.data.templates.length > 0) {
           setBankTemplates(d.data.templates)
         } else {
           setBankTemplates([])
@@ -1742,7 +1737,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                     {/* NOTE: BTN/Mandiri/BSB templates are handled by existing React components + PDF overlay.
                         Bank Builder is an ALTERNATIVE path for new banks + future editing.
                         Do NOT migrate existing code — just add Bank Builder templates as additional options. */}
-                    {bank !== 'BSB_SYARIAH' && <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>}
+                    {(bank === 'BTN' || bank === 'MANDIRI') && <button onClick={() => setGenerateDocId('spr')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'spr' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> SPR</button>}
                     {bank === 'BTN' && <button onClick={() => setGenerateDocId('flpp')} className={cn('px-3 py-1.5 rounded text-[10px] font-medium border flex items-center gap-1.5', generateDocId === 'flpp' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Form FLPP BTN</button>}
                     {bank === 'MANDIRI' && <button onClick={() => setGenerateDocId('mandiri-pernyataan-pemohon')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'mandiri-pernyataan-pemohon' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Pernyataan Pemohon</button>}
                     {bank === 'BSB_SYARIAH' && <>

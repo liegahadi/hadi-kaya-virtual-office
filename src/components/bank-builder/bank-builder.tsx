@@ -346,10 +346,10 @@ function BankEditor({
           <TemplateUploader bank={bank} template={template} onUpdated={onUpdated} />
         )}
 
-        {editMode === 'annotations' && template?.fileId && (
+        {editMode === 'annotations' && (
           <BankAnnotationEditor
             bank={bank}
-            template={template}
+            template={template || {}}
             onUpdated={onUpdated}
           />
         )}

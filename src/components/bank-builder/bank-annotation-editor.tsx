@@ -18,6 +18,11 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Annotation } from './bank-builder'
 
+// Annotation type with fontSize + testValue
+interface AnnotationExt extends Annotation {
+  fontSize?: number
+}
+
 // Common fields available in Customer table for mapping
 const FIELD_MAPPINGS = [
   // Identity
@@ -417,7 +422,7 @@ export function BankAnnotationEditor({
   const pageAnnotations = annotations.filter(a => a.page === currentPage)
 
   return (
-    <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-3 overflow-hidden">
       {/* PDF Viewer */}
       <Card className="lg:col-span-2 flex flex-col overflow-hidden">
         {/* Toolbar */}
@@ -519,6 +524,20 @@ export function BankAnnotationEditor({
                     <span className="absolute -top-5 left-0 text-[9px] font-medium bg-emerald-600 text-white px-1 py-0.5 rounded whitespace-nowrap pointer-events-none">
                       {ann.label}
                     </span>
+                    {/* Real-time test data overlay — show sample value inside annotation box */}
+                    {testFieldValues[ann.fieldMapping] && (
+                      <div
+                        className="absolute inset-0 flex items-center px-1 overflow-hidden pointer-events-none"
+                        style={{
+                          fontSize: `${(ann as any).fontSize || 10}px`,
+                          color: '#1e40af',
+                          fontWeight: 500,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        <span className="truncate">{testFieldValues[ann.fieldMapping]}</span>
+                      </div>
+                    )}
                     {/* Resize handles (only when selected) */}
                     {isSelected && (
                       <>
@@ -571,12 +590,12 @@ export function BankAnnotationEditor({
         </div>
       </Card>
 
-      {/* Annotation List + Editor — semua dalam ScrollArea agar bisa scroll */}
-      <Card className="overflow-hidden flex flex-col">
+      {/* Annotation List + Editor — proper scroll within modal */}
+      <Card className="overflow-hidden flex flex-col min-h-0">
         <div className="p-2 border-b border-border bg-muted/30 shrink-0">
           <h3 className="text-xs font-semibold">Annotations</h3>
         </div>
-        <ScrollArea className="flex-1" >
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
           <div className="p-2 space-y-2">
             {annotations.length === 0 ? (
               <div className="text-center text-xs text-muted-foreground py-4">
@@ -683,15 +702,30 @@ export function BankAnnotationEditor({
                       <Input type="number" step="0.01" min="0.01" max="1" value={ann.height.toFixed(3)} onChange={(e) => updateAnnotation(ann.id, { height: parseFloat(e.target.value) || 0.01 })} className="h-6 text-[10px]" />
                     </div>
                   </div>
-                  {/* TEST FIELD — sample data untuk preview */}
+                  {/* Font Size */}
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">Font Size (px)</label>
+                    <Input
+                      type="number"
+                      min="6"
+                      max="72"
+                      value={(ann as any).fontSize || 10}
+                      onChange={(e) => updateAnnotation(ann.id, { fontSize: parseInt(e.target.value) || 10 } as any)}
+                      className="h-7 text-xs w-20"
+                    />
+                  </div>
+                  {/* TEST FIELD — sample data untuk real-time preview di PDF */}
                   <div className="pt-2 border-t border-border">
-                    <label className="text-[10px] text-violet-500 font-medium">🧪 Test Data (preview)</label>
+                    <label className="text-[10px] text-violet-500 font-medium">🧪 Test Data (real-time preview di PDF)</label>
                     <Input
                       placeholder="Ketik sample value..."
                       value={testFieldValues[ann.fieldMapping] || ''}
                       onChange={(e) => setTestFieldValues(prev => ({ ...prev, [ann.fieldMapping]: e.target.value }))}
                       className="h-7 text-xs mt-1"
                     />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">
+                      Value muncul real-time di annotation box di PDF →
+                    </p>
                   </div>
                 </>
               )
@@ -766,7 +800,7 @@ export function BankAnnotationEditor({
             ))}
           </select>
         </div>
-        </ScrollArea>
+        </div>
       </Card>
     </div>
   )
