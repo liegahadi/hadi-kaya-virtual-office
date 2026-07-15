@@ -202,6 +202,7 @@ export function BankAnnotationEditor({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1.0)
   const [showGrid, setShowGrid] = useState(false)
+  const [pdfDocRef, setPdfDocRef] = useState<any>(null) // store pdfjs document for re-render
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -262,25 +263,22 @@ export function BankAnnotationEditor({
     loadAll()
   }, [bank.id])
 
-  // Load PDF — use selected template's fileId
+  // Load PDF — only when template or bank changes (NOT on zoom/page change)
   useEffect(() => {
     const selectedTpl = templates.find(t => t.id === selectedTemplateId)
-    if (!selectedTpl?.fileId && !template?.fileId) {
+    if (!selectedTpl?.fileId && !selectedTpl?.templatePath && !template?.fileId) {
       setLoadError('Belum ada template PDF. Upload template di tab "Template PDF" dulu.')
       return
     }
 
-    const activeFileId = selectedTpl?.fileId || template?.fileId
     let cancelled = false
     async function loadPdf() {
       try {
         setLoadError(null)
         setPdfLoaded(false)
 
-        // Use proxy with templateId for multi-template + local path support
         const proxyUrl = `/api/bank-config/${bank.id}/template/pdf-proxy?templateId=${selectedTpl?.id || selectedTemplateId}`
 
-        // Test proxy first — if it returns error, show real error message
         const testRes = await fetch(proxyUrl)
         if (!testRes.ok) {
           const errData = await testRes.json().catch(() => ({}))
@@ -288,8 +286,6 @@ export function BankAnnotationEditor({
         }
 
         const pdfjs: any = await import('pdfjs-dist')
-        // Use CDN worker with MATCHING version (must match package.json version exactly)
-        // Package version: 6.0.227 → worker must also be 6.0.227
         pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@6.0.227/build/pdf.worker.min.mjs`
 
         const loadingTask = pdfjs.getDocument({ url: proxyUrl })
@@ -299,7 +295,7 @@ export function BankAnnotationEditor({
 
         setNumPages(pdf.numPages)
         setPdfUrl(proxyUrl)
-        renderPage(pdf, currentPage)
+        setPdfDocRef(pdf) // store for re-render
       } catch (err: any) {
         console.error('PDF load error:', err)
         setLoadError(`Gagal memuat PDF: ${err?.message || 'unknown error'}`)
@@ -307,11 +303,14 @@ export function BankAnnotationEditor({
     }
     loadPdf()
     return () => { cancelled = true }
-  }, [selectedTemplateId, templates, template?.fileId, template?.webViewLink, currentPage, bank.id, zoom, showGrid])
+  }, [selectedTemplateId, templates, template?.fileId, bank.id])
 
-    async function renderPage(pdf: any, pageNum: number, zoomLevel: number = 1.0) {
+  // Re-render page — when zoom, page, showGrid, or pdfDocRef changes
+  useEffect(() => {
+    if (!pdfDocRef) return
+    async function doRender() {
       try {
-        const page = await pdf.getPage(pageNum)
+        const page = await pdfDocRef.getPage(currentPage)
         const canvas = canvasRef.current
         if (!canvas) return
 
@@ -319,7 +318,7 @@ export function BankAnnotationEditor({
         const maxWidth = container?.clientWidth ? container.clientWidth - 32 : 600
         const viewport = page.getViewport({ scale: 1 })
         const baseScale = maxWidth / viewport.width
-        const scale = baseScale * zoomLevel
+        const scale = baseScale * zoom
         const scaledViewport = page.getViewport({ scale })
 
         canvas.width = scaledViewport.width
@@ -332,34 +331,30 @@ export function BankAnnotationEditor({
         if (!ctx) return
 
         await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise
-        
+
         // Draw grid overlay if enabled (30% opacity)
         if (showGrid) {
           ctx.save()
           ctx.globalAlpha = 0.3
           ctx.strokeStyle = '#999'
           ctx.lineWidth = 0.5
-          const gridSize = 20 * zoomLevel
+          const gridSize = 20 * zoom
           for (let x = 0; x < canvas.width; x += gridSize) {
-            ctx.beginPath()
-            ctx.moveTo(x, 0)
-            ctx.lineTo(x, canvas.height)
-            ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke()
           }
           for (let y = 0; y < canvas.height; y += gridSize) {
-            ctx.beginPath()
-            ctx.moveTo(0, y)
-            ctx.lineTo(canvas.width, y)
-            ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke()
           }
           ctx.restore()
         }
-        
+
         setPdfLoaded(true)
       } catch (err) {
         console.error('Render page error:', err)
       }
     }
+    doRender()
+  }, [pdfDocRef, currentPage, zoom, showGrid])
 
   // Handle click on PDF to add annotation
   function handlePdfClick(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -637,9 +632,11 @@ export function BankAnnotationEditor({
                         : 'border-emerald-500 bg-emerald-500/20 hover:bg-emerald-500/30'
                     )}
                   >
-                    <span className="absolute -top-5 left-0 text-[9px] font-medium bg-emerald-600 text-white px-1 py-0.5 rounded whitespace-nowrap pointer-events-none">
+                    {isSelected && (
+                    <span className="absolute -top-5 left-0 text-[9px] font-medium bg-blue-600 text-white px-1 py-0.5 rounded whitespace-nowrap pointer-events-none z-10">
                       {ann.label}
                     </span>
+                    )}
                     {/* Real-time test data overlay — show sample value inside annotation box */}
                     {testFieldValues[ann.fieldMapping] && (
                       <div
