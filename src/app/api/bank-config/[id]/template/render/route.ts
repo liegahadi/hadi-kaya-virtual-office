@@ -98,7 +98,25 @@ export async function POST(
       if (!ann.fieldMapping) continue
 
       // Get value from formData
-      const value = formData[ann.fieldMapping] || ''
+      let value = formData[ann.fieldMapping] || ''
+      
+      // Handle combined fields
+      if (ann.fieldMapping === 'customer.pobDob') {
+        const pob = formData['customer.birthPlace'] || ''
+        const dob = formData['customer.birthDate'] || ''
+        if (pob && dob) {
+          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
+          catch { value = `${pob}, ${dob}` }
+        }
+      } else if (ann.fieldMapping === 'customer.spousePobDob') {
+        const pob = formData['customer.spouseBirthPlace'] || formData['customer.spousePob'] || ''
+        const dob = formData['customer.spouseBirthDate'] || formData['customer.spouseDob'] || ''
+        if (pob && dob) {
+          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
+          catch { value = `${pob}, ${dob}` }
+        }
+      }
+      
       if (!value) continue
 
       const page = pages[ann.page - 1]

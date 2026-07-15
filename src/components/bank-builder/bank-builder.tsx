@@ -826,7 +826,7 @@ const DOC_CATEGORIES = [
 const FORMBOX_CATEGORIES = [
   {
     id: 'perusahaan',
-    label: 'Data Perusahaan (Global)',
+    label: 'Perusahaan (Developer)',
     fields: [
       { id: 'company.companyName', label: 'Nama PT (Developer)', default: true },
       { id: 'company.directorName', label: 'Nama Direktur', default: true },
@@ -855,29 +855,38 @@ const FORMBOX_CATEGORIES = [
     ],
   },
   {
-    id: 'pasangan',
-    label: 'Data Pasangan Nasabah',
+    id: 'pekerjaan-debitur',
+    label: 'Pekerjaan Debitur (Karyawan / Wirausaha)',
     fields: [
-      { id: 'spouse.fullName', label: 'Nama Pasangan', default: false },
-      { id: 'spouse.ktpNumber', label: 'NIK Pasangan', default: false },
-      { id: 'spouse.dob', label: 'Tanggal Lahir Pasangan', default: false },
-      { id: 'spouse.job', label: 'Pekerjaan Pasangan', default: false },
+      { id: 'applicant.jobTitle', label: 'Jabatan / Jenis Usaha', default: true },
+      { id: 'applicant.companyName', label: 'Nama Perusahaan / Usaha', default: true },
+      { id: 'applicant.companyAddress', label: 'Alamat Perusahaan / Usaha', default: true },
+      { id: 'applicant.companyPhone', label: 'Telp Perusahaan', default: false },
+      { id: 'applicant.monthlyIncome', label: 'Gaji / Penghasilan Bersih per Bulan', default: true },
     ],
   },
   {
-    id: 'pekerjaan',
-    label: 'Data Pekerjaan / Wirausaha',
+    id: 'pasangan',
+    label: 'Data Pasangan Debitur (jika menikah)',
     fields: [
-      { id: 'applicant.jobTitle', label: 'Pekerjaan/Jabatan', default: true },
-      { id: 'applicant.companyName', label: 'Nama Perusahaan', default: true },
-      { id: 'applicant.companyAddress', label: 'Alamat Perusahaan', default: true },
-      { id: 'applicant.companyPhone', label: 'Telp Perusahaan', default: false },
-      { id: 'applicant.monthlyIncome', label: 'Penghasilan/Bulan', default: true },
+      { id: 'spouse.fullName', label: 'Nama Pasangan', default: false },
+      { id: 'spouse.ktpNumber', label: 'NIK Pasangan', default: false },
+      { id: 'spouse.pob', label: 'Tempat Lahir Pasangan', default: false },
+      { id: 'spouse.dob', label: 'Tanggal Lahir Pasangan', default: false },
+      { id: 'spouse.address', label: 'Alamat Pasangan', default: false },
+    ],
+  },
+  {
+    id: 'pekerjaan-pasangan',
+    label: 'Pekerjaan Pasangan Debitur (Karyawan / Wirausaha)',
+    fields: [
+      { id: 'spouse.job', label: 'Pekerjaan / Jabatan Pasangan', default: false },
+      { id: 'spouse.jobType', label: 'Status Pekerjaan Pasangan', default: false },
     ],
   },
   {
     id: 'properti',
-    label: 'Unit Properti',
+    label: 'Info Properti yang Diambil',
     fields: [
       { id: 'property.projectName', label: 'Nama Perumahan', default: true },
       { id: 'property.blockLetter', label: 'Blok Rumah', default: true },

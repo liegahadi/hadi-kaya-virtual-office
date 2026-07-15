@@ -40,6 +40,7 @@ const FIELD_MAPPINGS_GROUPED = [
     fields: [
       { value: 'customer.name', label: 'Nama Lengkap' },
       { value: 'customer.nik', label: 'NIK' },
+      { value: 'customer.pobDob', label: 'Tempat, Tanggal Lahir (gabungan)' },
       { value: 'customer.birthPlace', label: 'Tempat Lahir' },
       { value: 'customer.birthDate', label: 'Tanggal Lahir' },
       { value: 'customer.gender', label: 'Jenis Kelamin' },
@@ -67,6 +68,7 @@ const FIELD_MAPPINGS_GROUPED = [
   {
     group: 'Data Pasangan Nasabah',
     fields: [
+      { value: 'customer.spousePobDob', label: 'Tempat, Tanggal Lahir Pasangan (gabungan)' },
       { value: 'customer.spouseName', label: 'Nama Pasangan' },
       { value: 'customer.spouseNik', label: 'NIK Pasangan' },
       { value: 'customer.motherMaidenName', label: 'Nama Ibu Kandung' },
@@ -128,8 +130,9 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
     const catMap: Record<string, string> = {
       'perusahaan': 'Data Perusahaan (Global)',
       'nasabah': 'Data Nasabah',
+      'pekerjaan-debitur': 'Data Pekerjaan / Wirausaha',
       'pasangan': 'Data Pasangan Nasabah',
-      'pekerjaan': 'Data Pekerjaan / Wirausaha',
+      'pekerjaan-pasangan': 'Data Pasangan Nasabah',
       'properti': 'Unit Properti',
     }
     const groupLabel = Object.entries(catMap).find(([_, v]) => v === group.group)?.[0]

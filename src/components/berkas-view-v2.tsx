@@ -423,6 +423,15 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
   // Bank-specific docs + formbox from BankConfig (for Mandiri + future banks)
   const [bankSpecificUploads, setBankSpecificUploads] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
   const [bankSpecificSignedDocs, setBankSpecificSignedDocs] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
+  const [bankFormboxFields, setBankFormboxFields] = useState<string[] | null>(null)
+
+  // Helper: check if formbox field should be visible for current bank
+  // BTN/BSB = always visible (hardcoded). Mandiri+future = only if checked in BankConfig
+  const isFieldVisible = (fieldId: string): boolean => {
+    if (['BTN', 'BSB_SYARIAH'].includes(bank)) return true
+    if (!bankFormboxFields || bankFormboxFields.length === 0) return true
+    return bankFormboxFields.includes(fieldId)
+  }
 
   // Fetch bank-specific document config when bank changes (for non-hardcoded banks)
   useEffect(() => {
@@ -430,6 +439,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
     if (isHardcodedBank) {
       setBankSpecificUploads(null)
       setBankSpecificSignedDocs(null)
+      setBankFormboxFields(null)
       return
     }
     // For Mandiri + future banks: fetch from BankConfig
@@ -482,6 +492,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
 
           setBankSpecificUploads(uploadDocs)
           setBankSpecificSignedDocs(signedDocs)
+          setBankFormboxFields(docs.formboxFields || [])
         } catch {}
       })
       .catch(() => {})
@@ -968,6 +979,11 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         if (a.ktpNumber) fd['customer.nik'] = a.ktpNumber
         if (a.pob) fd['customer.birthPlace'] = a.pob
         if (a.dob) fd['customer.birthDate'] = a.dob
+        // Combined pobDob
+        if (a.pob && a.dob) {
+          try { fd['customer.pobDob'] = `${a.pob}, ${new Date(a.dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
+          catch { fd['customer.pobDob'] = `${a.pob}, ${a.dob}` }
+        }
         if (a.address) fd['customer.ktpAddress'] = a.address
         if (a.rtRw) fd['customer.rtRw'] = a.rtRw
         if (a.kelurahan) fd['customer.kelurahan'] = a.kelurahan
@@ -986,6 +1002,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         if (p.landSize) fd['customer.landSize'] = String(p.landSize)
         if (p.houseSize) fd['customer.houseSize'] = String(p.houseSize)
         if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
+        // Combined spouse pobDob
+        if (sp?.pob && sp?.dob) {
+          try { fd['customer.spousePobDob'] = `${sp.pob}, ${new Date(sp.dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
+          catch { fd['customer.spousePobDob'] = `${sp.pob}, ${sp.dob}` }
+        }
+        if (sp?.pob) fd['customer.spouseBirthPlace'] = sp.pob
+        if (sp?.dob) fd['customer.spouseBirthDate'] = sp.dob
         const today = new Date()
         fd['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
         fd['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -1550,27 +1573,27 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             {bank === 'BSB_SYARIAH' && <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />}
           </FormSection>
           <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
-            <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />
-            <FormField label="NIK / No. KTP" value={state.applicant.ktpNumber} onChange={v => updateApplicant('ktpNumber', v)} />
-            {formMode === 'bank' && <FormField label="NPWP" value={state.applicant.npwpNumber} onChange={v => updateApplicant('npwpNumber', v)} />}
-            {formMode === 'bank' && <FormField label="Rekening BTN" value={state.applicant.btnAccountNumber} onChange={v => updateApplicant('btnAccountNumber', v)} />}
-            <FormField label="Tempat Lahir" value={state.applicant.pob} onChange={v => updateApplicant('pob', v)} />
-            <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />
-            <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />
-            <FormField label="No. WhatsApp" value={state.applicant.phone} onChange={v => updateApplicant('phone', v)} />
+            {isFieldVisible('applicant.fullName') && <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />}
+            {isFieldVisible('applicant.ktpNumber') && <FormField label="NIK / No. KTP" value={state.applicant.ktpNumber} onChange={v => updateApplicant('ktpNumber', v)} />}
+            {formMode === 'bank' && isFieldVisible('applicant.npwpNumber') && <FormField label="NPWP" value={state.applicant.npwpNumber} onChange={v => updateApplicant('npwpNumber', v)} />}
+            {formMode === 'bank' && isFieldVisible('applicant.btnAccountNumber') && <FormField label="Rekening BTN" value={state.applicant.btnAccountNumber} onChange={v => updateApplicant('btnAccountNumber', v)} />}
+            {isFieldVisible('applicant.pob') && <FormField label="Tempat Lahir" value={state.applicant.pob} onChange={v => updateApplicant('pob', v)} />}
+            {isFieldVisible('applicant.dob') && <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />}
+            {isFieldVisible('applicant.address') && <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />}
+            {isFieldVisible('applicant.phone') && <FormField label="No. WhatsApp" value={state.applicant.phone} onChange={v => updateApplicant('phone', v)} />}
             {bank === 'BSB_SYARIAH' && <FormField label="Alamat Domisili" value={state.applicant.domicileAddress || ''} onChange={v => updateApplicant('domicileAddress', v)} full />}
             {bank === 'BSB_SYARIAH' && <FormField label="Email" value={state.applicant.email || ''} onChange={v => updateApplicant('email', v)} />}
             {bank === 'BSB_SYARIAH' && <FormField label="NIP / No. Pokok Pegawai" value={state.applicant.nip || ''} onChange={v => updateApplicant('nip', v)} />}
           </FormSection>
-          <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan">
+          <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan Debitur">
             <div className="col-span-2 flex gap-1 mb-1">
               <button onClick={() => updateApplicant('jobType', JobType.EMPLOYEE)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.applicant.jobType === JobType.EMPLOYEE ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-card border-border')}>KARYAWAN</button>
               <button onClick={() => updateApplicant('jobType', JobType.ENTREPRENEUR)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.applicant.jobType === JobType.ENTREPRENEUR ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-card border-border')}>WIRAUSAHA</button>
             </div>
-            <FormField label="Jabatan / Jenis Usaha" value={state.applicant.jobTitle} onChange={v => updateApplicant('jobTitle', v)} />
-            <FormField label="Nama Perusahaan" value={state.applicant.companyName} onChange={v => updateApplicant('companyName', v)} />
-            <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />
-            <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />
+            {isFieldVisible('applicant.jobTitle') && <FormField label="Jabatan / Jenis Usaha" value={state.applicant.jobTitle} onChange={v => updateApplicant('jobTitle', v)} />}
+            {isFieldVisible('applicant.companyName') && <FormField label="Nama Perusahaan" value={state.applicant.companyName} onChange={v => updateApplicant('companyName', v)} />}
+            {isFieldVisible('applicant.companyAddress') && <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />}
+            {isFieldVisible('applicant.monthlyIncome') && <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />}
           </FormSection>
           {/* BSB-specific: Bendaharawan fields */}
           {bank === 'BSB_SYARIAH' && (
@@ -1588,12 +1611,12 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
             </div>
             {state.maritalStatus === MaritalStatus.MARRIED && (
               <>
-                <FormField label="Nama Pasangan" value={state.spouse?.fullName || ''} onChange={v => updateSpouse('fullName', v)} />
-                <FormField label="NIK Pasangan" value={state.spouse?.ktpNumber || ''} onChange={v => updateSpouse('ktpNumber', v)} />
-                <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />
-                <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />
-                <FormField label="Pekerjaan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />
-                <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />
+                {isFieldVisible('spouse.fullName') && <FormField label="Nama Pasangan" value={state.spouse?.fullName || ''} onChange={v => updateSpouse('fullName', v)} />}
+                {isFieldVisible('spouse.ktpNumber') && <FormField label="NIK Pasangan" value={state.spouse?.ktpNumber || ''} onChange={v => updateSpouse('ktpNumber', v)} />}
+                {isFieldVisible('spouse.pob') && <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />}
+                {isFieldVisible('spouse.dob') && <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />}
+                {isFieldVisible('spouse.job') && <FormField label="Pekerjaan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />}
+                {isFieldVisible('spouse.address') && <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />}
                 <div className="col-span-2">
                   <label className="text-[9px] text-muted-foreground">Status Pekerjaan Pasangan</label>
                   <div className="flex gap-1 mt-0.5">
@@ -2183,6 +2206,13 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
                 if (p.landSize) fd['customer.landSize'] = String(p.landSize)
                 if (p.houseSize) fd['customer.houseSize'] = String(p.houseSize)
                 if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
+        // Combined spouse pobDob
+        if (sp?.pob && sp?.dob) {
+          try { fd['customer.spousePobDob'] = `${sp.pob}, ${new Date(sp.dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
+          catch { fd['customer.spousePobDob'] = `${sp.pob}, ${sp.dob}` }
+        }
+        if (sp?.pob) fd['customer.spouseBirthPlace'] = sp.pob
+        if (sp?.dob) fd['customer.spouseBirthDate'] = sp.dob
                 const today = new Date()
                 fd['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
                 fd['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
