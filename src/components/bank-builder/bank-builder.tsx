@@ -416,6 +416,8 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
   const fileInputRef = useRef<HTMLInputElement>(null)
   const replaceFileRef = useRef<HTMLInputElement>(null)
   const [replaceTemplateId, setReplaceTemplateId] = useState<string | null>(null)
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Load templates from BankConfig (extracted for reuse in rename)
   const loadTemplates = useCallback(async () => {
@@ -547,6 +549,41 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
     }
   }
 
+  // === Hapus template permanen ===
+  // Delete dari DB + disk (local file) ATAU Google Drive
+  async function handleDeleteTemplate(templateId: string) {
+    const tpl = templates.find(t => t.id === templateId)
+    if (!tpl) return
+
+    setDeleting(true)
+    try {
+      const res = await fetch(
+        `/api/bank-config/${bank.id}/template?templateId=${encodeURIComponent(templateId)}`,
+        { method: 'DELETE' }
+      )
+      const data = await res.json()
+      if (data.success) {
+        const d = data.data.deleted
+        const storageMsg = d.storage === 'local'
+          ? (d.localFileDeleted ? 'file lokal dihapus' : 'file lokal tidak ditemukan')
+          : d.storage === 'drive'
+            ? (d.driveFileDeleted ? 'file Drive dihapus' : 'file Drive tidak dapat dihapus')
+            : 'tidak ada file fisik'
+        toast.success(`🗑️ Template "${d.templateName}" v${d.version} dihapus permanen. ${storageMsg}.`)
+        // Refresh list
+        await loadTemplates()
+        onUpdated()
+      } else {
+        toast.error('Gagal hapus: ' + (data.error || 'unknown'))
+      }
+    } catch (err: any) {
+      toast.error('Gagal hapus: ' + (err?.message || 'unknown'))
+    } finally {
+      setDeleting(false)
+      setDeletingTemplateId(null)
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-6 h-6 mx-auto animate-spin" /></div>
 
   return (
@@ -591,10 +628,73 @@ function TemplateUploader({ bank, template, onUpdated }: { bank: Bank; template:
                   setReplaceTemplateId(tpl.id)
                   replaceFileRef.current?.click()
                 }}
-                disabled={uploading}
+                disabled={uploading || deleting}
               >
                 Replace
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-900"
+                onClick={() => setDeletingTemplateId(tpl.id)}
+                disabled={uploading || deleting}
+                title="Hapus template permanen (file + DB)"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+
+              {/* === Confirmation modal === */}
+              {deletingTemplateId === tpl.id && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                  <div className="bg-background border border-border rounded-lg shadow-xl p-5 max-w-md w-full space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+                        <Trash2 className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-semibold">Hapus Template Permanen?</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Tindakan ini <span className="text-red-600 font-medium">tidak dapat dibatalkan</span>.
+                          Template berikut akan dihapus:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-2 rounded-md bg-muted/50 border border-border text-xs space-y-1">
+                      <div><span className="text-muted-foreground">Nama:</span> <span className="font-medium">{tpl.name}</span></div>
+                      <div><span className="text-muted-foreground">Versi:</span> v{tpl.version}</div>
+                      <div><span className="text-muted-foreground">Stage:</span> {tpl.stage || 'entry'}</div>
+                      <div><span className="text-muted-foreground">File:</span> <span className="font-mono text-[10px]">{tpl.fileName || '-'}</span></div>
+                      <div><span className="text-muted-foreground">Storage:</span> {tpl.templatePath ? 'Local disk' : tpl.fileId ? 'Google Drive' : 'Unknown'}</div>
+                      <div><span className="text-muted-foreground">Annotations:</span> {tpl.annotations?.length || 0} fields</div>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground">
+                      Yang akan dihapus: file fisik {tpl.templatePath ? '(local disk)' : tpl.fileId ? '(Google Drive)' : ''} + entry template di database. Bank itu sendiri tetap ada.
+                    </p>
+
+                    <div className="flex gap-2 justify-end pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeletingTemplateId(null)}
+                        disabled={deleting}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteTemplate(tpl.id)}
+                        disabled={deleting}
+                      >
+                        {deleting ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1" />}
+                        Hapus Permanen
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
