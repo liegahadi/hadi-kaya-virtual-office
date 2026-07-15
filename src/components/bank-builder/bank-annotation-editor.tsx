@@ -120,13 +120,76 @@ const FIELD_MAPPINGS_GROUPED = [
 // Flatten for backward compat
 const FIELD_MAPPINGS = FIELD_MAPPINGS_GROUPED.flatMap(g => g.fields)
 
-// Build grouped dropdown options — merge custom fields from BankConfig
+// Map Form Box Field IDs (from BankConfig) → Field Mapping values (in dropdown)
+// This is needed because Form Box Fields use 'applicant.fullName' but
+// Field Mapping dropdown uses 'customer.name'
+const FORMBOX_TO_MAPPING: Record<string, string> = {
+  // Perusahaan
+  'company.companyName': 'company.companyName',
+  'company.directorName': 'company.directorName',
+  'company.directorNik': 'company.directorNik',
+  'company.officeAddress': 'company.officeAddress',
+  'company.city': 'company.city',
+  // Nasabah
+  'applicant.fullName': 'customer.name',
+  'applicant.ktpNumber': 'customer.nik',
+  'applicant.pob': 'customer.birthPlace',
+  'applicant.dob': 'customer.birthDate',
+  'applicant.address': 'customer.ktpAddress',
+  'applicant.rtRw': 'customer.rtRw',
+  'applicant.kelurahan': 'customer.kelurahan',
+  'applicant.kecamatan': 'customer.kecamatan',
+  'applicant.city': 'customer.city',
+  'applicant.postalCode': 'customer.postalCode',
+  'applicant.phone': 'customer.phone',
+  'applicant.npwpNumber': 'customer.npwpNumber',
+  'applicant.btnAccountNumber': 'customer.btnAccountNumber',
+  // Pekerjaan
+  'applicant.jobTitle': 'customer.workPosition',
+  'applicant.companyName': 'customer.companyName',
+  'applicant.companyAddress': 'customer.companyAddress',
+  'applicant.companyPhone': 'customer.companyPhone',
+  'applicant.monthlyIncome': 'customer.monthlyIncome',
+  // Pasangan
+  'spouse.fullName': 'customer.spouseName',
+  'spouse.ktpNumber': 'customer.spouseNik',
+  'spouse.pob': 'customer.spouseBirthPlace',
+  'spouse.dob': 'customer.spouseBirthDate',
+  'spouse.job': 'customer.spouseJob',
+  'spouse.address': 'customer.spouseAddress',
+  'spouse.jobType': 'customer.spouseJobType',
+  // Properti
+  'property.projectName': 'customer.projectName',
+  'property.blockLetter': 'customer.blockLetter',
+  'property.houseNumber': 'customer.houseNumber',
+  'property.landSize': 'customer.landSize',
+  'property.houseSize': 'customer.houseSize',
+  'property.price': 'customer.price',
+  'property.dpAmount': 'customer.dpAmount',
+  'property.plafonKpr': 'customer.plafonKpr',
+  'property.tenor': 'customer.tenor',
+  'dateOfDocument': 'customer.dateOfDocument',
+  'akadDate': 'customer.akadDate',
+  'lpaDate': 'customer.lpaDate',
+}
+
+// Reverse mapping: Field Mapping value → Form Box Field ID
+const MAPPING_TO_FORMBOX: Record<string, string> = Object.entries(FORMBOX_TO_MAPPING).reduce((acc, [k, v]) => {
+  acc[v] = k
+  return acc
+}, {} as Record<string, string>)
+
+// Build grouped dropdown options — filter static + custom fields by formboxFields
 function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string; category: string }>, formboxFields: string[]) {
-  // Only include custom fields that are checked in formboxFields
+  if (!formboxFields || formboxFields.length === 0) {
+    // No formbox config → show all (backward compat for banks without config)
+    return FIELD_MAPPINGS_GROUPED
+  }
+
+  // Only include custom fields that are checked
   const activeCustoms = customFields.filter(f => formboxFields.includes(f.id))
   
   return FIELD_MAPPINGS_GROUPED.map(group => {
-    // Map category IDs: 'perusahaan' → 'Data Perusahaan (Global)', etc
     const catMap: Record<string, string> = {
       'perusahaan': 'Data Perusahaan (Global)',
       'nasabah': 'Data Nasabah',
@@ -137,11 +200,18 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
     }
     const groupLabel = Object.entries(catMap).find(([_, v]) => v === group.group)?.[0]
     const customsForGroup = activeCustoms.filter(f => f.category === groupLabel)
+
+    // Filter static fields: only show if corresponding formbox field is checked
+    const filteredStatic = group.fields.filter(f => {
+      const formboxId = MAPPING_TO_FORMBOX[f.value]
+      if (!formboxId) return true // System/custom fields always show
+      return formboxFields.includes(formboxId)
+    })
     
     return {
       ...group,
       fields: [
-        ...group.fields,
+        ...filteredStatic,
         ...customsForGroup.map(f => ({ value: f.id, label: `${f.label} (Custom)` })),
       ],
     }

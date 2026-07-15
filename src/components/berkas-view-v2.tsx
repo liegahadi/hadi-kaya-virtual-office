@@ -113,6 +113,7 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showBankBuilder, setShowBankBuilder] = useState(false)
+  const [bankConfigVersion, setBankConfigVersion] = useState(0)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -159,7 +160,7 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
             {customers.map(c => (
               <CustomerFolder key={c.id} customer={c} expanded={expandedId === c.id}
                 onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
-                onRefresh={fetchCustomers} projectId={projectId} />
+                onRefresh={fetchCustomers} projectId={projectId} bankConfigVersion={bankConfigVersion} />
             ))}
           </div>
         )}
@@ -172,7 +173,7 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
 
       {/* BANK BUILDER MODAL */}
       {showBankBuilder && (
-        <BankBuilderModal onClose={() => setShowBankBuilder(false)} />
+        <BankBuilderModal onClose={() => { setShowBankBuilder(false); setBankConfigVersion(v => v + 1) }} />
       )}
 
       {/* DINA CHAT - PERSISTENT - WhatsApp-style with file upload + reply + history */}
@@ -184,8 +185,8 @@ export function BerkasViewV2({ projectId }: { projectId: string }) {
 // ============================================================
 // CUSTOMER FOLDER
 // ============================================================
-function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: {
-  customer: any; expanded: boolean; onToggle: () => void; onRefresh: () => void; projectId: string
+function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId, bankConfigVersion }: {
+  customer: any; expanded: boolean; onToggle: () => void; onRefresh: () => void; projectId: string; bankConfigVersion: number
 }) {
   // Issue 2: Display blok/unit from multiple sources:
   // 1. customer.units[0].blockNumber (if linked via Unit table)
@@ -229,7 +230,7 @@ function CustomerFolder({ customer, expanded, onToggle, onRefresh, projectId }: 
       </Card>
       {expanded && (
         <div className="mt-2">
-          <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} />
+          <BerkasEditor customer={customer} onRefresh={onRefresh} projectId={projectId} bankConfigVersion={bankConfigVersion} />
         </div>
       )}
     </div>
@@ -335,7 +336,7 @@ function DinaSidebar({ customer, onDbUpdate }: { customer: any; onDbUpdate?: () 
 // ============================================================
 // BERKAS EDITOR - Form + Preview (2 columns inside box)
 // ============================================================
-function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRefresh: () => void; projectId: string }) {
+function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }: { customer: any; onRefresh: () => void; projectId: string; bankConfigVersion?: number }) {
   // Build initial state FROM customer DB data (prevents reset after save)
   const buildInitialState = (): BerkasState => {
     const unit = customer.units?.[0]
@@ -496,7 +497,7 @@ function BerkasEditor({ customer, onRefresh, projectId }: { customer: any; onRef
         } catch {}
       })
       .catch(() => {})
-  }, [bank, state.maritalStatus, state.spouse?.jobType])
+  }, [bank, state.maritalStatus, state.spouse?.jobType, bankConfigVersion])
   const [saving, setSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
