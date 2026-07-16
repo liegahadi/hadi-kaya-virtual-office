@@ -23,7 +23,13 @@ interface AnnotationExt extends Annotation {
   fontSize?: number
 }
 
-// Grouped field mappings — urut per abjad dalam setiap kategori
+// Grouped field mappings — MIRROR parent (FORMBOX_CATEGORIES di bank-builder.tsx)
+// Urutan kategori & fields HARUS sama dengan parent, hanya beda value key:
+//   - Parent uses form box field IDs ('applicant.fullName')
+//   - Dropdown uses field mapping values ('customer.name')
+//   - Mapping between them via FORMBOX_TO_MAPPING
+// Field extra dihapus (gender, religion, maritalStatus, shmNumber, dll) — parent jadi source of truth murni.
+// System + Custom tetap ada di bawah sebagai extra categories.
 const FIELD_MAPPINGS_GROUPED = [
   {
     group: 'Data Perusahaan (Global)',
@@ -38,63 +44,63 @@ const FIELD_MAPPINGS_GROUPED = [
   {
     group: 'Data Nasabah',
     fields: [
-      { value: 'customer.name', label: 'Nama Lengkap' },
-      { value: 'customer.nik', label: 'NIK' },
-      { value: 'customer.pobDob', label: 'Tempat, Tanggal Lahir (gabungan)' },
+      { value: 'customer.name', label: 'Nama Lengkap Debitur' },
+      { value: 'customer.nik', label: 'NIK (No KTP)' },
       { value: 'customer.birthPlace', label: 'Tempat Lahir' },
       { value: 'customer.birthDate', label: 'Tanggal Lahir' },
-      { value: 'customer.gender', label: 'Jenis Kelamin' },
-      { value: 'customer.religion', label: 'Agama' },
-      { value: 'customer.maritalStatus', label: 'Status Pernikahan' },
       { value: 'customer.ktpAddress', label: 'Alamat KTP' },
       { value: 'customer.rtRw', label: 'RT/RW' },
-      { value: 'customer.kelurahan', label: 'Kelurahan' },
+      { value: 'customer.kelurahan', label: 'Kelurahan/Desa' },
       { value: 'customer.kecamatan', label: 'Kecamatan' },
       { value: 'customer.city', label: 'Kota' },
       { value: 'customer.postalCode', label: 'Kode Pos' },
       { value: 'customer.phone', label: 'No HP/Telp' },
       { value: 'customer.npwpNumber', label: 'NPWP' },
-      { value: 'customer.bankName', label: 'Nama Bank' },
-      { value: 'customer.bankAccount', label: 'No Rekening' },
       { value: 'customer.btnAccountNumber', label: 'No Rekening BTN' },
-      { value: 'customer.shmNumber', label: 'No SHM' },
-      { value: 'customer.nibNumber', label: 'No NIB' },
-      { value: 'customer.closingDate', label: 'Tanggal Closing' },
-      { value: 'customer.sp3kDate', label: 'Tanggal SP3K' },
-      { value: 'customer.akadDate', label: 'Tanggal Akad' },
-      { value: 'customer.akadNumber', label: 'No Akad' },
+    ],
+  },
+  {
+    group: 'Data Pekerjaan / Wirausaha (Debitur)',
+    fields: [
+      { value: 'customer.workPosition', label: 'Jabatan / Jenis Usaha' },
+      { value: 'customer.companyName', label: 'Nama Perusahaan / Usaha' },
+      { value: 'customer.companyAddress', label: 'Alamat Perusahaan / Usaha' },
+      { value: 'customer.companyPhone', label: 'Telp Perusahaan' },
+      { value: 'customer.monthlyIncome', label: 'Gaji / Penghasilan Bersih per Bulan' },
     ],
   },
   {
     group: 'Data Pasangan Nasabah',
     fields: [
-      { value: 'customer.spousePobDob', label: 'Tempat, Tanggal Lahir Pasangan (gabungan)' },
       { value: 'customer.spouseName', label: 'Nama Pasangan' },
       { value: 'customer.spouseNik', label: 'NIK Pasangan' },
-      { value: 'customer.motherMaidenName', label: 'Nama Ibu Kandung' },
-      { value: 'customer.dependents', label: 'Jumlah Tanggungan' },
+      { value: 'customer.spouseBirthPlace', label: 'Tempat Lahir Pasangan' },
+      { value: 'customer.spouseBirthDate', label: 'Tanggal Lahir Pasangan' },
+      { value: 'customer.spouseAddress', label: 'Alamat Pasangan' },
     ],
   },
   {
-    group: 'Data Pekerjaan / Wirausaha',
+    group: 'Data Pekerjaan Pasangan',
     fields: [
-      { value: 'customer.occupation', label: 'Pekerjaan' },
-      { value: 'customer.companyName', label: 'Nama Perusahaan' },
-      { value: 'company.companyName', label: 'Nama PT (Developer)' },
-      { value: 'customer.companyAddress', label: 'Alamat Perusahaan' },
-      { value: 'customer.companyPhone', label: 'Telp Perusahaan' },
-      { value: 'customer.workPosition', label: 'Jabatan' },
-      { value: 'customer.workDuration', label: 'Lama Bekerja' },
-      { value: 'customer.monthlyIncome', label: 'Penghasilan/Bulan' },
+      { value: 'customer.spouseJob', label: 'Pekerjaan / Jabatan Pasangan' },
+      { value: 'customer.spouseJobType', label: 'Status Pekerjaan Pasangan' },
     ],
   },
   {
     group: 'Unit Properti',
     fields: [
+      { value: 'customer.projectName', label: 'Nama Perumahan' },
       { value: 'customer.blockLetter', label: 'Blok Rumah' },
       { value: 'customer.houseNumber', label: 'No Rumah' },
       { value: 'customer.landSize', label: 'Luas Tanah' },
       { value: 'customer.houseSize', label: 'Luas Bangunan' },
+      { value: 'customer.price', label: 'Harga Rumah' },
+      { value: 'customer.dpAmount', label: 'DP' },
+      { value: 'customer.plafonKpr', label: 'Plafon KPR' },
+      { value: 'customer.tenor', label: 'Tenor (tahun)' },
+      { value: 'customer.dateOfDocument', label: 'Tanggal Dokumen' },
+      { value: 'customer.akadDate', label: 'Tanggal Akad' },
+      { value: 'customer.lpaDate', label: 'Tanggal LPA' },
     ],
   },
   {
@@ -180,6 +186,22 @@ const MAPPING_TO_FORMBOX: Record<string, string> = Object.entries(FORMBOX_TO_MAP
 }, {} as Record<string, string>)
 
 // Build grouped dropdown options — filter static + custom fields by formboxFields
+// Map parent category ID → dropdown group label (URUTAN HARUS MIRROR parent)
+const CATEGORY_TO_GROUP: Record<string, string> = {
+  'perusahaan': 'Data Perusahaan (Global)',
+  'nasabah': 'Data Nasabah',
+  'pekerjaan-debitur': 'Data Pekerjaan / Wirausaha (Debitur)',
+  'pasangan': 'Data Pasangan Nasabah',
+  'pekerjaan-pasangan': 'Data Pekerjaan Pasangan',
+  'properti': 'Unit Properti',
+}
+
+// Reverse lookup: group label → category ID
+const GROUP_TO_CATEGORY: Record<string, string> = Object.entries(CATEGORY_TO_GROUP).reduce((acc, [k, v]) => {
+  acc[v] = k
+  return acc
+}, {} as Record<string, string>)
+
 function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string; category: string }>, formboxFields: string[]) {
   if (!formboxFields || formboxFields.length === 0) {
     // No formbox config → show all (backward compat for banks without config)
@@ -190,18 +212,11 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
   const activeCustoms = customFields.filter(f => formboxFields.includes(f.id))
   
   return FIELD_MAPPINGS_GROUPED.map(group => {
-    const catMap: Record<string, string> = {
-      'perusahaan': 'Data Perusahaan (Global)',
-      'nasabah': 'Data Nasabah',
-      'pekerjaan-debitur': 'Data Pekerjaan / Wirausaha',
-      'pasangan': 'Data Pasangan Nasabah',
-      'pekerjaan-pasangan': 'Data Pasangan Nasabah',
-      'properti': 'Unit Properti',
-    }
-    const groupLabel = Object.entries(catMap).find(([_, v]) => v === group.group)?.[0]
+    const groupLabel = GROUP_TO_CATEGORY[group.group]
     const customsForGroup = activeCustoms.filter(f => f.category === groupLabel)
 
     // Filter static fields: only show if corresponding formbox field is checked
+    // System + Custom categories (no groupLabel) always show all
     const filteredStatic = group.fields.filter(f => {
       const formboxId = MAPPING_TO_FORMBOX[f.value]
       if (!formboxId) return true // System/custom fields always show

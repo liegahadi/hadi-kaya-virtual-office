@@ -928,79 +928,165 @@ const FORMBOX_CATEGORIES = [
     id: 'perusahaan',
     label: 'Perusahaan (Developer)',
     fields: [
-      { id: 'company.companyName', label: 'Nama PT (Developer)', default: true },
-      { id: 'company.directorName', label: 'Nama Direktur', default: true },
-      { id: 'company.directorNik', label: 'NIK Direktur', default: true },
-      { id: 'company.officeAddress', label: 'Alamat Kantor', default: true },
-      { id: 'company.city', label: 'Kota Kantor', default: true },
+      { id: 'company.companyName', label: 'Nama PT (Developer)', fieldType: 'text', default: true },
+      { id: 'company.directorName', label: 'Nama Direktur', fieldType: 'text', default: true },
+      { id: 'company.directorNik', label: 'NIK Direktur', fieldType: 'text', default: true },
+      { id: 'company.officeAddress', label: 'Alamat Kantor', fieldType: 'address', default: true },
+      { id: 'company.city', label: 'Kota Kantor', fieldType: 'text', default: true },
     ],
   },
   {
     id: 'nasabah',
     label: 'Data Nasabah',
     fields: [
-      { id: 'applicant.fullName', label: 'Nama Lengkap Debitur', default: true },
-      { id: 'applicant.ktpNumber', label: 'NIK (No KTP)', default: true },
-      { id: 'applicant.pob', label: 'Tempat Lahir', default: true },
-      { id: 'applicant.dob', label: 'Tanggal Lahir', default: true },
-      { id: 'applicant.address', label: 'Alamat KTP', default: true },
-      { id: 'applicant.rtRw', label: 'RT/RW', default: true },
-      { id: 'applicant.kelurahan', label: 'Kelurahan/Desa', default: true },
-      { id: 'applicant.kecamatan', label: 'Kecamatan', default: true },
-      { id: 'applicant.city', label: 'Kota', default: true },
-      { id: 'applicant.postalCode', label: 'Kode Pos', default: true },
-      { id: 'applicant.phone', label: 'No HP/Telp', default: true },
-      { id: 'applicant.npwpNumber', label: 'NPWP', default: true },
-      { id: 'applicant.btnAccountNumber', label: 'No Rekening BTN', default: false },
+      { id: 'applicant.fullName', label: 'Nama Lengkap Debitur', fieldType: 'text', default: true },
+      { id: 'applicant.ktpNumber', label: 'NIK (No KTP)', fieldType: 'text', default: true },
+      { id: 'applicant.pob', label: 'Tempat Lahir', fieldType: 'text', default: true },
+      { id: 'applicant.dob', label: 'Tanggal Lahir', fieldType: 'date', default: true },
+      { id: 'applicant.address', label: 'Alamat KTP', fieldType: 'address', default: true },
+      { id: 'applicant.rtRw', label: 'RT/RW', fieldType: 'text', default: true },
+      { id: 'applicant.kelurahan', label: 'Kelurahan/Desa', fieldType: 'text', default: true },
+      { id: 'applicant.kecamatan', label: 'Kecamatan', fieldType: 'text', default: true },
+      { id: 'applicant.city', label: 'Kota', fieldType: 'text', default: true },
+      { id: 'applicant.postalCode', label: 'Kode Pos', fieldType: 'text', default: true },
+      { id: 'applicant.phone', label: 'No HP/Telp', fieldType: 'phone', default: true },
+      { id: 'applicant.npwpNumber', label: 'NPWP', fieldType: 'text', default: true },
+      { id: 'applicant.btnAccountNumber', label: 'No Rekening BTN', fieldType: 'text', default: false },
     ],
   },
   {
     id: 'pekerjaan-debitur',
     label: 'Pekerjaan Debitur (Karyawan / Wirausaha)',
     fields: [
-      { id: 'applicant.jobTitle', label: 'Jabatan / Jenis Usaha', default: true },
-      { id: 'applicant.companyName', label: 'Nama Perusahaan / Usaha', default: true },
-      { id: 'applicant.companyAddress', label: 'Alamat Perusahaan / Usaha', default: true },
-      { id: 'applicant.companyPhone', label: 'Telp Perusahaan', default: false },
-      { id: 'applicant.monthlyIncome', label: 'Gaji / Penghasilan Bersih per Bulan', default: true },
+      { id: 'applicant.jobTitle', label: 'Jabatan / Jenis Usaha', fieldType: 'text', default: true },
+      { id: 'applicant.companyName', label: 'Nama Perusahaan / Usaha', fieldType: 'text', default: true },
+      { id: 'applicant.companyAddress', label: 'Alamat Perusahaan / Usaha', fieldType: 'address', default: true },
+      { id: 'applicant.companyPhone', label: 'Telp Perusahaan', fieldType: 'phone', default: false },
+      { id: 'applicant.monthlyIncome', label: 'Gaji / Penghasilan Bersih per Bulan', fieldType: 'currency', default: true },
     ],
   },
   {
     id: 'pasangan',
     label: 'Data Pasangan Debitur (jika menikah)',
     fields: [
-      { id: 'spouse.fullName', label: 'Nama Pasangan', default: false },
-      { id: 'spouse.ktpNumber', label: 'NIK Pasangan', default: false },
-      { id: 'spouse.pob', label: 'Tempat Lahir Pasangan', default: false },
-      { id: 'spouse.dob', label: 'Tanggal Lahir Pasangan', default: false },
-      { id: 'spouse.address', label: 'Alamat Pasangan', default: false },
+      { id: 'spouse.fullName', label: 'Nama Pasangan', fieldType: 'text', default: false },
+      { id: 'spouse.ktpNumber', label: 'NIK Pasangan', fieldType: 'text', default: false },
+      { id: 'spouse.pob', label: 'Tempat Lahir Pasangan', fieldType: 'text', default: false },
+      { id: 'spouse.dob', label: 'Tanggal Lahir Pasangan', fieldType: 'date', default: false },
+      { id: 'spouse.address', label: 'Alamat Pasangan', fieldType: 'address', default: false },
     ],
   },
   {
     id: 'pekerjaan-pasangan',
     label: 'Pekerjaan Pasangan Debitur (Karyawan / Wirausaha)',
     fields: [
-      { id: 'spouse.job', label: 'Pekerjaan / Jabatan Pasangan', default: false },
-      { id: 'spouse.jobType', label: 'Status Pekerjaan Pasangan', default: false },
+      { id: 'spouse.job', label: 'Pekerjaan / Jabatan Pasangan', fieldType: 'text', default: false },
+      { id: 'spouse.jobType', label: 'Status Pekerjaan Pasangan', fieldType: 'text', default: false },
     ],
   },
   {
     id: 'properti',
     label: 'Info Properti yang Diambil',
     fields: [
-      { id: 'property.projectName', label: 'Nama Perumahan', default: true },
-      { id: 'property.blockLetter', label: 'Blok Rumah', default: true },
-      { id: 'property.houseNumber', label: 'No Rumah', default: true },
-      { id: 'property.landSize', label: 'Luas Tanah', default: true },
-      { id: 'property.houseSize', label: 'Luas Bangunan', default: true },
-      { id: 'property.price', label: 'Harga Rumah', default: true },
-      { id: 'property.dpAmount', label: 'DP', default: true },
-      { id: 'property.plafonKpr', label: 'Plafon KPR', default: true },
-      { id: 'property.tenor', label: 'Tenor (tahun)', default: true },
-      { id: 'dateOfDocument', label: 'Tanggal Dokumen', default: true },
-      { id: 'akadDate', label: 'Tanggal Akad', default: false },
-      { id: 'lpaDate', label: 'Tanggal LPA', default: false },
+      { id: 'property.projectName', label: 'Nama Perumahan', fieldType: 'text', default: true },
+      { id: 'property.blockLetter', label: 'Blok Rumah', fieldType: 'text', default: true },
+      { id: 'property.houseNumber', label: 'No Rumah', fieldType: 'text', default: true },
+      { id: 'property.landSize', label: 'Luas Tanah', fieldType: 'number', default: true },
+      { id: 'property.houseSize', label: 'Luas Bangunan', fieldType: 'number', default: true },
+      { id: 'property.price', label: 'Harga Rumah', fieldType: 'currency', default: true },
+      { id: 'property.dpAmount', label: 'DP', fieldType: 'currency', default: true },
+      { id: 'property.plafonKpr', label: 'Plafon KPR', fieldType: 'currency', default: true },
+      { id: 'property.tenor', label: 'Tenor (tahun)', fieldType: 'number', default: true },
+      { id: 'dateOfDocument', label: 'Tanggal Dokumen', fieldType: 'date', default: true },
+      { id: 'akadDate', label: 'Tanggal Akad', fieldType: 'date', default: false },
+      { id: 'lpaDate', label: 'Tanggal LPA', fieldType: 'date', default: false },
     ],
+  },
+]
+
+// Field type definitions — used by sidebar rendering + annotation overlay
+// - text: single-line input
+// - number: numeric input (integer or decimal)
+// - date: date picker (returns YYYY-MM-DD)
+// - phone: tel input (auto-format +62)
+// - email: email input
+// - currency: numeric input with "Rp" prefix + auto-thousand-separator
+// - address: multi-line textarea
+// - longtext: multi-line textarea
+// - image: file upload widget (image/* only)
+// - file: file upload widget (any type)
+export type FieldType = 'text' | 'number' | 'date' | 'phone' | 'email' | 'currency' | 'address' | 'longtext' | 'image' | 'file'
+
+// Composite field types — auto-derived from 2+ fields, NOT in parent checkbox
+// Muncul di Field Mapping dropdown jika sub-fields nya di-centang
+// - composite_pob_dob: gabungan applicant.pob + applicant.dob → "Jakarta, 17 Agustus 1990"
+// - composite_city_long_date: gabungan company.city + dateOfDocument → "Pangkalpinang, 17 Agustus 2026"
+export type CompositeType = 'composite_pob_dob' | 'composite_city_long_date'
+
+// Transform field types — auto-derived from 1 date field (default: dateOfDocument)
+// Muncul di Field Mapping dropdown jika dateOfDocument di-centang
+// - roman_month: "VIII" (untuk Agustus) — untuk No. SPR "XXX/SPR/VIII/SPR-AJR/2026"
+// - month_name: "Agustus"
+// - date_long: "17 Agustus 2026"
+// - date_short: "17/08/2026"
+export type TransformType = 'roman_month' | 'month_name' | 'date_long' | 'date_short'
+
+// Auto-derived field definitions (NOT in parent checkbox — injected to dropdown automatically)
+// Source field ID wajib ada di formboxFields (checked) supaya field ini muncul di dropdown
+export const AUTO_DERIVED_FIELDS: Array<{
+  id: string
+  label: string
+  type: CompositeType | TransformType
+  sourceFieldIds: string[] // sub-fields yang harus di-check supaya field ini muncul
+  category: string // parent category ID untuk penempatan di dropdown
+}> = [
+  // Composite: Tempat, Tgl Lahir (gabungan)
+  {
+    id: 'applicant.pobDobComposite',
+    label: 'Tempat, Tgl Lahir (gabungan)',
+    type: 'composite_pob_dob',
+    sourceFieldIds: ['applicant.pob', 'applicant.dob'],
+    category: 'nasabah',
+  },
+  // Composite: Kota, Tanggal Bulan Tahun (untuk header surat "Pangkalpinang, 17 Agustus 2026")
+  {
+    id: 'company.cityLongDateComposite',
+    label: 'Kota + Tanggal Panjang (gabungan)',
+    type: 'composite_city_long_date',
+    sourceFieldIds: ['company.city', 'dateOfDocument'],
+    category: 'perusahaan',
+  },
+  // Transform: Roman month dari dateOfDocument (untuk No. SPR)
+  {
+    id: 'property.sprRomanMonth',
+    label: 'Bulan SPR (Romawi, I-XII)',
+    type: 'roman_month',
+    sourceFieldIds: ['dateOfDocument'],
+    category: 'properti',
+  },
+  // Transform: Month name dari dateOfDocument
+  {
+    id: 'property.sprMonthName',
+    label: 'Nama Bulan (e.g. Agustus)',
+    type: 'month_name',
+    sourceFieldIds: ['dateOfDocument'],
+    category: 'properti',
+  },
+  // Transform: Date long dari dateOfDocument
+  {
+    id: 'property.sprLongDate',
+    label: 'Tanggal Panjang (17 Agustus 2026)',
+    type: 'date_long',
+    sourceFieldIds: ['dateOfDocument'],
+    category: 'properti',
+  },
+  // Transform: Date short dari dateOfDocument
+  {
+    id: 'property.sprShortDate',
+    label: 'Tanggal Pendek (17/08/2026)',
+    type: 'date_short',
+    sourceFieldIds: ['dateOfDocument'],
+    category: 'properti',
   },
 ]
 

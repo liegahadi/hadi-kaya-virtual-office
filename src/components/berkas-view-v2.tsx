@@ -1559,15 +1559,17 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
       <div className="grid grid-cols-1 lg:grid-cols-12">
         {/* LEFT: Form — wider (5/12) */}
         <div className="lg:col-span-5 p-4 space-y-4 border-r border-border max-h-[70vh] overflow-y-auto">
-          {/* Data Perusahaan - SELALU TAMPIL (default untuk Anjayo 16), editable, disimpan global */}
+          {/* Data Perusahaan - SELALU TAMPIL (default untuk Anjayo 16), editable, disimpan global.
+              isFieldVisible aktif per field untuk bank non-hardcoded (Mandiri + future).
+              BTN/BSB tetap show all (isFieldVisible return true). */}
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Data Perusahaan (Global)">
-            <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />
-            <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />
-            <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />
+            {isFieldVisible('company.companyName') && <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />}
+            {isFieldVisible('company.directorName') && <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />}
+            {isFieldVisible('company.directorNik') && <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />}
             <FormField label="No. HP Owner (Global)" value={(companySettings as any).directorPhone || ''} onChange={v => updateCompanySetting('directorPhone', v)} />
             <FormField label="Alamat KTP Direktur" value={(companySettings as any).directorAddress || ''} onChange={v => updateCompanySetting('directorAddress', v)} full />
-            <FormField label="Alamat Kantor (Global)" value={(companySettings as any).officeAddress || ''} onChange={v => updateCompanySetting('officeAddress', v)} full />
-            <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />
+            {isFieldVisible('company.officeAddress') && <FormField label="Alamat Kantor (Global)" value={(companySettings as any).officeAddress || ''} onChange={v => updateCompanySetting('officeAddress', v)} full />}
+            {isFieldVisible('company.city') && <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />}
             {/* Rekening per bank - hanya tampil yang sesuai bank yang dipilih */}
             {bank === 'BTN' && <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />}
             {bank === 'MANDIRI' && <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />}
@@ -1581,6 +1583,11 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('applicant.pob') && <FormField label="Tempat Lahir" value={state.applicant.pob} onChange={v => updateApplicant('pob', v)} />}
             {isFieldVisible('applicant.dob') && <FormField label="Tanggal Lahir" type="date" value={state.applicant.dob} onChange={v => updateApplicant('dob', v)} />}
             {isFieldVisible('applicant.address') && <FormField label="Alamat KTP" value={state.applicant.address} onChange={v => updateApplicant('address', v)} full />}
+            {isFieldVisible('applicant.rtRw') && <FormField label="RT/RW" value={(state.applicant as any).rtRw || ''} onChange={v => updateApplicant('rtRw', v)} />}
+            {isFieldVisible('applicant.kelurahan') && <FormField label="Kelurahan/Desa" value={(state.applicant as any).kelurahan || ''} onChange={v => updateApplicant('kelurahan', v)} />}
+            {isFieldVisible('applicant.kecamatan') && <FormField label="Kecamatan" value={(state.applicant as any).kecamatan || ''} onChange={v => updateApplicant('kecamatan', v)} />}
+            {isFieldVisible('applicant.city') && <FormField label="Kota" value={(state.applicant as any).city || ''} onChange={v => updateApplicant('city', v)} />}
+            {isFieldVisible('applicant.postalCode') && <FormField label="Kode Pos" value={(state.applicant as any).postalCode || ''} onChange={v => updateApplicant('postalCode', v)} />}
             {isFieldVisible('applicant.phone') && <FormField label="No. WhatsApp" value={state.applicant.phone} onChange={v => updateApplicant('phone', v)} />}
             {bank === 'BSB_SYARIAH' && <FormField label="Alamat Domisili" value={state.applicant.domicileAddress || ''} onChange={v => updateApplicant('domicileAddress', v)} full />}
             {bank === 'BSB_SYARIAH' && <FormField label="Email" value={state.applicant.email || ''} onChange={v => updateApplicant('email', v)} />}
@@ -1594,9 +1601,10 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('applicant.jobTitle') && <FormField label="Jabatan / Jenis Usaha" value={state.applicant.jobTitle} onChange={v => updateApplicant('jobTitle', v)} />}
             {isFieldVisible('applicant.companyName') && <FormField label="Nama Perusahaan" value={state.applicant.companyName} onChange={v => updateApplicant('companyName', v)} />}
             {isFieldVisible('applicant.companyAddress') && <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />}
+            {isFieldVisible('applicant.companyPhone') && <FormField label="Telp Perusahaan" value={(state.applicant as any).companyPhone || ''} onChange={v => updateApplicant('companyPhone', v)} />}
             {isFieldVisible('applicant.monthlyIncome') && <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />}
           </FormSection>
-          {/* BSB-specific: Bendaharawan fields */}
+          {/* BSB-specific: Bendaharawan fields — pertahankan untuk BSB saja */}
           {bank === 'BSB_SYARIAH' && (
           <FormSection icon={<User className="w-3 h-3" />} title="Data Bendaharawan & Atasan (BSB)">
             <FormField label="Nama Bendaharawan" value={state.applicant.bendaharawanName || ''} onChange={v => updateApplicant('bendaharawanName', v)} full />
@@ -1605,53 +1613,61 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             <FormField label="NIP Atasan" value={state.applicant.atasanNip || ''} onChange={v => updateApplicant('atasanNip', v)} />
           </FormSection>
           )}
-          <FormSection icon={<Heart className="w-3 h-3" />} title="Status Keluarga">
+          {/* === Status Pernikahan (just buttons, no fields) — separate from data pasangan === */}
+          <FormSection icon={<Heart className="w-3 h-3" />} title="Status Pernikahan">
             <div className="col-span-2 flex gap-1 mb-1">
               <button onClick={() => setState(s => ({ ...s, maritalStatus: MaritalStatus.SINGLE }))} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.maritalStatus === MaritalStatus.SINGLE ? 'bg-pink-500 text-white border-pink-500' : 'bg-card border-border')}>BELUM KAWIN</button>
               <button onClick={() => setState(s => ({ ...s, maritalStatus: MaritalStatus.MARRIED }))} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', state.maritalStatus === MaritalStatus.MARRIED ? 'bg-pink-500 text-white border-pink-500' : 'bg-card border-border')}>KAWIN</button>
             </div>
-            {state.maritalStatus === MaritalStatus.MARRIED && (
-              <>
-                {isFieldVisible('spouse.fullName') && <FormField label="Nama Pasangan" value={state.spouse?.fullName || ''} onChange={v => updateSpouse('fullName', v)} />}
-                {isFieldVisible('spouse.ktpNumber') && <FormField label="NIK Pasangan" value={state.spouse?.ktpNumber || ''} onChange={v => updateSpouse('ktpNumber', v)} />}
-                {isFieldVisible('spouse.pob') && <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />}
-                {isFieldVisible('spouse.dob') && <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />}
-                {isFieldVisible('spouse.job') && <FormField label="Pekerjaan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />}
-                {isFieldVisible('spouse.address') && <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />}
-                <div className="col-span-2">
-                  <label className="text-[9px] text-muted-foreground">Status Pekerjaan Pasangan</label>
-                  <div className="flex gap-1 mt-0.5">
-                    {(['NGANGGUR', 'KARYAWAN', 'WIRAUSAHA'] as SpouseJobType[]).map(jt => (
-                      <button key={jt} onClick={() => updateSpouse('jobType', jt)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', (state.spouse?.jobType || 'NGANGGUR') === jt ? 'bg-pink-600 text-white border-pink-600' : 'bg-card border-border')}>{jt}</button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
           </FormSection>
+          {/* === Data Pasangan — terpisah sesuai parent (muncul hanya jika MARRIED) === */}
+          {state.maritalStatus === MaritalStatus.MARRIED && (
+          <FormSection icon={<Heart className="w-3 h-3" />} title="Data Pasangan">
+            {isFieldVisible('spouse.fullName') && <FormField label="Nama Pasangan" value={state.spouse?.fullName || ''} onChange={v => updateSpouse('fullName', v)} />}
+            {isFieldVisible('spouse.ktpNumber') && <FormField label="NIK Pasangan" value={state.spouse?.ktpNumber || ''} onChange={v => updateSpouse('ktpNumber', v)} />}
+            {isFieldVisible('spouse.pob') && <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />}
+            {isFieldVisible('spouse.dob') && <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />}
+            {isFieldVisible('spouse.address') && <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />}
+          </FormSection>
+          )}
+          {/* === Pekerjaan Pasangan — terpisah sesuai parent (muncul hanya jika MARRIED) === */}
+          {state.maritalStatus === MaritalStatus.MARRIED && (
+          <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan Pasangan">
+            <div className="col-span-2">
+              <label className="text-[9px] text-muted-foreground">Status Pekerjaan Pasangan</label>
+              <div className="flex gap-1 mt-0.5">
+                {(['NGANGGUR', 'KARYAWAN', 'WIRAUSAHA'] as SpouseJobType[]).map(jt => (
+                  <button key={jt} onClick={() => updateSpouse('jobType', jt)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', (state.spouse?.jobType || 'NGANGGUR') === jt ? 'bg-pink-600 text-white border-pink-600' : 'bg-card border-border')}>{jt}</button>
+                ))}
+              </div>
+            </div>
+            {isFieldVisible('spouse.job') && <FormField label="Pekerjaan / Jabatan Pasangan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />}
+          </FormSection>
+          )}
+          {/* === Unit Properti — isFieldVisible aktif per field === */}
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Unit Properti">
-            <FormField label="Nama Perumahan" value={state.property.projectName} onChange={v => updateProperty('projectName', v)} />
+            {isFieldVisible('property.projectName') && <FormField label="Nama Perumahan" value={state.property.projectName} onChange={v => updateProperty('projectName', v)} />}
             <FormField label="Alamat" value={state.property.houseAddress} onChange={v => updateProperty('houseAddress', v)} full />
-            <FormField label="Blok (Huruf)" value={state.property.blockLetter} onChange={v => {
+            {isFieldVisible('property.blockLetter') && <FormField label="Blok (Huruf)" value={state.property.blockLetter} onChange={v => {
               updateProperty('blockLetter', v)
               setState(s => ({ ...s, property: { ...s.property, blockLetter: v, kavlingNumber: `${v}${s.property.houseNumber || ''}` } }))
-            }} />
-            <FormField label="No. Rumah (Angka)" value={state.property.houseNumber} onChange={v => {
+            }} />}
+            {isFieldVisible('property.houseNumber') && <FormField label="No. Rumah (Angka)" value={state.property.houseNumber} onChange={v => {
               updateProperty('houseNumber', v)
               setState(s => ({ ...s, property: { ...s.property, houseNumber: v, kavlingNumber: `${s.property.blockLetter || ''}${v}` } }))
-            }} />
-            <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />
-            <FormField label="Luas Bangunan (m²)" type="number" value={state.property.houseSize} onChange={v => updateProperty('houseSize', parseInt(v) || 0)} />
+            }} />}
+            {isFieldVisible('property.landSize') && <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />}
+            {isFieldVisible('property.houseSize') && <FormField label="Luas Bangunan (m²)" type="number" value={state.property.houseSize} onChange={v => updateProperty('houseSize', parseInt(v) || 0)} />}
             <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
             <FormField label="Kelurahan Sertipikat" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
-            <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />
-            {formMode === 'bank' && <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />}
-            {formMode === 'bank' && <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />}
-            {formMode === 'bank' && <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />}
-            <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} full />
-            {formMode === 'bank' && <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />}
+            {isFieldVisible('property.price') && <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />}
+            {formMode === 'bank' && isFieldVisible('property.dpAmount') && <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />}
+            {formMode === 'bank' && isFieldVisible('property.plafonKpr') && <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />}
+            {formMode === 'bank' && isFieldVisible('property.tenor') && <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />}
+            {isFieldVisible('dateOfDocument') && <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} full />}
+            {formMode === 'bank' && isFieldVisible('akadDate') && <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />}
             {formMode === 'bank' && <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />}
-            {formMode === 'bank' && <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />}
+            {formMode === 'bank' && isFieldVisible('lpaDate') && <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />}
             {formMode === 'bank' && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
             {formMode === 'bank' && <FormField label="Tanggal SP3K" type="date" value={state.sp3kDate || ''} onChange={v => setState(s => ({ ...s, sp3kDate: v }))} />}
           </FormSection>
