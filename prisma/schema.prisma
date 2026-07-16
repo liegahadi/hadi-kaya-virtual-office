@@ -295,6 +295,7 @@ model Customer {
   gajiPokok      Int?
   slipGajiData   String?  // JSON: tunjangan, potongan, tanggalTerima, periode
   uploadedDocs   String?  // JSON string of { docId: dataUrl } for file persistence
+  customFieldValues String? // JSON: { customFieldId: value } — bank-specific custom field values
 
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignedAgent  Agent?        @relation(fields: [assignedAgentId], references: [id])

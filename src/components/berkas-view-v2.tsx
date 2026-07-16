@@ -425,6 +425,8 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
   const [bankSpecificUploads, setBankSpecificUploads] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
   const [bankSpecificSignedDocs, setBankSpecificSignedDocs] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
   const [bankFormboxFields, setBankFormboxFields] = useState<string[] | null>(null)
+  const [bankCustomFields, setBankCustomFields] = useState<Array<{ id: string; label: string; category: string; fieldType?: string }>>([])
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({})
 
   // Helper: check if formbox field should be visible for current bank
   // BTN/BSB = always visible (hardcoded). Mandiri+future = only if checked in BankConfig
@@ -432,6 +434,33 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
     if (['BTN', 'BSB_SYARIAH'].includes(bank)) return true
     if (!bankFormboxFields || bankFormboxFields.length === 0) return true
     return bankFormboxFields.includes(fieldId)
+  }
+
+  // Helper: update custom field value (for sidebar input)
+  const updateCustomField = (id: string, value: string) => {
+    setCustomFieldValues(prev => ({ ...prev, [id]: value }))
+  }
+
+  // Helper: render custom fields for a category in sidebar
+  // Returns array of FormField elements — caller spreads them after static fields
+  const renderCustomFieldsForCategory = (categoryId: string, fullByDefault = false) => {
+    if (!bankCustomFields || bankCustomFields.length === 0) return null
+    const fields = bankCustomFields.filter(f => f.category === categoryId && bankFormboxFields?.includes(f.id))
+    if (fields.length === 0) return null
+    return fields.map(f => {
+      const fieldType = f.fieldType || 'text'
+      const inputType = fieldType === 'date' ? 'date' : fieldType === 'number' ? 'number' : 'text'
+      return (
+        <FormField
+          key={f.id}
+          label={`${f.label} (Custom)`}
+          value={customFieldValues[f.id] || ''}
+          onChange={v => updateCustomField(f.id, v)}
+          full={fullByDefault && (fieldType === 'address' || fieldType === 'longtext')}
+          type={inputType}
+        />
+      )
+    })
   }
 
   // Fetch bank-specific document config when bank changes (for non-hardcoded banks)
@@ -494,6 +523,17 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
           setBankSpecificUploads(uploadDocs)
           setBankSpecificSignedDocs(signedDocs)
           setBankFormboxFields(docs.formboxFields || [])
+          setBankCustomFields(docs.customFields || [])
+          // Load saved customFieldValues dari customer record (kalau ada)
+          if (customer.customFieldValues) {
+            try {
+              setCustomFieldValues(JSON.parse(customer.customFieldValues))
+            } catch {
+              setCustomFieldValues({})
+            }
+          } else {
+            setCustomFieldValues({})
+          }
         } catch {}
       })
       .catch(() => {})
@@ -848,6 +888,8 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             periodeSlip: (state.applicant as any).periodeSlip,
           }),
           uploadedDocs: JSON.stringify(uploadedFiles),
+          // Save custom field values (bank-specific)
+          customFieldValues: JSON.stringify(customFieldValues),
         }),
       })
       const d = await res.json()
@@ -1692,14 +1734,15 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('company.companyName') && <FormField label="Nama PT" value={companySettings.companyName || ''} onChange={v => updateCompanySetting('companyName', v)} />}
             {isFieldVisible('company.directorName') && <FormField label="Direktur" value={companySettings.directorName || ''} onChange={v => updateCompanySetting('directorName', v)} />}
             {isFieldVisible('company.directorNik') && <FormField label="NIK Direktur" value={companySettings.directorNik || ''} onChange={v => updateCompanySetting('directorNik', v)} />}
-            <FormField label="No. HP Owner (Global)" value={(companySettings as any).directorPhone || ''} onChange={v => updateCompanySetting('directorPhone', v)} />
-            <FormField label="Alamat KTP Direktur" value={(companySettings as any).directorAddress || ''} onChange={v => updateCompanySetting('directorAddress', v)} full />
+            {isFieldVisible('company.directorPhone') && <FormField label="No. HP Owner (Global)" value={(companySettings as any).directorPhone || ''} onChange={v => updateCompanySetting('directorPhone', v)} />}
+            {isFieldVisible('company.directorAddress') && <FormField label="Alamat KTP Direktur" value={(companySettings as any).directorAddress || ''} onChange={v => updateCompanySetting('directorAddress', v)} full />}
             {isFieldVisible('company.officeAddress') && <FormField label="Alamat Kantor (Global)" value={(companySettings as any).officeAddress || ''} onChange={v => updateCompanySetting('officeAddress', v)} full />}
             {isFieldVisible('company.city') && <FormField label="Kota" value={companySettings.city || ''} onChange={v => updateCompanySetting('city', v)} />}
             {/* Rekening per bank - hanya tampil yang sesuai bank yang dipilih */}
-            {bank === 'BTN' && <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />}
-            {bank === 'MANDIRI' && <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />}
-            {bank === 'BSB_SYARIAH' && <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />}
+            {bank === 'BTN' && isFieldVisible('company.btnAccount') && <FormField label="Rekening BTN" value={companySettings.btnAccount || ''} onChange={v => updateCompanySetting('btnAccount', v)} />}
+            {bank === 'MANDIRI' && isFieldVisible('company.mandiriAccount') && <FormField label="Rekening Mandiri" value={companySettings.mandiriAccount || ''} onChange={v => updateCompanySetting('mandiriAccount', v)} />}
+            {bank === 'BSB_SYARIAH' && isFieldVisible('company.bsbAccount') && <FormField label="Rekening BSB Syariah" value={companySettings.bsbAccount || ''} onChange={v => updateCompanySetting('bsbAccount', v)} />}
+            {renderCustomFieldsForCategory('perusahaan', true)}
           </FormSection>
           <FormSection icon={<User className="w-3 h-3" />} title="Data Nasabah">
             {isFieldVisible('applicant.fullName') && <FormField label="Nama Lengkap (KTP)" value={state.applicant.fullName} onChange={v => updateApplicant('fullName', v)} required />}
@@ -1718,6 +1761,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {bank === 'BSB_SYARIAH' && <FormField label="Alamat Domisili" value={state.applicant.domicileAddress || ''} onChange={v => updateApplicant('domicileAddress', v)} full />}
             {bank === 'BSB_SYARIAH' && <FormField label="Email" value={state.applicant.email || ''} onChange={v => updateApplicant('email', v)} />}
             {bank === 'BSB_SYARIAH' && <FormField label="NIP / No. Pokok Pegawai" value={state.applicant.nip || ''} onChange={v => updateApplicant('nip', v)} />}
+            {renderCustomFieldsForCategory('nasabah', true)}
           </FormSection>
           <FormSection icon={<Briefcase className="w-3 h-3" />} title="Pekerjaan Debitur">
             <div className="col-span-2 flex gap-1 mb-1">
@@ -1729,6 +1773,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('applicant.companyAddress') && <FormField label="Alamat Perusahaan" value={state.applicant.companyAddress} onChange={v => updateApplicant('companyAddress', v)} full />}
             {isFieldVisible('applicant.companyPhone') && <FormField label="Telp Perusahaan" value={(state.applicant as any).companyPhone || ''} onChange={v => updateApplicant('companyPhone', v)} />}
             {isFieldVisible('applicant.monthlyIncome') && <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />}
+            {renderCustomFieldsForCategory('pekerjaan-debitur', true)}
           </FormSection>
           {/* BSB-specific: Bendaharawan fields — pertahankan untuk BSB saja */}
           {bank === 'BSB_SYARIAH' && (
@@ -1754,6 +1799,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('spouse.pob') && <FormField label="Tempat Lahir" value={state.spouse?.pob || ''} onChange={v => updateSpouse('pob', v)} />}
             {isFieldVisible('spouse.dob') && <FormField label="Tanggal Lahir" type="date" value={state.spouse?.dob || ''} onChange={v => updateSpouse('dob', v)} />}
             {isFieldVisible('spouse.address') && <FormField label="Alamat Pasangan" value={state.spouse?.address || ''} onChange={v => updateSpouse('address', v)} full />}
+            {renderCustomFieldsForCategory('pasangan', true)}
           </FormSection>
           )}
           {/* === Pekerjaan Pasangan — terpisah sesuai parent (muncul hanya jika MARRIED) === */}
@@ -1775,12 +1821,13 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
               </div>
             </div>
             {isFieldVisible('spouse.job') && <FormField label="Pekerjaan / Jabatan Pasangan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />}
+            {renderCustomFieldsForCategory('pekerjaan-pasangan', false)}
           </FormSection>
           )}
           {/* === Unit Properti — isFieldVisible aktif per field === */}
           <FormSection icon={<Building2 className="w-3 h-3" />} title="Unit Properti">
             {isFieldVisible('property.projectName') && <FormField label="Nama Perumahan" value={state.property.projectName} onChange={v => updateProperty('projectName', v)} />}
-            <FormField label="Alamat" value={state.property.houseAddress} onChange={v => updateProperty('houseAddress', v)} full />
+            {isFieldVisible('property.houseAddress') && <FormField label="Alamat" value={state.property.houseAddress} onChange={v => updateProperty('houseAddress', v)} full />}
             {isFieldVisible('property.blockLetter') && <FormField label="Blok (Huruf)" value={state.property.blockLetter} onChange={v => {
               updateProperty('blockLetter', v)
               setState(s => ({ ...s, property: { ...s.property, blockLetter: v, kavlingNumber: `${v}${s.property.houseNumber || ''}` } }))
@@ -1791,18 +1838,19 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             }} />}
             {isFieldVisible('property.landSize') && <FormField label="Luas Tanah (m²)" type="number" value={state.property.landSize} onChange={v => updateProperty('landSize', parseInt(v) || 0)} />}
             {isFieldVisible('property.houseSize') && <FormField label="Luas Bangunan (m²)" type="number" value={state.property.houseSize} onChange={v => updateProperty('houseSize', parseInt(v) || 0)} />}
-            <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />
-            <FormField label="Kelurahan Sertipikat" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />
+            {isFieldVisible('property.shmNumber') && <FormField label="No. Sertifikat (SHM)" value={state.property.shmNumber} onChange={v => updateProperty('shmNumber', v)} />}
+            {isFieldVisible('property.nibNumber') && <FormField label="Kelurahan Sertipikat" value={state.property.nibNumber} onChange={v => updateProperty('nibNumber', v)} />}
             {isFieldVisible('property.price') && <FormField label="Harga Jual" type="number" value={state.property.price} onChange={v => updateProperty('price', parseInt(v) || 0)} />}
             {formMode === 'bank' && isFieldVisible('property.dpAmount') && <FormField label="DP" type="number" value={state.property.downPayment} onChange={v => updateProperty('downPayment', parseInt(v) || 0)} />}
             {formMode === 'bank' && isFieldVisible('property.plafonKpr') && <FormField label="Plafon KPR" type="number" value={state.property.kprPlafon} onChange={v => updateProperty('kprPlafon', parseInt(v) || 0)} />}
             {formMode === 'bank' && isFieldVisible('property.tenor') && <FormField label="Tenor (tahun)" type="number" value={state.property.kprTerm} onChange={v => updateProperty('kprTerm', parseInt(v) || 0)} />}
             {isFieldVisible('dateOfDocument') && <FormField label="Tanggal Dokumen" type="date" value={state.dateOfDocument} onChange={v => setState(s => ({ ...s, dateOfDocument: v }))} full />}
             {formMode === 'bank' && isFieldVisible('akadDate') && <FormField label="Tanggal Akad" type="date" value={state.akadDate || ''} onChange={v => setState(s => ({ ...s, akadDate: v }))} />}
-            {formMode === 'bank' && <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />}
+            {formMode === 'bank' && isFieldVisible('akadNumber') && <FormField label="No. Akad" value={state.akadNumber || ''} onChange={v => setState(s => ({ ...s, akadNumber: v }))} />}
             {formMode === 'bank' && isFieldVisible('lpaDate') && <FormField label="Tanggal LPA" type="date" value={state.lpaDate || ''} onChange={v => setState(s => ({ ...s, lpaDate: v }))} />}
-            {formMode === 'bank' && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
-            {formMode === 'bank' && <FormField label="Tanggal SP3K" type="date" value={state.sp3kDate || ''} onChange={v => setState(s => ({ ...s, sp3kDate: v }))} />}
+            {formMode === 'bank' && isFieldVisible('lpaNumber') && <FormField label="No. LPA" value={state.lpaNumber || ''} onChange={v => setState(s => ({ ...s, lpaNumber: v }))} />}
+            {formMode === 'bank' && isFieldVisible('sp3kDate') && <FormField label="Tanggal SP3K" type="date" value={state.sp3kDate || ''} onChange={v => setState(s => ({ ...s, sp3kDate: v }))} />}
+            {renderCustomFieldsForCategory('properti', true)}
           </FormSection>
           {/* Post-SP3K BTN file requirements - only when AJB stage for BTN */}
           {formMode === 'bank' && docStage === 'ajb' && bank === 'BTN' && (
