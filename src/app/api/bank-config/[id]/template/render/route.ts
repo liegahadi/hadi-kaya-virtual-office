@@ -100,21 +100,73 @@ export async function POST(
       // Get value from formData
       let value = formData[ann.fieldMapping] || ''
       
-      // Handle combined fields
-      if (ann.fieldMapping === 'customer.pobDob') {
+      // === Handle auto-derived composite + transform field types ===
+      // Composite: gabungan 2+ fields
+      // Transform: derive dari 1 date field (default: dateOfDocument)
+      const ROMAN_MONTHS = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+      const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+
+      function formatDateLong(dateStr: string): string {
+        if (!dateStr) return ''
+        try { return new Date(dateStr).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) }
+        catch { return dateStr }
+      }
+      function formatDateShort(dateStr: string): string {
+        if (!dateStr) return ''
+        try {
+          const d = new Date(dateStr)
+          const dd = String(d.getDate()).padStart(2, '0')
+          const mm = String(d.getMonth() + 1).padStart(2, '0')
+          return `${dd}/${mm}/${d.getFullYear()}`
+        } catch { return dateStr }
+      }
+      function getMonthIdx(dateStr: string): number {
+        try { return new Date(dateStr).getMonth() } catch { return -1 }
+      }
+
+      if (ann.fieldMapping === 'applicant.pobDobComposite') {
+        // composite_pob_dob: applicant.pob + applicant.dob → "Jakarta, 17 Agustus 1990"
+        // Form data uses 'customer.birthPlace' + 'customer.birthDate' (mapped values)
+        const pob = formData['customer.birthPlace'] || formData['applicant.pob'] || ''
+        const dob = formData['customer.birthDate'] || formData['applicant.dob'] || ''
+        if (pob && dob) value = `${pob}, ${formatDateLong(dob)}`
+        else if (pob) value = pob
+        else if (dob) value = formatDateLong(dob)
+      } else if (ann.fieldMapping === 'company.cityLongDateComposite') {
+        // composite_city_long_date: company.city + dateOfDocument → "Pangkalpinang, 17 Agustus 2026"
+        const city = formData['company.city'] || formData['customer.city'] || ''
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        if (city && dateStr) value = `${city}, ${formatDateLong(dateStr)}`
+        else if (city) value = city
+        else if (dateStr) value = formatDateLong(dateStr)
+      } else if (ann.fieldMapping === 'property.sprRomanMonth') {
+        // roman_month: dari dateOfDocument → "VIII" (untuk Agustus)
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        const idx = getMonthIdx(dateStr)
+        if (idx >= 0) value = ROMAN_MONTHS[idx]
+      } else if (ann.fieldMapping === 'property.sprMonthName') {
+        // month_name: dari dateOfDocument → "Agustus"
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        const idx = getMonthIdx(dateStr)
+        if (idx >= 0) value = MONTH_NAMES[idx]
+      } else if (ann.fieldMapping === 'property.sprLongDate') {
+        // date_long: dari dateOfDocument → "17 Agustus 2026"
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        value = formatDateLong(dateStr)
+      } else if (ann.fieldMapping === 'property.sprShortDate') {
+        // date_short: dari dateOfDocument → "17/08/2026"
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        value = formatDateShort(dateStr)
+      }
+      // Legacy combined fields (kept for backward compat — old annotations might still use these)
+      else if (ann.fieldMapping === 'customer.pobDob') {
         const pob = formData['customer.birthPlace'] || ''
         const dob = formData['customer.birthDate'] || ''
-        if (pob && dob) {
-          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { value = `${pob}, ${dob}` }
-        }
+        if (pob && dob) value = `${pob}, ${formatDateLong(dob)}`
       } else if (ann.fieldMapping === 'customer.spousePobDob') {
         const pob = formData['customer.spouseBirthPlace'] || formData['customer.spousePob'] || ''
         const dob = formData['customer.spouseBirthDate'] || formData['customer.spouseDob'] || ''
-        if (pob && dob) {
-          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { value = `${pob}, ${dob}` }
-        }
+        if (pob && dob) value = `${pob}, ${formatDateLong(dob)}`
       }
       
       if (!value) continue

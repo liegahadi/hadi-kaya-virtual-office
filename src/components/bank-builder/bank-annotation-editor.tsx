@@ -202,18 +202,47 @@ const GROUP_TO_CATEGORY: Record<string, string> = Object.entries(CATEGORY_TO_GRO
   return acc
 }, {} as Record<string, string>)
 
+// Auto-derived fields (composite + transform) — injected to dropdown
+// when their source field IDs are all checked in formboxFields.
+// Defined in bank-builder.tsx as AUTO_DERIVED_FIELDS.
+// Each auto-derived field appears in its parent category group.
+const AUTO_DERIVED_FIELDS_LIST = [
+  { id: 'applicant.pobDobComposite', label: 'Tempat, Tgl Lahir (gabungan)', type: 'composite_pob_dob', sourceFieldIds: ['applicant.pob', 'applicant.dob'], category: 'nasabah' },
+  { id: 'company.cityLongDateComposite', label: 'Kota + Tanggal Panjang (gabungan)', type: 'composite_city_long_date', sourceFieldIds: ['company.city', 'dateOfDocument'], category: 'perusahaan' },
+  { id: 'property.sprRomanMonth', label: 'Bulan SPR (Romawi, I-XII)', type: 'roman_month', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
+  { id: 'property.sprMonthName', label: 'Nama Bulan (e.g. Agustus)', type: 'month_name', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
+  { id: 'property.sprLongDate', label: 'Tanggal Panjang (17 Agustus 2026)', type: 'date_long', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
+  { id: 'property.sprShortDate', label: 'Tanggal Pendek (17/08/2026)', type: 'date_short', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
+]
+
 function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string; category: string }>, formboxFields: string[]) {
   if (!formboxFields || formboxFields.length === 0) {
     // No formbox config → show all (backward compat for banks without config)
-    return FIELD_MAPPINGS_GROUPED
+    // Also include auto-derived fields (since we don't know what's checked, include all)
+    return FIELD_MAPPINGS_GROUPED.map(group => {
+      const catId = GROUP_TO_CATEGORY[group.group]
+      const autoForGroup = AUTO_DERIVED_FIELDS_LIST
+        .filter(af => af.category === catId)
+        .map(af => ({ value: af.id, label: `${af.label} (Auto)` }))
+      return {
+        ...group,
+        fields: [...group.fields, ...autoForGroup],
+      }
+    })
   }
 
   // Only include custom fields that are checked
   const activeCustoms = customFields.filter(f => formboxFields.includes(f.id))
   
+  // Determine which auto-derived fields are active (all source IDs must be checked)
+  const activeAutoDerived = AUTO_DERIVED_FIELDS_LIST.filter(af =>
+    af.sourceFieldIds.every(srcId => formboxFields.includes(srcId))
+  )
+  
   return FIELD_MAPPINGS_GROUPED.map(group => {
     const groupLabel = GROUP_TO_CATEGORY[group.group]
     const customsForGroup = activeCustoms.filter(f => f.category === groupLabel)
+    const autoForGroup = activeAutoDerived.filter(af => af.category === groupLabel)
 
     // Filter static fields: only show if corresponding formbox field is checked
     // System + Custom categories (no groupLabel) always show all
@@ -227,6 +256,7 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
       ...group,
       fields: [
         ...filteredStatic,
+        ...autoForGroup.map(af => ({ value: af.id, label: `${af.label} (Auto)` })),
         ...customsForGroup.map(f => ({ value: f.id, label: `${f.label} (Custom)` })),
       ],
     }
