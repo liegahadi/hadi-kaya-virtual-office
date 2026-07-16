@@ -242,6 +242,7 @@ const GROUP_TO_CATEGORY: Record<string, string> = Object.entries(CATEGORY_TO_GRO
 // Each auto-derived field appears in its parent category group.
 const AUTO_DERIVED_FIELDS_LIST = [
   { id: 'applicant.pobDobComposite', label: 'Tempat, Tgl Lahir (gabungan)', type: 'composite_pob_dob', sourceFieldIds: ['applicant.pob', 'applicant.dob'], category: 'nasabah' },
+  { id: 'spouse.pobDobComposite', label: 'Tempat, Tgl Lahir Pasangan (gabungan)', type: 'composite_spouse_pob_dob', sourceFieldIds: ['spouse.pob', 'spouse.dob'], category: 'pasangan' },
   { id: 'company.cityLongDateComposite', label: 'Kota + Tanggal Panjang (gabungan)', type: 'composite_city_long_date', sourceFieldIds: ['company.city', 'dateOfDocument'], category: 'perusahaan' },
   { id: 'property.blokRumahComposite', label: 'Blok - No Rumah (gabungan, E-6)', type: 'composite_blok_rumah', sourceFieldIds: ['property.blockLetter', 'property.houseNumber'], category: 'properti' },
   { id: 'property.ltlbComposite', label: 'Luas Tanah / Luas Bangunan (gabungan, 36/84)', type: 'composite_ltlb', sourceFieldIds: ['property.landSize', 'property.houseSize'], category: 'properti' },
@@ -251,18 +252,33 @@ const AUTO_DERIVED_FIELDS_LIST = [
   { id: 'property.sprShortDate', label: 'Tanggal Pendek (17/08/2026)', type: 'date_short', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
 ]
 
-function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string; category: string }>, formboxFields: string[]) {
+function buildGroupedWithCustoms(
+  customFields: Array<{ id: string; label: string; category: string }>,
+  formboxFields: string[],
+  customComposites?: Array<{
+    id: string
+    label: string
+    category: string
+    source1: string
+    source2: string
+    separator: string
+    dateFormat: string
+  }>
+) {
   if (!formboxFields || formboxFields.length === 0) {
     // No formbox config → show all (backward compat for banks without config)
-    // Also include auto-derived fields (since we don't know what's checked, include all)
+    // Also include auto-derived + custom composites (since we don't know what's checked, include all)
     return FIELD_MAPPINGS_GROUPED.map(group => {
       const catId = GROUP_TO_CATEGORY[group.group]
       const autoForGroup = AUTO_DERIVED_FIELDS_LIST
         .filter(af => af.category === catId)
         .map(af => ({ value: af.id, label: `${af.label} (Auto)` }))
+      const compositeForGroup = (customComposites || [])
+        .filter(c => c.category === catId)
+        .map(c => ({ value: c.id, label: `${c.label} (Composite)` }))
       return {
         ...group,
-        fields: [...group.fields, ...autoForGroup],
+        fields: [...group.fields, ...autoForGroup, ...compositeForGroup],
       }
     })
   }
@@ -274,11 +290,17 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
   const activeAutoDerived = AUTO_DERIVED_FIELDS_LIST.filter(af =>
     af.sourceFieldIds.every(srcId => formboxFields.includes(srcId))
   )
+
+  // Determine which custom composites are active (both source fields must be checked)
+  const activeCustomComposites = (customComposites || []).filter(c =>
+    formboxFields.includes(c.source1) && formboxFields.includes(c.source2)
+  )
   
   return FIELD_MAPPINGS_GROUPED.map(group => {
     const groupLabel = GROUP_TO_CATEGORY[group.group]
     const customsForGroup = activeCustoms.filter(f => f.category === groupLabel)
     const autoForGroup = activeAutoDerived.filter(af => af.category === groupLabel)
+    const compositeForGroup = activeCustomComposites.filter(c => c.category === groupLabel)
 
     // Filter static fields: only show if corresponding formbox field is checked
     // System + Custom categories (no groupLabel) always show all
@@ -293,6 +315,7 @@ function buildGroupedWithCustoms(customFields: Array<{ id: string; label: string
       fields: [
         ...filteredStatic,
         ...autoForGroup.map(af => ({ value: af.id, label: `${af.label} (Auto)` })),
+        ...compositeForGroup.map(c => ({ value: c.id, label: `${c.label} (Composite)` })),
         ...customsForGroup.map(f => ({ value: f.id, label: `${f.label} (Custom)` })),
       ],
     }
@@ -330,6 +353,15 @@ export function BankAnnotationEditor({
   const [testCustomerId, setTestCustomerId] = useState<string>('')
   const [customers, setCustomers] = useState<any[]>([])
   const [bankCustomFields, setBankCustomFields] = useState<Array<{ id: string; label: string; category: string }>>([])
+  const [bankCustomComposites, setBankCustomComposites] = useState<Array<{
+    id: string
+    label: string
+    category: string
+    source1: string
+    source2: string
+    separator: string
+    dateFormat: 'long' | 'short' | 'none'
+  }>>([])
   const [bankFormboxFields, setBankFormboxFields] = useState<string[]>([])
 
   const dragRef = useRef<{
@@ -405,6 +437,7 @@ export function BankAnnotationEditor({
         if (data.success && data.data.bank?.documents) {
           const docs = JSON.parse(data.data.bank.documents)
           setBankCustomFields(docs.customFields || [])
+          setBankCustomComposites(docs.customComposites || [])
           setBankFormboxFields(docs.formboxFields || [])
         }
       } catch (err) {
@@ -928,7 +961,7 @@ export function BankAnnotationEditor({
                     >
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {buildGroupedWithCustoms(bankCustomFields, bankFormboxFields).map((group) => (
+                        {buildGroupedWithCustoms(bankCustomFields, bankFormboxFields, bankCustomComposites).map((group) => (
                           <div key={group.group}>
                             <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase bg-muted/50 sticky top-0">
                               {group.group}
@@ -1071,6 +1104,7 @@ export function BankAnnotationEditor({
 
                     // === PROPERTI ===
                     if (c.projectName) values['customer.projectName'] = c.projectName
+                    if (c.houseAddress) values['customer.houseAddress'] = c.houseAddress
                     if (c.blockLetter) values['customer.blockLetter'] = c.blockLetter
                     if (c.houseNumber) values['customer.houseNumber'] = c.houseNumber
                     if (c.landSize) values['customer.landSize'] = String(c.landSize)
@@ -1107,6 +1141,14 @@ export function BankAnnotationEditor({
                         const d = new Date(values['customer.birthDate'])
                         const long = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
                         values['applicant.pobDobComposite'] = `${values['customer.birthPlace']}, ${long}`
+                      } catch {}
+                    }
+                    // Composite: spousePobDob — "Bandung, 5 Mei 1992" (pasangan)
+                    if (values['customer.spouseBirthPlace'] && values['customer.spouseBirthDate']) {
+                      try {
+                        const d = new Date(values['customer.spouseBirthDate'])
+                        const long = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                        values['spouse.pobDobComposite'] = `${values['customer.spouseBirthPlace']}, ${long}`
                       } catch {}
                     }
                     // Composite: cityLongDate — "Pangkalpinang, 17 Agustus 2026"

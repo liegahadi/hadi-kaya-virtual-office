@@ -92,6 +92,87 @@ export async function POST(
 
     const pages = pdfDoc.getPages()
 
+    // Load custom composites from BankConfig DB (for user-defined composite field rendering)
+    let customComposites: Array<{
+      id: string
+      label: string
+      category: string
+      source1: string
+      source2: string
+      separator: string
+      dateFormat: string
+    }> = []
+    try {
+      const bank = await db.bankConfig.findUnique({ where: { id: bankId } })
+      if (bank?.documents) {
+        const docs = JSON.parse(bank.documents)
+        if (Array.isArray(docs.customComposites)) customComposites = docs.customComposites
+      }
+    } catch {}
+
+    // FORMBOX_TO_MAPPING reverse: formBox ID → customer value key
+    const FORMBOX_TO_MAPPING: Record<string, string> = {
+      'company.companyName': 'company.companyName',
+      'company.directorName': 'company.directorName',
+      'company.directorNik': 'company.directorNik',
+      'company.directorPhone': 'company.directorPhone',
+      'company.directorAddress': 'company.directorAddress',
+      'company.officeAddress': 'company.officeAddress',
+      'company.city': 'company.city',
+      'company.btnAccount': 'company.btnAccount',
+      'company.mandiriAccount': 'company.mandiriAccount',
+      'company.bsbAccount': 'company.bsbAccount',
+      'company.btnBranch': 'company.btnBranch',
+      'company.mandiriBranch': 'company.mandiriBranch',
+      'company.bsbBranch': 'company.bsbBranch',
+      'applicant.fullName': 'customer.name',
+      'applicant.ktpNumber': 'customer.nik',
+      'applicant.pob': 'customer.birthPlace',
+      'applicant.dob': 'customer.birthDate',
+      'applicant.address': 'customer.ktpAddress',
+      'applicant.rtRw': 'customer.rtRw',
+      'applicant.kelurahan': 'customer.kelurahan',
+      'applicant.kecamatan': 'customer.kecamatan',
+      'applicant.city': 'customer.city',
+      'applicant.postalCode': 'customer.postalCode',
+      'applicant.phone': 'customer.phone',
+      'applicant.npwpNumber': 'customer.npwpNumber',
+      'applicant.btnAccountNumber': 'customer.btnAccountNumber',
+      'applicant.domicileAddress': 'customer.domicileAddress',
+      'applicant.email': 'customer.email',
+      'applicant.nip': 'customer.nip',
+      'applicant.jobTitle': 'customer.workPosition',
+      'applicant.companyName': 'customer.companyName',
+      'applicant.companyAddress': 'customer.companyAddress',
+      'applicant.companyPhone': 'customer.companyPhone',
+      'applicant.monthlyIncome': 'customer.monthlyIncome',
+      'spouse.fullName': 'customer.spouseName',
+      'spouse.ktpNumber': 'customer.spouseNik',
+      'spouse.pob': 'customer.spouseBirthPlace',
+      'spouse.dob': 'customer.spouseBirthDate',
+      'spouse.job': 'customer.spouseJob',
+      'spouse.address': 'customer.spouseAddress',
+      'spouse.jobType': 'customer.spouseJobType',
+      'property.projectName': 'customer.projectName',
+      'property.houseAddress': 'customer.houseAddress',
+      'property.blockLetter': 'customer.blockLetter',
+      'property.houseNumber': 'customer.houseNumber',
+      'property.landSize': 'customer.landSize',
+      'property.houseSize': 'customer.houseSize',
+      'property.shmNumber': 'customer.shmNumber',
+      'property.nibNumber': 'customer.nibNumber',
+      'property.price': 'customer.price',
+      'property.dpAmount': 'customer.dpAmount',
+      'property.plafonKpr': 'customer.plafonKpr',
+      'property.tenor': 'customer.tenor',
+      'dateOfDocument': 'customer.dateOfDocument',
+      'akadDate': 'customer.akadDate',
+      'akadNumber': 'customer.akadNumber',
+      'lpaDate': 'customer.lpaDate',
+      'lpaNumber': 'customer.lpaNumber',
+      'sp3kDate': 'customer.sp3kDate',
+    }
+
     // Process each annotation
     for (const ann of annotations) {
       if (!ann.page || ann.page < 1 || ann.page > pages.length) continue
@@ -126,9 +207,15 @@ export async function POST(
 
       if (ann.fieldMapping === 'applicant.pobDobComposite') {
         // composite_pob_dob: applicant.pob + applicant.dob → "Jakarta, 17 Agustus 1990"
-        // Form data uses 'customer.birthPlace' + 'customer.birthDate' (mapped values)
         const pob = formData['customer.birthPlace'] || formData['applicant.pob'] || ''
         const dob = formData['customer.birthDate'] || formData['applicant.dob'] || ''
+        if (pob && dob) value = `${pob}, ${formatDateLong(dob)}`
+        else if (pob) value = pob
+        else if (dob) value = formatDateLong(dob)
+      } else if (ann.fieldMapping === 'spouse.pobDobComposite') {
+        // composite_spouse_pob_dob: spouse.pob + spouse.dob → "Bandung, 5 Mei 1992"
+        const pob = formData['customer.spouseBirthPlace'] || formData['spouse.pob'] || ''
+        const dob = formData['customer.spouseBirthDate'] || formData['spouse.dob'] || ''
         if (pob && dob) value = `${pob}, ${formatDateLong(dob)}`
         else if (pob) value = pob
         else if (dob) value = formatDateLong(dob)
@@ -172,6 +259,24 @@ export async function POST(
         const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
         value = formatDateShort(dateStr)
       }
+      // === User-defined custom composite fields ===
+      // Look up by ID in customComposites (loaded from BankConfig DB)
+      else if (ann.fieldMapping.startsWith('composite-')) {
+        const c = customComposites.find(x => x.id === ann.fieldMapping)
+        if (c) {
+          const mappingKey1 = FORMBOX_TO_MAPPING[c.source1] || c.source1
+          const mappingKey2 = FORMBOX_TO_MAPPING[c.source2] || c.source2
+          let v1 = formData[mappingKey1] || formData[c.source1] || ''
+          let v2 = formData[mappingKey2] || formData[c.source2] || ''
+          // Format v2 if dateFormat specified (assume v2 is date)
+          if (c.dateFormat === 'long' && v2) v2 = formatDateLong(v2)
+          else if (c.dateFormat === 'short' && v2) v2 = formatDateShort(v2)
+          const sep = c.separator || ' '
+          if (v1 && v2) value = `${v1}${sep}${v2}`
+          else if (v1) value = v1
+          else if (v2) value = v2
+        }
+      }
       // Legacy combined fields (kept for backward compat — old annotations might still use these)
       else if (ann.fieldMapping === 'customer.pobDob') {
         const pob = formData['customer.birthPlace'] || ''
@@ -191,15 +296,25 @@ export async function POST(
       // Convert relative coordinates (0-1) to absolute PDF coordinates
       // PDF: origin bottom-left, Y goes up
       // Annotation: origin top-left, Y goes down
+      // ann.y = top of box (in relative, top-left origin)
+      // y_bottom (PDF coords) = pageHeight - (ann.y + ann.height) * pageHeight  ← bottom of box
       const x = ann.x * pageWidth
-      const y = pageHeight - (ann.y * pageHeight) - (ann.height * pageHeight) // flip Y
+      const boxHeightPx = ann.height * pageHeight
+      const y_bottom = pageHeight - (ann.y * pageHeight) - boxHeightPx // bottom of box in PDF coords
       const fontSize = ann.fontSize || 10
+
+      // Match preview's top-baseline rendering:
+      // - Preview: textBaseline='top', text drawn at y+2 from TOP of box (Y goes down)
+      // - Render (PDF): text drawn with baseline at y, so to align text near TOP of box
+      //   we need y = (top of box in PDF coords) - fontSize - 2
+      //   top of box in PDF coords = y_bottom + boxHeightPx
+      const textY = y_bottom + boxHeightPx - fontSize - 2
 
       // Draw text
       try {
         page.drawText(String(value), {
           x: x + 2,
-          y: y + 2,
+          y: textY,
           size: fontSize,
           font: helveticaFont,
           color: rgb(0, 0, 0),

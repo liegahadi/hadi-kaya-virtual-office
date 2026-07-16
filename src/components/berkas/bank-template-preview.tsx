@@ -175,6 +175,12 @@ export function BankTemplatePreview({
         if (pob && dob) value = `${pob}, ${fmtLong(dob)}`
         else if (pob) value = pob
         else if (dob) value = fmtLong(dob)
+      } else if (ann.fieldMapping === 'spouse.pobDobComposite') {
+        const pob = formData['customer.spouseBirthPlace'] || formData['spouse.pob'] || ''
+        const dob = formData['customer.spouseBirthDate'] || formData['spouse.dob'] || ''
+        if (pob && dob) value = `${pob}, ${fmtLong(dob)}`
+        else if (pob) value = pob
+        else if (dob) value = fmtLong(dob)
       } else if (ann.fieldMapping === 'company.cityLongDateComposite') {
         const city = formData['company.city'] || formData['customer.city'] || ''
         const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''

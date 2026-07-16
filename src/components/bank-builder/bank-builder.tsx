@@ -1130,8 +1130,31 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
   const [formboxFields, setFormboxFields] = useState<string[]>([])
   const [customDocs, setCustomDocs] = useState<Array<{ id: string; label: string; category: string }>>([])
   const [customFields, setCustomFields] = useState<Array<{ id: string; label: string; category: string }>>([])
+  // User-defined custom composite fields
+  // Format: { id, label, category, source1, source2, separator, dateFormat }
+  //   - source1/source2: field ID dari FORMBOX_CATEGORIES (e.g. 'spouse.pob')
+  //   - separator: string antara 2 values (default ', ')
+  //   - dateFormat: 'long'|'short'|'none' — kalau source berupa date, format pake ini
+  // Render output: `{value1}{separator}{value2}` (value2 di-format sesuai dateFormat)
+  const [customComposites, setCustomComposites] = useState<Array<{
+    id: string
+    label: string
+    category: string
+    source1: string
+    source2: string
+    separator: string
+    dateFormat: 'long' | 'short' | 'none'
+  }>>([])
   const [newDocLabels, setNewDocLabels] = useState<Record<string, string>>({})
   const [newFieldLabels, setNewFieldLabels] = useState<Record<string, string>>({})
+  const [newComposite, setNewComposite] = useState<{
+    label: string
+    category: string
+    source1: string
+    source2: string
+    separator: string
+    dateFormat: 'long' | 'short' | 'none'
+  }>({ label: '', category: 'nasabah', source1: '', source2: '', separator: ', ', dateFormat: 'none' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -1145,6 +1168,7 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
         setFormboxFields(docs.formboxFields || allDefaultFields)
         setCustomDocs(docs.customDocs || [])
         setCustomFields(docs.customFields || [])
+        setCustomComposites(docs.customComposites || [])
       } else {
         setRequiredDocs(DOC_CATEGORIES.flatMap(c => c.docs.filter(d => d.default).map(d => d.id)))
         setFormboxFields(FORMBOX_CATEGORIES.flatMap(c => c.fields.filter(f => f.default).map(f => f.id)))
@@ -1201,6 +1225,7 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
       existingDocs.formboxFields = formboxFields
       existingDocs.customDocs = customDocs
       existingDocs.customFields = customFields
+      existingDocs.customComposites = customComposites
       existingDocs.updatedAt = new Date().toISOString()
       const res = await fetch('/api/bank-config', {
         method: 'PUT',
@@ -1298,6 +1323,127 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
         ))}
       </div>
 
+      {/* === Custom Composite Fields — User-defined gabungan 2 field === */}
+      <div className="border-t border-border pt-3">
+        <h3 className="text-sm font-semibold">🔗 Custom Composite Fields (User-Defined)</h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-3">
+          Buat gabungan 2 field dengan separator & format tanggal. Muncul otomatis di Field Mapping dropdown kalau kedua source field di-check.
+        </p>
+
+        {/* List existing composites */}
+        {customComposites.length > 0 && (
+          <div className="space-y-1 mb-3">
+            {customComposites.map(c => {
+              const cat = FORMBOX_CATEGORIES.find(fc => fc.id === c.category)
+              return (
+                <div key={c.id} className="flex items-center gap-2 p-2 rounded border border-amber-500/30 bg-amber-500/5">
+                  <Badge variant="outline" className="text-[8px]">Composite</Badge>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium">{c.label}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {c.source1} <span className="text-amber-600">{c.separator || ' '}</span> {c.source2}
+                      {c.dateFormat !== 'none' && <span className="text-blue-600"> ({c.dateFormat} date)</span>}
+                    </div>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{cat?.label || c.category}</span>
+                  <button onClick={() => setCustomComposites(prev => prev.filter(x => x.id !== c.id))} className="text-red-500 hover:text-red-700">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Form: Add new composite */}
+        <div className="p-2 rounded border border-amber-500/30 bg-amber-500/5 space-y-2">
+          <Input
+            placeholder="Label composite (e.g. 'Tempat Lahir Pasangan + Tgl Lahir')"
+            value={newComposite.label}
+            onChange={e => setNewComposite(prev => ({ ...prev, label: e.target.value }))}
+            className="h-7 text-xs"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-muted-foreground">Source Field 1</label>
+              <select
+                value={newComposite.source1}
+                onChange={e => setNewComposite(prev => ({ ...prev, source1: e.target.value }))}
+                className="w-full h-7 text-xs border rounded bg-background px-2"
+              >
+                <option value="">— pilih field 1 —</option>
+                {FORMBOX_CATEGORIES.flatMap(cat => cat.fields.map(f => (
+                  <option key={f.id} value={f.id}>{cat.label} → {f.label}</option>
+                )))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-muted-foreground">Source Field 2</label>
+              <select
+                value={newComposite.source2}
+                onChange={e => setNewComposite(prev => ({ ...prev, source2: e.target.value }))}
+                className="w-full h-7 text-xs border rounded bg-background px-2"
+              >
+                <option value="">— pilih field 2 —</option>
+                {FORMBOX_CATEGORIES.flatMap(cat => cat.fields.map(f => (
+                  <option key={f.id} value={f.id}>{cat.label} → {f.label}</option>
+                )))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[9px] text-muted-foreground">Separator</label>
+              <Input
+                placeholder=", "
+                value={newComposite.separator}
+                onChange={e => setNewComposite(prev => ({ ...prev, separator: e.target.value }))}
+                className="h-7 text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] text-muted-foreground">Date Format (field 2)</label>
+              <select
+                value={newComposite.dateFormat}
+                onChange={e => setNewComposite(prev => ({ ...prev, dateFormat: e.target.value as 'long' | 'short' | 'none' }))}
+                className="w-full h-7 text-xs border rounded bg-background px-2"
+              >
+                <option value="none">None (text)</option>
+                <option value="long">Long (17 Agustus 2026)</option>
+                <option value="short">Short (17/08/2026)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-muted-foreground">Category</label>
+              <select
+                value={newComposite.category}
+                onChange={e => setNewComposite(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full h-7 text-xs border rounded bg-background px-2"
+              >
+                {FORMBOX_CATEGORIES.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="h-7 text-xs w-full"
+            disabled={!newComposite.label.trim() || !newComposite.source1 || !newComposite.source2}
+            onClick={() => {
+              if (!newComposite.label.trim() || !newComposite.source1 || !newComposite.source2) return
+              const id = `composite-${Date.now()}-${newComposite.category}`
+              setCustomComposites(prev => [...prev, { id, ...newComposite, label: newComposite.label.trim() }])
+              setNewComposite({ label: '', category: 'nasabah', source1: '', source2: '', separator: ', ', dateFormat: 'none' })
+              toast.success('Custom composite ditambahkan. Klik Simpan untuk menyimpan.')
+            }}
+          >
+            <Plus className="w-3 h-3 mr-1" />
+            Tambah Composite
+          </Button>
+        </div>
+      </div>
+
       <div className="flex gap-2 pt-2 border-t border-border sticky bottom-0 bg-background">
         <Button onClick={save} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
@@ -1308,6 +1454,7 @@ function BankDocumentsConfig({ bank, onUpdated }: { bank: any; onUpdated: () => 
           setFormboxFields(FORMBOX_CATEGORIES.flatMap(c => c.fields.filter(f => f.default).map(f => f.id)))
           setCustomDocs([])
           setCustomFields([])
+          setCustomComposites([])
         }}>Reset</Button>
       </div>
     </Card>

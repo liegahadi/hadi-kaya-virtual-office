@@ -426,6 +426,15 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
   const [bankSpecificSignedDocs, setBankSpecificSignedDocs] = useState<Array<{ id: string; label: string; desc: string }> | null>(null)
   const [bankFormboxFields, setBankFormboxFields] = useState<string[] | null>(null)
   const [bankCustomFields, setBankCustomFields] = useState<Array<{ id: string; label: string; category: string; fieldType?: string }>>([])
+  const [bankCustomComposites, setBankCustomComposites] = useState<Array<{
+    id: string
+    label: string
+    category: string
+    source1: string
+    source2: string
+    separator: string
+    dateFormat: 'long' | 'short' | 'none'
+  }>>([])
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({})
 
   // Helper: check if formbox field should be visible for current bank
@@ -524,6 +533,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
           setBankSpecificSignedDocs(signedDocs)
           setBankFormboxFields(docs.formboxFields || [])
           setBankCustomFields(docs.customFields || [])
+          setBankCustomComposites(docs.customComposites || [])
           // Load saved customFieldValues dari customer record (kalau ada)
           if (customer.customFieldValues) {
             try {
@@ -684,6 +694,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
       }
       // === PROPERTI ===
       if (p.projectName) formData['customer.projectName'] = p.projectName
+      if (p.houseAddress) formData['customer.houseAddress'] = p.houseAddress
       if (p.blockLetter) formData['customer.blockLetter'] = p.blockLetter
       if (p.houseNumber) formData['customer.houseNumber'] = p.houseNumber
       if (p.landSize) formData['customer.landSize'] = String(p.landSize)
@@ -711,6 +722,13 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
           formData['applicant.pobDobComposite'] = `${formData['customer.birthPlace']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
         } catch {}
       }
+      // Composite: spouse pobDob — "Bandung, 5 Mei 1992"
+      if (formData['customer.spouseBirthPlace'] && formData['customer.spouseBirthDate']) {
+        try {
+          const d = new Date(formData['customer.spouseBirthDate'])
+          formData['spouse.pobDobComposite'] = `${formData['customer.spouseBirthPlace']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+        } catch {}
+      }
       if (formData['company.city'] && formData['customer.dateOfDocument']) {
         try {
           const d = new Date(formData['customer.dateOfDocument'])
@@ -735,6 +753,53 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
           const mm = String(d.getMonth() + 1).padStart(2, '0')
           formData['property.sprShortDate'] = `${dd}/${mm}/${d.getFullYear()}`
         } catch {}
+      }
+      // === USER-DEFINED CUSTOM COMPOSITES ===
+      // Compute each composite: {v1}{separator}{v2} where v2 may be formatted
+      const FORMBOX_TO_MAPPING_LOCAL: Record<string, string> = {
+        'company.companyName': 'company.companyName', 'company.directorName': 'company.directorName',
+        'company.directorNik': 'company.directorNik', 'company.directorPhone': 'company.directorPhone',
+        'company.directorAddress': 'company.directorAddress', 'company.officeAddress': 'company.officeAddress',
+        'company.city': 'company.city', 'company.btnAccount': 'company.btnAccount',
+        'company.mandiriAccount': 'company.mandiriAccount', 'company.bsbAccount': 'company.bsbAccount',
+        'applicant.fullName': 'customer.name', 'applicant.ktpNumber': 'customer.nik',
+        'applicant.pob': 'customer.birthPlace', 'applicant.dob': 'customer.birthDate',
+        'applicant.address': 'customer.ktpAddress', 'applicant.rtRw': 'customer.rtRw',
+        'applicant.kelurahan': 'customer.kelurahan', 'applicant.kecamatan': 'customer.kecamatan',
+        'applicant.city': 'customer.city', 'applicant.postalCode': 'customer.postalCode',
+        'applicant.phone': 'customer.phone', 'applicant.npwpNumber': 'customer.npwpNumber',
+        'applicant.btnAccountNumber': 'customer.btnAccountNumber',
+        'applicant.domicileAddress': 'customer.domicileAddress', 'applicant.email': 'customer.email',
+        'applicant.nip': 'customer.nip', 'applicant.jobTitle': 'customer.workPosition',
+        'applicant.companyName': 'customer.companyName', 'applicant.companyAddress': 'customer.companyAddress',
+        'applicant.companyPhone': 'customer.companyPhone', 'applicant.monthlyIncome': 'customer.monthlyIncome',
+        'spouse.fullName': 'customer.spouseName', 'spouse.ktpNumber': 'customer.spouseNik',
+        'spouse.pob': 'customer.spouseBirthPlace', 'spouse.dob': 'customer.spouseBirthDate',
+        'spouse.job': 'customer.spouseJob', 'spouse.address': 'customer.spouseAddress',
+        'spouse.jobType': 'customer.spouseJobType',
+        'property.projectName': 'customer.projectName', 'property.houseAddress': 'customer.houseAddress',
+        'property.blockLetter': 'customer.blockLetter', 'property.houseNumber': 'customer.houseNumber',
+        'property.landSize': 'customer.landSize', 'property.houseSize': 'customer.houseSize',
+        'property.shmNumber': 'customer.shmNumber', 'property.nibNumber': 'customer.nibNumber',
+        'property.price': 'customer.price', 'property.dpAmount': 'customer.dpAmount',
+        'property.plafonKpr': 'customer.plafonKpr', 'property.tenor': 'customer.tenor',
+        'dateOfDocument': 'customer.dateOfDocument', 'akadDate': 'customer.akadDate',
+        'akadNumber': 'customer.akadNumber', 'lpaDate': 'customer.lpaDate',
+        'lpaNumber': 'customer.lpaNumber', 'sp3kDate': 'customer.sp3kDate',
+      }
+      const fmtLongLocal = (s: string) => { try { return new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) } catch { return s } }
+      const fmtShortLocal = (s: string) => { try { const d = new Date(s); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` } catch { return s } }
+      for (const c of bankCustomComposites) {
+        const k1 = FORMBOX_TO_MAPPING_LOCAL[c.source1] || c.source1
+        const k2 = FORMBOX_TO_MAPPING_LOCAL[c.source2] || c.source2
+        let v1 = formData[k1] || formData[c.source1] || ''
+        let v2 = formData[k2] || formData[c.source2] || ''
+        if (c.dateFormat === 'long' && v2) v2 = fmtLongLocal(v2)
+        else if (c.dateFormat === 'short' && v2) v2 = fmtShortLocal(v2)
+        const sep = c.separator || ' '
+        if (v1 && v2) formData[c.id] = `${v1}${sep}${v2}`
+        else if (v1) formData[c.id] = v1
+        else if (v2) formData[c.id] = v2
       }
       // === SYSTEM ===
       const today = new Date()
@@ -865,6 +930,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
           btnAccountNumber: state.applicant.btnAccountNumber,
           blockLetter: state.property.blockLetter,
           houseNumber: state.property.houseNumber,
+          houseAddress: state.property.houseAddress,
           landSize: state.property.landSize,
           houseSize: state.property.houseSize,
           shmNumber: state.property.shmNumber,
@@ -1124,6 +1190,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
         }
         // === PROPERTI ===
         if (p.projectName) fd['customer.projectName'] = p.projectName
+        if (p.houseAddress) fd['customer.houseAddress'] = p.houseAddress
         if (p.blockLetter) fd['customer.blockLetter'] = p.blockLetter
         if (p.houseNumber) fd['customer.houseNumber'] = p.houseNumber
         if (p.landSize) fd['customer.landSize'] = String(p.landSize)
@@ -1152,6 +1219,13 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             fd['customer.pobDob'] = fd['applicant.pobDobComposite']
           } catch {}
         }
+        // Composite: spouse pobDob
+        if (fd['customer.spouseBirthPlace'] && fd['customer.spouseBirthDate']) {
+          try {
+            const d = new Date(fd['customer.spouseBirthDate'])
+            fd['spouse.pobDobComposite'] = `${fd['customer.spouseBirthPlace']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+          } catch {}
+        }
         if (fd['company.city'] && fd['customer.dateOfDocument']) {
           try {
             const d = new Date(fd['customer.dateOfDocument'])
@@ -1176,6 +1250,52 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             const mm = String(d.getMonth() + 1).padStart(2, '0')
             fd['property.sprShortDate'] = `${dd}/${mm}/${d.getFullYear()}`
           } catch {}
+        }
+        // === USER-DEFINED CUSTOM COMPOSITES ===
+        const FORMBOX_TO_MAPPING_LOCAL2: Record<string, string> = {
+          'company.companyName': 'company.companyName', 'company.directorName': 'company.directorName',
+          'company.directorNik': 'company.directorNik', 'company.directorPhone': 'company.directorPhone',
+          'company.directorAddress': 'company.directorAddress', 'company.officeAddress': 'company.officeAddress',
+          'company.city': 'company.city', 'company.btnAccount': 'company.btnAccount',
+          'company.mandiriAccount': 'company.mandiriAccount', 'company.bsbAccount': 'company.bsbAccount',
+          'applicant.fullName': 'customer.name', 'applicant.ktpNumber': 'customer.nik',
+          'applicant.pob': 'customer.birthPlace', 'applicant.dob': 'customer.birthDate',
+          'applicant.address': 'customer.ktpAddress', 'applicant.rtRw': 'customer.rtRw',
+          'applicant.kelurahan': 'customer.kelurahan', 'applicant.kecamatan': 'customer.kecamatan',
+          'applicant.city': 'customer.city', 'applicant.postalCode': 'customer.postalCode',
+          'applicant.phone': 'customer.phone', 'applicant.npwpNumber': 'customer.npwpNumber',
+          'applicant.btnAccountNumber': 'customer.btnAccountNumber',
+          'applicant.domicileAddress': 'customer.domicileAddress', 'applicant.email': 'customer.email',
+          'applicant.nip': 'customer.nip', 'applicant.jobTitle': 'customer.workPosition',
+          'applicant.companyName': 'customer.companyName', 'applicant.companyAddress': 'customer.companyAddress',
+          'applicant.companyPhone': 'customer.companyPhone', 'applicant.monthlyIncome': 'customer.monthlyIncome',
+          'spouse.fullName': 'customer.spouseName', 'spouse.ktpNumber': 'customer.spouseNik',
+          'spouse.pob': 'customer.spouseBirthPlace', 'spouse.dob': 'customer.spouseBirthDate',
+          'spouse.job': 'customer.spouseJob', 'spouse.address': 'customer.spouseAddress',
+          'spouse.jobType': 'customer.spouseJobType',
+          'property.projectName': 'customer.projectName', 'property.houseAddress': 'customer.houseAddress',
+          'property.blockLetter': 'customer.blockLetter', 'property.houseNumber': 'customer.houseNumber',
+          'property.landSize': 'customer.landSize', 'property.houseSize': 'customer.houseSize',
+          'property.shmNumber': 'customer.shmNumber', 'property.nibNumber': 'customer.nibNumber',
+          'property.price': 'customer.price', 'property.dpAmount': 'customer.dpAmount',
+          'property.plafonKpr': 'customer.plafonKpr', 'property.tenor': 'customer.tenor',
+          'dateOfDocument': 'customer.dateOfDocument', 'akadDate': 'customer.akadDate',
+          'akadNumber': 'customer.akadNumber', 'lpaDate': 'customer.lpaDate',
+          'lpaNumber': 'customer.lpaNumber', 'sp3kDate': 'customer.sp3kDate',
+        }
+        const fmtLongLocal2 = (s: string) => { try { return new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) } catch { return s } }
+        const fmtShortLocal2 = (s: string) => { try { const d = new Date(s); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` } catch { return s } }
+        for (const c of bankCustomComposites) {
+          const k1 = FORMBOX_TO_MAPPING_LOCAL2[c.source1] || c.source1
+          const k2 = FORMBOX_TO_MAPPING_LOCAL2[c.source2] || c.source2
+          let v1 = fd[k1] || fd[c.source1] || ''
+          let v2 = fd[k2] || fd[c.source2] || ''
+          if (c.dateFormat === 'long' && v2) v2 = fmtLongLocal2(v2)
+          else if (c.dateFormat === 'short' && v2) v2 = fmtShortLocal2(v2)
+          const sep = c.separator || ' '
+          if (v1 && v2) fd[c.id] = `${v1}${sep}${v2}`
+          else if (v1) fd[c.id] = v1
+          else if (v2) fd[c.id] = v2
         }
         // === SYSTEM ===
         const today = new Date()

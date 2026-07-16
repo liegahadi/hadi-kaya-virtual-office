@@ -259,6 +259,7 @@ model Customer {
   btnAccountNumber String?
   blockLetter  String?
   houseNumber  String?
+  houseAddress String?  // Alamat rumah/properti (e.g. "SUMUR BOR BESAR")
   landSize     Int?
   houseSize    Int?
   shmNumber    String?
