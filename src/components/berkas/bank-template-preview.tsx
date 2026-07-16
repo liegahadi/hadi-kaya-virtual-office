@@ -162,21 +162,61 @@ export function BankTemplatePreview({
 
     for (const ann of pageAnns) {
       let value = formData[ann.fieldMapping] || ''
-      // Handle combined fields
-      if (ann.fieldMapping === 'customer.pobDob') {
+      // === Handle composite + transform field types (mirror render endpoint) ===
+      const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+      const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+      const fmtLong = (s: string) => { try { return new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) } catch { return s } }
+      const fmtShort = (s: string) => { try { const d = new Date(s); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` } catch { return s } }
+      const monthIdx = (s: string) => { try { return new Date(s).getMonth() } catch { return -1 } }
+
+      if (ann.fieldMapping === 'applicant.pobDobComposite') {
+        const pob = formData['customer.birthPlace'] || formData['applicant.pob'] || ''
+        const dob = formData['customer.birthDate'] || formData['applicant.dob'] || ''
+        if (pob && dob) value = `${pob}, ${fmtLong(dob)}`
+        else if (pob) value = pob
+        else if (dob) value = fmtLong(dob)
+      } else if (ann.fieldMapping === 'company.cityLongDateComposite') {
+        const city = formData['company.city'] || formData['customer.city'] || ''
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        if (city && dateStr) value = `${city}, ${fmtLong(dateStr)}`
+        else if (city) value = city
+        else if (dateStr) value = fmtLong(dateStr)
+      } else if (ann.fieldMapping === 'property.blokRumahComposite') {
+        const block = formData['customer.blockLetter'] || formData['property.blockLetter'] || ''
+        const num = formData['customer.houseNumber'] || formData['property.houseNumber'] || ''
+        if (block && num) value = `${block}-${num}`
+        else if (block) value = block
+        else if (num) value = num
+      } else if (ann.fieldMapping === 'property.ltlbComposite') {
+        const lt = formData['customer.landSize'] || formData['property.landSize'] || ''
+        const lb = formData['customer.houseSize'] || formData['property.houseSize'] || ''
+        if (lt && lb) value = `${lt}/${lb}`
+        else if (lt) value = lt
+        else if (lb) value = lb
+      } else if (ann.fieldMapping === 'property.sprRomanMonth') {
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        const idx = monthIdx(dateStr)
+        if (idx >= 0) value = ROMAN[idx]
+      } else if (ann.fieldMapping === 'property.sprMonthName') {
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        const idx = monthIdx(dateStr)
+        if (idx >= 0) value = MONTHS[idx]
+      } else if (ann.fieldMapping === 'property.sprLongDate') {
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        value = fmtLong(dateStr)
+      } else if (ann.fieldMapping === 'property.sprShortDate') {
+        const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''
+        value = fmtShort(dateStr)
+      }
+      // Legacy combined fields (kept for backward compat)
+      else if (ann.fieldMapping === 'customer.pobDob') {
         const pob = formData['customer.birthPlace'] || ''
         const dob = formData['customer.birthDate'] || ''
-        if (pob && dob) {
-          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { value = `${pob}, ${dob}` }
-        }
+        if (pob && dob) value = `${pob}, ${fmtLong(dob)}`
       } else if (ann.fieldMapping === 'customer.spousePobDob') {
         const pob = formData['customer.spouseBirthPlace'] || formData['customer.spousePob'] || ''
         const dob = formData['customer.spouseBirthDate'] || formData['customer.spouseDob'] || ''
-        if (pob && dob) {
-          try { value = `${pob}, ${new Date(dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { value = `${pob}, ${dob}` }
-        }
+        if (pob && dob) value = `${pob}, ${fmtLong(dob)}`
       }
       if (!value) continue
 

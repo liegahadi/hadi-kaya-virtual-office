@@ -139,6 +139,20 @@ export async function POST(
         if (city && dateStr) value = `${city}, ${formatDateLong(dateStr)}`
         else if (city) value = city
         else if (dateStr) value = formatDateLong(dateStr)
+      } else if (ann.fieldMapping === 'property.blokRumahComposite') {
+        // composite_blok_rumah: property.blockLetter + property.houseNumber → "E-6"
+        const block = formData['customer.blockLetter'] || formData['property.blockLetter'] || ''
+        const num = formData['customer.houseNumber'] || formData['property.houseNumber'] || ''
+        if (block && num) value = `${block}-${num}`
+        else if (block) value = block
+        else if (num) value = num
+      } else if (ann.fieldMapping === 'property.ltlbComposite') {
+        // composite_ltlb: property.landSize + property.houseSize → "36/84"
+        const lt = formData['customer.landSize'] || formData['property.landSize'] || ''
+        const lb = formData['customer.houseSize'] || formData['property.houseSize'] || ''
+        if (lt && lb) value = `${lt}/${lb}`
+        else if (lt) value = lt
+        else if (lb) value = lb
       } else if (ann.fieldMapping === 'property.sprRomanMonth') {
         // roman_month: dari dateOfDocument → "VIII" (untuk Agustus)
         const dateStr = formData['customer.dateOfDocument'] || formData['dateOfDocument'] || ''

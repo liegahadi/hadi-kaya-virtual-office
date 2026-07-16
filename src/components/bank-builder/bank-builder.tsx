@@ -1021,7 +1021,9 @@ export type FieldType = 'text' | 'number' | 'date' | 'phone' | 'email' | 'curren
 // Muncul di Field Mapping dropdown jika sub-fields nya di-centang
 // - composite_pob_dob: gabungan applicant.pob + applicant.dob → "Jakarta, 17 Agustus 1990"
 // - composite_city_long_date: gabungan company.city + dateOfDocument → "Pangkalpinang, 17 Agustus 2026"
-export type CompositeType = 'composite_pob_dob' | 'composite_city_long_date'
+// - composite_blok_rumah: gabungan property.blockLetter + property.houseNumber → "E-6"
+// - composite_ltlb: gabungan property.landSize + property.houseSize → "36/84"
+export type CompositeType = 'composite_pob_dob' | 'composite_city_long_date' | 'composite_blok_rumah' | 'composite_ltlb'
 
 // Transform field types — auto-derived from 1 date field (default: dateOfDocument)
 // Muncul di Field Mapping dropdown jika dateOfDocument di-centang
@@ -1044,7 +1046,7 @@ export const AUTO_DERIVED_FIELDS: Array<{
   {
     id: 'applicant.pobDobComposite',
     label: 'Tempat, Tgl Lahir (gabungan)',
-    type: 'composite_pob_dob',
+    type: 'composite_pob_dob' as CompositeType,
     sourceFieldIds: ['applicant.pob', 'applicant.dob'],
     category: 'nasabah',
   },
@@ -1052,15 +1054,31 @@ export const AUTO_DERIVED_FIELDS: Array<{
   {
     id: 'company.cityLongDateComposite',
     label: 'Kota + Tanggal Panjang (gabungan)',
-    type: 'composite_city_long_date',
+    type: 'composite_city_long_date' as CompositeType,
     sourceFieldIds: ['company.city', 'dateOfDocument'],
     category: 'perusahaan',
+  },
+  // Composite: Blok - No Rumah (gabungan, e.g. "E-6")
+  {
+    id: 'property.blokRumahComposite',
+    label: 'Blok - No Rumah (gabungan, E-6)',
+    type: 'composite_blok_rumah' as CompositeType,
+    sourceFieldIds: ['property.blockLetter', 'property.houseNumber'],
+    category: 'properti',
+  },
+  // Composite: Luas Tanah / Luas Bangunan (gabungan, e.g. "36/84")
+  {
+    id: 'property.ltlbComposite',
+    label: 'Luas Tanah / Luas Bangunan (gabungan, 36/84)',
+    type: 'composite_ltlb' as CompositeType,
+    sourceFieldIds: ['property.landSize', 'property.houseSize'],
+    category: 'properti',
   },
   // Transform: Roman month dari dateOfDocument (untuk No. SPR)
   {
     id: 'property.sprRomanMonth',
     label: 'Bulan SPR (Romawi, I-XII)',
-    type: 'roman_month',
+    type: 'roman_month' as TransformType,
     sourceFieldIds: ['dateOfDocument'],
     category: 'properti',
   },
@@ -1068,7 +1086,7 @@ export const AUTO_DERIVED_FIELDS: Array<{
   {
     id: 'property.sprMonthName',
     label: 'Nama Bulan (e.g. Agustus)',
-    type: 'month_name',
+    type: 'month_name' as TransformType,
     sourceFieldIds: ['dateOfDocument'],
     category: 'properti',
   },
@@ -1076,7 +1094,7 @@ export const AUTO_DERIVED_FIELDS: Array<{
   {
     id: 'property.sprLongDate',
     label: 'Tanggal Panjang (17 Agustus 2026)',
-    type: 'date_long',
+    type: 'date_long' as TransformType,
     sourceFieldIds: ['dateOfDocument'],
     category: 'properti',
   },
@@ -1084,7 +1102,7 @@ export const AUTO_DERIVED_FIELDS: Array<{
   {
     id: 'property.sprShortDate',
     label: 'Tanggal Pendek (17/08/2026)',
-    type: 'date_short',
+    type: 'date_short' as TransformType,
     sourceFieldIds: ['dateOfDocument'],
     category: 'properti',
   },

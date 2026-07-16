@@ -605,7 +605,9 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
       const a = state.applicant as any
       const p = state.property as any
       const sp = state.spouse as any
+      const cs = companySettings as any
       const formData: Record<string, string> = {}
+      // === NASABAH ===
       if (a.fullName) formData['customer.name'] = a.fullName
       if (a.ktpNumber) formData['customer.nik'] = a.ktpNumber
       if (a.pob) formData['customer.birthPlace'] = a.pob
@@ -617,18 +619,84 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
       if (a.city) formData['customer.city'] = a.city
       if (a.postalCode) formData['customer.postalCode'] = a.postalCode
       if (a.phone) formData['customer.phone'] = a.phone
+      if (a.npwpNumber) formData['customer.npwpNumber'] = a.npwpNumber
+      if (a.btnAccountNumber) formData['customer.btnAccountNumber'] = a.btnAccountNumber
+      // === PEKERJAAN DEBITUR ===
       if (a.jobTitle) formData['customer.workPosition'] = a.jobTitle
       if (a.companyName) formData['customer.companyName'] = a.companyName
       if (a.companyAddress) formData['customer.companyAddress'] = a.companyAddress
+      if (a.companyPhone) formData['customer.companyPhone'] = a.companyPhone || ''
       if (a.monthlyIncome) formData['customer.monthlyIncome'] = String(a.monthlyIncome)
-      if (a.npwpNumber) formData['customer.npwpNumber'] = a.npwpNumber
-      if (a.btnAccountNumber) formData['customer.btnAccountNumber'] = a.btnAccountNumber
+      // === PASANGAN ===
+      if (sp?.fullName) formData['customer.spouseName'] = sp.fullName
+      if (sp?.ktpNumber) formData['customer.spouseNik'] = sp.ktpNumber
+      if (sp?.pob) formData['customer.spouseBirthPlace'] = sp.pob
+      if (sp?.dob) formData['customer.spouseBirthDate'] = sp.dob
+      if (sp?.address) formData['customer.spouseAddress'] = sp.address
+      if (sp?.job) formData['customer.spouseJob'] = sp.job
+      if (sp?.jobType) {
+        const jobTypeMap: Record<string, string> = {
+          'NGANGGUR': 'Tidak Bekerja',
+          'KARYAWAN': 'Karyawan',
+          'WIRAUSAHA': 'Wirausaha',
+        }
+        formData['customer.spouseJobType'] = jobTypeMap[sp.jobType] || sp.jobType
+      }
+      // === PROPERTI ===
+      if (p.projectName) formData['customer.projectName'] = p.projectName
       if (p.blockLetter) formData['customer.blockLetter'] = p.blockLetter
       if (p.houseNumber) formData['customer.houseNumber'] = p.houseNumber
       if (p.landSize) formData['customer.landSize'] = String(p.landSize)
       if (p.houseSize) formData['customer.houseSize'] = String(p.houseSize)
-      if (sp?.fullName) formData['customer.spouseName'] = sp.fullName
-      // System fields
+      if (p.price) formData['customer.price'] = String(p.price)
+      if (p.downPayment) formData['customer.dpAmount'] = String(p.downPayment)
+      if (p.kprPlafon) formData['customer.plafonKpr'] = String(p.kprPlafon)
+      if (p.kprTerm) formData['customer.tenor'] = String(p.kprTerm)
+      if (state.dateOfDocument) formData['customer.dateOfDocument'] = state.dateOfDocument
+      if (state.akadDate) formData['customer.akadDate'] = state.akadDate
+      if (state.lpaDate) formData['customer.lpaDate'] = state.lpaDate
+      if (p.shmNumber) formData['customer.shmNumber'] = p.shmNumber
+      if (p.nibNumber) formData['customer.nibNumber'] = p.nibNumber
+      // === PERUSAHAAN (GLOBAL) ===
+      if (cs?.companyName) formData['company.companyName'] = cs.companyName
+      if (cs?.directorName) formData['company.directorName'] = cs.directorName
+      if (cs?.directorNik) formData['company.directorNik'] = cs.directorNik
+      if (cs?.officeAddress) formData['company.officeAddress'] = cs.officeAddress
+      if (cs?.city) formData['company.city'] = cs.city
+      // === AUTO-DERIVED COMPOSITE + TRANSFORM ===
+      // (computed at render endpoint too — but include in formData for client-side preview fallback)
+      if (formData['customer.birthPlace'] && formData['customer.birthDate']) {
+        try {
+          const d = new Date(formData['customer.birthDate'])
+          formData['applicant.pobDobComposite'] = `${formData['customer.birthPlace']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+        } catch {}
+      }
+      if (formData['company.city'] && formData['customer.dateOfDocument']) {
+        try {
+          const d = new Date(formData['customer.dateOfDocument'])
+          formData['company.cityLongDateComposite'] = `${formData['company.city']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+        } catch {}
+      }
+      if (formData['customer.blockLetter'] && formData['customer.houseNumber']) {
+        formData['property.blokRumahComposite'] = `${formData['customer.blockLetter']}-${formData['customer.houseNumber']}`
+      }
+      if (formData['customer.landSize'] && formData['customer.houseSize']) {
+        formData['property.ltlbComposite'] = `${formData['customer.landSize']}/${formData['customer.houseSize']}`
+      }
+      if (formData['customer.dateOfDocument']) {
+        try {
+          const d = new Date(formData['customer.dateOfDocument'])
+          const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+          const NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+          formData['property.sprRomanMonth'] = ROMAN[d.getMonth()] || ''
+          formData['property.sprMonthName'] = NAMES[d.getMonth()] || ''
+          formData['property.sprLongDate'] = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+          const dd = String(d.getDate()).padStart(2, '0')
+          const mm = String(d.getMonth() + 1).padStart(2, '0')
+          formData['property.sprShortDate'] = `${dd}/${mm}/${d.getFullYear()}`
+        } catch {}
+      }
+      // === SYSTEM ===
       const today = new Date()
       formData['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
       formData['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -975,16 +1043,13 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
         const a = state.applicant as any
         const p = state.property as any
         const sp = state.spouse as any
+        const cs = companySettings as any
         const fd: Record<string, string> = {}
+        // === NASABAH ===
         if (a.fullName) fd['customer.name'] = a.fullName
         if (a.ktpNumber) fd['customer.nik'] = a.ktpNumber
         if (a.pob) fd['customer.birthPlace'] = a.pob
         if (a.dob) fd['customer.birthDate'] = a.dob
-        // Combined pobDob
-        if (a.pob && a.dob) {
-          try { fd['customer.pobDob'] = `${a.pob}, ${new Date(a.dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { fd['customer.pobDob'] = `${a.pob}, ${a.dob}` }
-        }
         if (a.address) fd['customer.ktpAddress'] = a.address
         if (a.rtRw) fd['customer.rtRw'] = a.rtRw
         if (a.kelurahan) fd['customer.kelurahan'] = a.kelurahan
@@ -992,24 +1057,85 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
         if (a.city) fd['customer.city'] = a.city
         if (a.postalCode) fd['customer.postalCode'] = a.postalCode
         if (a.phone) fd['customer.phone'] = a.phone
+        if (a.npwpNumber) fd['customer.npwpNumber'] = a.npwpNumber
+        if (a.btnAccountNumber) fd['customer.btnAccountNumber'] = a.btnAccountNumber
+        // === PEKERJAAN DEBITUR ===
         if (a.jobTitle) fd['customer.workPosition'] = a.jobTitle
         if (a.companyName) fd['customer.companyName'] = a.companyName
         if (a.companyAddress) fd['customer.companyAddress'] = a.companyAddress
+        if (a.companyPhone) fd['customer.companyPhone'] = a.companyPhone || ''
         if (a.monthlyIncome) fd['customer.monthlyIncome'] = String(a.monthlyIncome)
-        if (a.npwpNumber) fd['customer.npwpNumber'] = a.npwpNumber
-        if (a.btnAccountNumber) fd['customer.btnAccountNumber'] = a.btnAccountNumber
+        // === PASANGAN ===
+        if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
+        if (sp?.ktpNumber) fd['customer.spouseNik'] = sp.ktpNumber
+        if (sp?.pob) fd['customer.spouseBirthPlace'] = sp.pob
+        if (sp?.dob) fd['customer.spouseBirthDate'] = sp.dob
+        if (sp?.address) fd['customer.spouseAddress'] = sp.address
+        if (sp?.job) fd['customer.spouseJob'] = sp.job
+        if (sp?.jobType) {
+          const jobTypeMap: Record<string, string> = {
+            'NGANGGUR': 'Tidak Bekerja',
+            'KARYAWAN': 'Karyawan',
+            'WIRAUSAHA': 'Wirausaha',
+          }
+          fd['customer.spouseJobType'] = jobTypeMap[sp.jobType] || sp.jobType
+        }
+        // === PROPERTI ===
+        if (p.projectName) fd['customer.projectName'] = p.projectName
         if (p.blockLetter) fd['customer.blockLetter'] = p.blockLetter
         if (p.houseNumber) fd['customer.houseNumber'] = p.houseNumber
         if (p.landSize) fd['customer.landSize'] = String(p.landSize)
         if (p.houseSize) fd['customer.houseSize'] = String(p.houseSize)
-        if (sp?.fullName) fd['customer.spouseName'] = sp.fullName
-        // Combined spouse pobDob
-        if (sp?.pob && sp?.dob) {
-          try { fd['customer.spousePobDob'] = `${sp.pob}, ${new Date(sp.dob).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}` }
-          catch { fd['customer.spousePobDob'] = `${sp.pob}, ${sp.dob}` }
+        if (p.price) fd['customer.price'] = String(p.price)
+        if (p.downPayment) fd['customer.dpAmount'] = String(p.downPayment)
+        if (p.kprPlafon) fd['customer.plafonKpr'] = String(p.kprPlafon)
+        if (p.kprTerm) fd['customer.tenor'] = String(p.kprTerm)
+        if (state.dateOfDocument) fd['customer.dateOfDocument'] = state.dateOfDocument
+        if (state.akadDate) fd['customer.akadDate'] = state.akadDate
+        if (state.lpaDate) fd['customer.lpaDate'] = state.lpaDate
+        if (p.shmNumber) fd['customer.shmNumber'] = p.shmNumber
+        if (p.nibNumber) fd['customer.nibNumber'] = p.nibNumber
+        // === PERUSAHAAN (GLOBAL) ===
+        if (cs?.companyName) fd['company.companyName'] = cs.companyName
+        if (cs?.directorName) fd['company.directorName'] = cs.directorName
+        if (cs?.directorNik) fd['company.directorNik'] = cs.directorNik
+        if (cs?.officeAddress) fd['company.officeAddress'] = cs.officeAddress
+        if (cs?.city) fd['company.city'] = cs.city
+        // === AUTO-DERIVED COMPOSITE + TRANSFORM ===
+        if (fd['customer.birthPlace'] && fd['customer.birthDate']) {
+          try {
+            const d = new Date(fd['customer.birthDate'])
+            fd['applicant.pobDobComposite'] = `${fd['customer.birthPlace']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+            // Legacy
+            fd['customer.pobDob'] = fd['applicant.pobDobComposite']
+          } catch {}
         }
-        if (sp?.pob) fd['customer.spouseBirthPlace'] = sp.pob
-        if (sp?.dob) fd['customer.spouseBirthDate'] = sp.dob
+        if (fd['company.city'] && fd['customer.dateOfDocument']) {
+          try {
+            const d = new Date(fd['customer.dateOfDocument'])
+            fd['company.cityLongDateComposite'] = `${fd['company.city']}, ${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`
+          } catch {}
+        }
+        if (fd['customer.blockLetter'] && fd['customer.houseNumber']) {
+          fd['property.blokRumahComposite'] = `${fd['customer.blockLetter']}-${fd['customer.houseNumber']}`
+        }
+        if (fd['customer.landSize'] && fd['customer.houseSize']) {
+          fd['property.ltlbComposite'] = `${fd['customer.landSize']}/${fd['customer.houseSize']}`
+        }
+        if (fd['customer.dateOfDocument']) {
+          try {
+            const d = new Date(fd['customer.dateOfDocument'])
+            const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+            const NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+            fd['property.sprRomanMonth'] = ROMAN[d.getMonth()] || ''
+            fd['property.sprMonthName'] = NAMES[d.getMonth()] || ''
+            fd['property.sprLongDate'] = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+            const dd = String(d.getDate()).padStart(2, '0')
+            const mm = String(d.getMonth() + 1).padStart(2, '0')
+            fd['property.sprShortDate'] = `${dd}/${mm}/${d.getFullYear()}`
+          } catch {}
+        }
+        // === SYSTEM ===
         const today = new Date()
         fd['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
         fd['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -1636,9 +1762,16 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             <div className="col-span-2">
               <label className="text-[9px] text-muted-foreground">Status Pekerjaan Pasangan</label>
               <div className="flex gap-1 mt-0.5">
-                {(['NGANGGUR', 'KARYAWAN', 'WIRAUSAHA'] as SpouseJobType[]).map(jt => (
-                  <button key={jt} onClick={() => updateSpouse('jobType', jt)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', (state.spouse?.jobType || 'NGANGGUR') === jt ? 'bg-pink-600 text-white border-pink-600' : 'bg-card border-border')}>{jt}</button>
-                ))}
+                {(['NGANGGUR', 'KARYAWAN', 'WIRAUSAHA'] as SpouseJobType[]).map(jt => {
+                  const labelMap: Record<SpouseJobType, string> = {
+                    'NGANGGUR': 'TIDAK BEKERJA',
+                    'KARYAWAN': 'KARYAWAN',
+                    'WIRAUSAHA': 'WIRAUSAHA',
+                  }
+                  return (
+                    <button key={jt} onClick={() => updateSpouse('jobType', jt)} className={cn('flex-1 px-2 py-1.5 rounded text-[10px] font-bold border', (state.spouse?.jobType || 'NGANGGUR') === jt ? 'bg-pink-600 text-white border-pink-600' : 'bg-card border-border')}>{labelMap[jt]}</button>
+                  )
+                })}
               </div>
             </div>
             {isFieldVisible('spouse.job') && <FormField label="Pekerjaan / Jabatan Pasangan" value={state.spouse?.job || ''} onChange={v => updateSpouse('job', v)} />}

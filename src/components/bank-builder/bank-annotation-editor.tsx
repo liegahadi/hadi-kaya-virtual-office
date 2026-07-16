@@ -209,6 +209,8 @@ const GROUP_TO_CATEGORY: Record<string, string> = Object.entries(CATEGORY_TO_GRO
 const AUTO_DERIVED_FIELDS_LIST = [
   { id: 'applicant.pobDobComposite', label: 'Tempat, Tgl Lahir (gabungan)', type: 'composite_pob_dob', sourceFieldIds: ['applicant.pob', 'applicant.dob'], category: 'nasabah' },
   { id: 'company.cityLongDateComposite', label: 'Kota + Tanggal Panjang (gabungan)', type: 'composite_city_long_date', sourceFieldIds: ['company.city', 'dateOfDocument'], category: 'perusahaan' },
+  { id: 'property.blokRumahComposite', label: 'Blok - No Rumah (gabungan, E-6)', type: 'composite_blok_rumah', sourceFieldIds: ['property.blockLetter', 'property.houseNumber'], category: 'properti' },
+  { id: 'property.ltlbComposite', label: 'Luas Tanah / Luas Bangunan (gabungan, 36/84)', type: 'composite_ltlb', sourceFieldIds: ['property.landSize', 'property.houseSize'], category: 'properti' },
   { id: 'property.sprRomanMonth', label: 'Bulan SPR (Romawi, I-XII)', type: 'roman_month', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
   { id: 'property.sprMonthName', label: 'Nama Bulan (e.g. Agustus)', type: 'month_name', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
   { id: 'property.sprLongDate', label: 'Tanggal Panjang (17 Agustus 2026)', type: 'date_long', sourceFieldIds: ['dateOfDocument'], category: 'properti' },
@@ -980,38 +982,135 @@ export function BankAnnotationEditor({
               const cid = e.target.value
               setTestCustomerId(cid)
               if (cid) {
-                // Fetch customer data and fill test field values
+                // Fetch customer data + company settings + fill test field values
                 try {
-                  const res = await fetch(`/api/customers/${cid}`)
-                  const data = await res.json()
+                  const [custRes, companyRes] = await Promise.all([
+                    fetch(`/api/customers/${cid}`),
+                    fetch(`/api/company-settings`).catch(() => null),
+                  ])
+                  const data = await custRes.json()
                   if (data.success) {
                     const c = data.data
                     const values: Record<string, string> = {}
-                    // Map customer fields to test values
+
+                    // === NASABAH ===
                     if (c.name) values['customer.name'] = c.name
                     if (c.nik) values['customer.nik'] = c.nik
                     if (c.birthPlace) values['customer.birthPlace'] = c.birthPlace
                     if (c.birthDate) values['customer.birthDate'] = c.birthDate
-                    if (c.gender) values['customer.gender'] = c.gender
-                    if (c.religion) values['customer.religion'] = c.religion
-                    if (c.maritalStatus) values['customer.maritalStatus'] = c.maritalStatus
                     if (c.ktpAddress) values['customer.ktpAddress'] = c.ktpAddress
                     if (c.rtRw) values['customer.rtRw'] = c.rtRw
                     if (c.kelurahan) values['customer.kelurahan'] = c.kelurahan
                     if (c.kecamatan) values['customer.kecamatan'] = c.kecamatan
                     if (c.city) values['customer.city'] = c.city
                     if (c.postalCode) values['customer.postalCode'] = c.postalCode
-                    if (c.whatsappNumber) values['customer.phone'] = c.whatsappNumber
-                    if (c.occupation) values['customer.occupation'] = c.occupation
+                    if (c.whatsappNumber || c.phone) values['customer.phone'] = c.whatsappNumber || c.phone
+                    if (c.npwpNumber) values['customer.npwpNumber'] = c.npwpNumber
+                    if (c.btnAccountNumber) values['customer.btnAccountNumber'] = c.btnAccountNumber
+
+                    // === PEKERJAAN DEBITUR ===
+                    if (c.workPosition) values['customer.workPosition'] = c.workPosition
                     if (c.companyName) values['customer.companyName'] = c.companyName
                     if (c.companyAddress) values['customer.companyAddress'] = c.companyAddress
-                    if (c.workPosition) values['customer.workPosition'] = c.workPosition
+                    if (c.companyPhone) values['customer.companyPhone'] = c.companyPhone || ''
                     if (c.monthlyIncome) values['customer.monthlyIncome'] = String(c.monthlyIncome)
-                    if (c.npwpNumber) values['customer.npwpNumber'] = c.npwpNumber
-                    if (c.bankName) values['customer.bankName'] = c.bankName
+
+                    // === PASANGAN ===
+                    if (c.spouseName) values['customer.spouseName'] = c.spouseName
+                    if (c.spouseNik) values['customer.spouseNik'] = c.spouseNik
+                    if (c.spouseBirthPlace) values['customer.spouseBirthPlace'] = c.spouseBirthPlace
+                    if (c.spouseBirthDate) values['customer.spouseBirthDate'] = c.spouseBirthDate
+                    if (c.spouseAddress) values['customer.spouseAddress'] = c.spouseAddress
+                    if (c.spouseOccupation) values['customer.spouseJob'] = c.spouseOccupation
+                    // jobType: 'NGANGGUR' → 'Tidak Bekerja', 'KARYAWAN' → 'Karyawan', 'WIRAUSAHA' → 'Wirausaha'
+                    if (c.spouseJobType) {
+                      const jobTypeMap: Record<string, string> = {
+                        'NGANGGUR': 'Tidak Bekerja',
+                        'KARYAWAN': 'Karyawan',
+                        'WIRAUSAHA': 'Wirausaha',
+                      }
+                      values['customer.spouseJobType'] = jobTypeMap[c.spouseJobType] || c.spouseJobType
+                    } else if (c.maritalStatus === 'MENIKAH' || c.maritalStatus === 'MARRIED') {
+                      // Default to 'Tidak Bekerja' if married but no jobType set
+                      values['customer.spouseJobType'] = 'Tidak Bekerja'
+                    }
+
+                    // === PROPERTI ===
+                    if (c.projectName) values['customer.projectName'] = c.projectName
                     if (c.blockLetter) values['customer.blockLetter'] = c.blockLetter
                     if (c.houseNumber) values['customer.houseNumber'] = c.houseNumber
-                    // System fields
+                    if (c.landSize) values['customer.landSize'] = String(c.landSize)
+                    if (c.houseSize) values['customer.houseSize'] = String(c.houseSize)
+                    if (c.price) values['customer.price'] = String(c.price)
+                    if (c.downPayment) values['customer.dpAmount'] = String(c.downPayment)
+                    if (c.kprPlafon) values['customer.plafonKpr'] = String(c.kprPlafon)
+                    if (c.kprTerm) values['customer.tenor'] = String(c.kprTerm)
+                    if (c.dateOfDocument) values['customer.dateOfDocument'] = c.dateOfDocument
+                    if (c.akadDate) values['customer.akadDate'] = c.akadDate
+                    if (c.lpaDate) values['customer.lpaDate'] = c.lpaDate
+                    if (c.shmNumber) values['customer.shmNumber'] = c.shmNumber
+                    if (c.nibNumber) values['customer.nibNumber'] = c.nibNumber
+
+                    // === PERUSAHAAN (GLOBAL — dari CompanySetting) ===
+                    if (companyRes && companyRes.ok) {
+                      try {
+                        const compData = await companyRes.json()
+                        if (compData.success && compData.data) {
+                          const cs = compData.data
+                          if (cs.companyName) values['company.companyName'] = cs.companyName
+                          if (cs.directorName) values['company.directorName'] = cs.directorName
+                          if (cs.directorNik) values['company.directorNik'] = cs.directorNik
+                          if (cs.officeAddress) values['company.officeAddress'] = cs.officeAddress
+                          if (cs.city) values['company.city'] = cs.city
+                        }
+                      } catch {}
+                    }
+
+                    // === AUTO-DERIVED COMPOSITE + TRANSFORM FIELDS ===
+                    // Composite: pobDob — "Jakarta, 17 Agustus 1990"
+                    if (values['customer.birthPlace'] && values['customer.birthDate']) {
+                      try {
+                        const d = new Date(values['customer.birthDate'])
+                        const long = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                        values['applicant.pobDobComposite'] = `${values['customer.birthPlace']}, ${long}`
+                      } catch {}
+                    }
+                    // Composite: cityLongDate — "Pangkalpinang, 17 Agustus 2026"
+                    if (values['company.city'] && values['customer.dateOfDocument']) {
+                      try {
+                        const d = new Date(values['customer.dateOfDocument'])
+                        const long = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                        values['company.cityLongDateComposite'] = `${values['company.city']}, ${long}`
+                      } catch {}
+                    }
+                    // Composite: blokRumahComposite — "E-6"
+                    if (values['customer.blockLetter'] && values['customer.houseNumber']) {
+                      values['property.blokRumahComposite'] = `${values['customer.blockLetter']}-${values['customer.houseNumber']}`
+                    } else if (values['customer.blockLetter']) {
+                      values['property.blokRumahComposite'] = values['customer.blockLetter']
+                    } else if (values['customer.houseNumber']) {
+                      values['property.blokRumahComposite'] = values['customer.houseNumber']
+                    }
+                    // Composite: ltlbComposite — "36/84"
+                    if (values['customer.landSize'] && values['customer.houseSize']) {
+                      values['property.ltlbComposite'] = `${values['customer.landSize']}/${values['customer.houseSize']}`
+                    }
+                    // Transform: roman_month, month_name, date_long, date_short — all derived from dateOfDocument
+                    if (values['customer.dateOfDocument']) {
+                      try {
+                        const d = new Date(values['customer.dateOfDocument'])
+                        const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+                        const NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+                        values['property.sprRomanMonth'] = ROMAN[d.getMonth()] || ''
+                        values['property.sprMonthName'] = NAMES[d.getMonth()] || ''
+                        values['property.sprLongDate'] = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                        const dd = String(d.getDate()).padStart(2, '0')
+                        const mm = String(d.getMonth() + 1).padStart(2, '0')
+                        values['property.sprShortDate'] = `${dd}/${mm}/${d.getFullYear()}`
+                      } catch {}
+                    }
+
+                    // === SYSTEM ===
                     const today = new Date()
                     values['system.todayDate'] = today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
                     values['system.todayDateLong'] = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
