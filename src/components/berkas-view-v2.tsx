@@ -1808,16 +1808,18 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             ))}
           </select>
         )}
-        {/* Editor buttons for Combined Doc (SK+Slip) & Lokasi Kerja - only in bank mode Entry */}
+        {/* Editor buttons for Combined Doc (SK+Slip/Laporan Keuangan) & Lokasi Kerja - only in bank mode Entry */}
         {formMode === 'bank' && docStage === 'entry' && (
           <>
             <button
               onClick={() => setCombinedDocModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors h-8 bg-amber-50 dark:bg-amber-950/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-              title="Edit SK Kerja + Slip Gaji di Google Docs (Service Account)"
+              title={state.applicant.jobType === JobType.ENTREPRENEUR
+                ? 'Edit SK Kerja + Laporan Keuangan 6 Bulan (Wirausaha)'
+                : 'Edit SK Kerja + Slip Gaji 7 Lembar (Karyawan)'}
             >
               <FileText className="w-3 h-3" />
-              <span>SK + Slip Gaji</span>
+              <span>{state.applicant.jobType === JobType.ENTREPRENEUR ? 'SK + Laporan Keuangan' : 'SK + Slip Gaji'}</span>
             </button>
             <button
               onClick={() => setLokasiModalOpen(true)}
@@ -2247,7 +2249,7 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
                     {bank !== 'BSB_SYARIAH' && bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('pernyataan-rumah')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-rumah' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Tidak Punya Rumah</button>}
                     {bank !== 'BSB_SYARIAH' && bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('pernyataan-penghasilan')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'pernyataan-penghasilan' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Surat Penghasilan</button>}
                     {/* NEW: Dokumen Kerja preview tab (shows saved SK+Slip HTML + Denah from Lokasi Kerja) */}
-                    {bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja</button>}
+                    <button onClick={() => setGenerateDocId('dok-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'dok-kerja' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><FileText className="w-3 h-3" /> Dok Kerja</button>
                     {bank !== 'MANDIRI' && <button onClick={() => setGenerateDocId('lokasi-kerja')} className={cn('px-2 py-1.5 rounded text-[9px] font-medium border flex items-center gap-1', generateDocId === 'lokasi-kerja' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-700 text-muted-foreground border-border')}><MapPin className="w-3 h-3" /> Lokasi Kerja {((state.applicant as any).workplaceFrontPhoto || (state.applicant as any).workplaceMapsLink) ? '✓' : ''}</button>}
                     {/* NOTE: Slip Gaji & SK Kerja diakses via tombol di action bar (CombinedDocumentEditorModal), bukan di sini */}
 

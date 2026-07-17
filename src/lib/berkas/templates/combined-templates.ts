@@ -108,104 +108,113 @@ function buildKop(style: 'formal' | 'modern' | 'informal' | 'gov' | 'bank' | 'mi
   }
 }
 
-// SK Kerja body — uses proper tables for tidy layout
+// SK Kerja body — LAYOUT PARAGRAF (NO TABLE) dengan dotted underline
+// Setiap baris: label (lebar tetap) + : + value (dotted underline)
+// Lebih rapih, lebih mudah dibaca, sesuai standar surat resmi Indonesia
 function buildSkBody(style: string): string {
   const kop = buildKop(style as any)
   const signatoryRole = style === 'gov' ? 'Kepala {{perusahaan}}' : style === 'informal' ? 'Pemilik Usaha' : 'Pimpinan {{perusahaan}}'
+
+  // Helper: baris identitas dengan dotted underline
+  // label lebar 160px, separator ":", value dengan border-bottom dotted
+  const idRow = (label: string, value: string, strong = false) =>
+    `<p style="margin:6px 0;font-size:11pt;line-height:1.8;">` +
+    `<span style="display:inline-block;width:160px;vertical-align:bottom;">${label}</span>` +
+    `<span style="display:inline-block;width:12px;">:</span>` +
+    `<span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px 1px;${strong ? 'font-weight:bold;' : ''}">${value}</span>` +
+    `</p>`
 
   return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.6;color:#000;">
 
 ${kop}
 
-<p style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SURAT KETERANGAN KERJA</p>
-<p style="text-align:center;font-size:11pt;margin:5px 0 25px;">No: .../SK/{{bulan}}/{{tahun}}</p>
+<p style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline;margin:25px 0 5px;letter-spacing:0.5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:11pt;margin:5px 0 30px;">No: .../SK/{{bulan}}/{{tahun}}</p>
 
-<p style="margin-bottom:15px;">Yang bertanda tangan di bawah ini:</p>
+<p style="margin-bottom:18px;">Yang bertanda tangan di bawah ini:</p>
 
-<table style="width:100%;font-size:11pt;margin-bottom:20px;border-collapse:collapse;">
-<tbody>
-<tr><td style="width:30%;padding:4px 0;vertical-align:top;">Nama</td><td style="width:3%;vertical-align:top;">:</td><td style="padding:4px 0;">${signatoryRole}</td></tr>
-<tr><td style="padding:4px 0;vertical-align:top;">Jabatan</td><td style="vertical-align:top;">:</td><td style="padding:4px 0;">Pimpinan / Direktur</td></tr>
-<tr><td style="padding:4px 0;vertical-align:top;">Perusahaan</td><td style="vertical-align:top;">:</td><td style="padding:4px 0;">{{perusahaan}}</td></tr>
-<tr><td style="padding:4px 0;vertical-align:top;">Alamat</td><td style="vertical-align:top;">:</td><td style="padding:4px 0;">{{alamat_perusahaan}}</td></tr>
-</tbody>
-</table>
+<div style="margin:0 0 25px 30px;">
+${idRow('Nama', signatoryRole)}
+${idRow('Jabatan', 'Pimpinan / Direktur')}
+${idRow('Perusahaan', '{{perusahaan}}')}
+${idRow('Alamat', '{{alamat_perusahaan}}')}
+</div>
 
-<p style="margin-bottom:15px;">Dengan ini menerangkan bahwa:</p>
+<p style="margin-bottom:18px;">Dengan ini menerangkan bahwa:</p>
 
-<table style="width:100%;font-size:11pt;margin-bottom:20px;border-collapse:collapse;">
-<tbody>
-<tr><td style="width:30%;padding:6px 0;vertical-align:top;">Nama</td><td style="width:3%;vertical-align:top;">:</td><td style="padding:6px 0;"><strong>{{nama}}</strong></td></tr>
-<tr><td style="padding:6px 0;vertical-align:top;">NIK</td><td style="vertical-align:top;">:</td><td style="padding:6px 0;">{{nik}}</td></tr>
-<tr><td style="padding:6px 0;vertical-align:top;">Tempat/Tgl Lahir</td><td style="vertical-align:top;">:</td><td style="padding:6px 0;">{{tempat_lahir}}, {{tanggal_lahir}}</td></tr>
-<tr><td style="padding:6px 0;vertical-align:top;">Jabatan</td><td style="vertical-align:top;">:</td><td style="padding:6px 0;">{{jabatan}}</td></tr>
-<tr><td style="padding:6px 0;vertical-align:top;">Lama Bekerja</td><td style="vertical-align:top;">:</td><td style="padding:6px 0;">{{lama_bekerja}} tahun</td></tr>
-<tr><td style="padding:6px 0;vertical-align:top;">Gaji per Bulan</td><td style="vertical-align:top;">:</td><td style="padding:6px 0;">{{gaji}}</td></tr>
-</tbody>
-</table>
+<div style="margin:0 0 25px 30px;">
+${idRow('Nama', '{{nama}}', true)}
+${idRow('NIK', '{{nik}}')}
+${idRow('Tempat/Tgl Lahir', '{{tempat_lahir}}, {{tanggal_lahir}}')}
+${idRow('Jabatan', '{{jabatan}}')}
+${idRow('Lama Bekerja', '{{lama_bekerja}} tahun')}
+${idRow('Gaji per Bulan', '{{gaji}}')}
+</div>
 
-<p style="text-align:justify;margin:20px 0;text-indent:30px;">Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).</p>
+<p style="text-align:justify;margin:25px 0;text-indent:36px;line-height:1.7;">Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).</p>
 
-<p style="margin-bottom:30px;">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
+<p style="margin-bottom:40px;text-indent:36px;">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
 
-<table style="width:100%;margin-top:40px;"><tbody><tr>
-<td style="width:55%;"></td>
-<td style="text-align:left;vertical-align:top;">
-<p style="margin:0 0 5px 0;">{{kota}}, {{tanggal}}</p>
-<p style="margin:0 0 70px 0;">${signatoryRole}</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;">( ............................. )</p>
-</td>
-</tr></tbody></table>
+<div style="text-align:right;margin-top:40px;">
+<p style="margin:0 0 6px 0;">{{kota}}, {{tanggal}}</p>
+<p style="margin:0 0 80px 0;">${signatoryRole},</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;border-top:1px solid #000;padding-top:6px;min-width:200px;text-align:center;">( ............................. )</p>
+</div>
 
 </div>`
 }
 
-// Slip Gaji body (single sheet) — proper Word-like table layout
+// Slip Gaji body (single sheet) — 1 BULAN = 1 HALAMAN
+// Wrap dengan div yang paksa page-break + min-height supaya 1 slip muat 1 halaman
+// Kop surat di-include di tiap slip page (auto-repeat per halaman)
+// Table BOLEH untuk slip gaji (struktur kolom pendapatan/potongan)
 function buildSlipBody(style: string): string {
   const kop = buildKop(style as any)
   const signerRole = style === 'gov' ? 'Bendahara Pengeluaran' : style === 'informal' ? 'Pemilik Usaha' : 'Bagian Keuangan'
   const upahLabel = style === 'informal' ? 'Upah' : 'Gaji'
 
-  return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.6;color:#000;">
+  return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;width:100%;min-height:90vh;padding:20px 0;page-break-after:always;break-after:page;">
 
 ${kop}
 
-<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:15px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
+<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Periode: {{periode}}</p>
 
-<table style="width:100%;font-size:11pt;margin-bottom:15px;border-collapse:collapse;">
-<tbody>
-<tr><td style="width:25%;padding:4px 0;">Nama</td><td style="width:3%;">:</td><td style="padding:4px 0;"><strong>{{nama}}</strong></td><td style="width:5%;"></td><td style="width:15%;">NIK</td><td style="width:3%;">:</td><td style="width:30%;">{{nik}}</td></tr>
-<tr><td style="padding:4px 0;">Jabatan</td><td>:</td><td style="padding:4px 0;">{{jabatan}}</td><td></td><td>Periode</td><td>:</td><td>{{periode}}</td></tr>
-</tbody>
-</table>
+<p style="margin:8px 0;"><span style="display:inline-block;width:120px;">Nama</span>: <strong>{{nama}}</strong></p>
+<p style="margin:8px 0;"><span style="display:inline-block;width:120px;">NIK</span>: {{nik}}</p>
+<p style="margin:8px 0;"><span style="display:inline-block;width:120px;">Jabatan</span>: {{jabatan}}</p>
+<p style="margin:8px 0 15px;"><span style="display:inline-block;width:120px;">Perusahaan</span>: {{perusahaan}}</p>
 
-<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1px solid #000;">
+<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
 <thead>
-<tr style="background:#f0f0f0;">
-<th style="padding:6px 8px;border:1px solid #000;text-align:left;width:55%;">Keterangan</th>
-<th style="padding:6px 8px;border:1px solid #000;text-align:right;width:22.5%;">Pendapatan</th>
-<th style="padding:6px 8px;border:1px solid #000;text-align:right;width:22.5%;">Potongan</th>
+<tr style="background:#e8e8e8;">
+<th style="padding:8px 10px;border:1px solid #000;text-align:left;width:55%;">Keterangan</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;width:22.5%;">Pendapatan</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;width:22.5%;">Potongan</th>
 </tr>
 </thead>
 <tbody>
-<tr><td style="padding:5px 8px;border:1px solid #ccc;">${upahLabel} Pokok</td><td style="padding:5px 8px;border:1px solid #ccc;text-align:right;">{{gaji_pokok}}</td><td style="padding:5px 8px;border:1px solid #ccc;"></td></tr>
-{{#tunjangan_tetap}}<tr><td style="padding:5px 8px;border:1px solid #ccc;">{label}</td><td style="padding:5px 8px;border:1px solid #ccc;text-align:right;">{amount}</td><td style="padding:5px 8px;border:1px solid #ccc;"></td></tr>{{/tunjangan_tetap}}
-{{#tunjangan_variabel}}<tr><td style="padding:5px 8px;border:1px solid #ccc;">{label}</td><td style="padding:5px 8px;border:1px solid #ccc;text-align:right;">{amount}</td><td style="padding:5px 8px;border:1px solid #ccc;"></td></tr>{{/tunjangan_variabel}}
-{{#potongan}}<tr><td style="padding:5px 8px;border:1px solid #ccc;">{label}</td><td style="padding:5px 8px;border:1px solid #ccc;"></td><td style="padding:5px 8px;border:1px solid #ccc;text-align:right;">{amount}</td></tr>{{/potongan}}
-<tr style="background:#f9f9f9;font-weight:bold;"><td style="padding:6px 8px;border-top:2px solid #000;border:1px solid #000;">Total</td><td style="padding:6px 8px;border-top:2px solid #000;border:1px solid #000;text-align:right;">{{gaji_kotor}}</td><td style="padding:6px 8px;border-top:2px solid #000;border:1px solid #000;text-align:right;">{{total_potongan}}</td></tr>
-<tr style="font-weight:bold;font-size:12pt;background:#e6f3ff;"><td style="padding:8px;border:1px solid #000;" colspan="2">${upahLabel} Diterima (Bersih)</td><td style="padding:8px;border:1px solid #000;text-align:right;">{{gaji_bersih}}</td></tr>
+<tr><td style="padding:6px 10px;border:1px solid #999;">${upahLabel} Pokok</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">{{gaji_pokok}}</td><td style="padding:6px 10px;border:1px solid #999;"></td></tr>
+{{#tunjangan_tetap}}<tr><td style="padding:6px 10px;border:1px solid #999;">{label}</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">{amount}</td><td style="padding:6px 10px;border:1px solid #999;"></td></tr>{{/tunjangan_tetap}}
+{{#tunjangan_variabel}}<tr><td style="padding:6px 10px;border:1px solid #999;">{label}</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">{amount}</td><td style="padding:6px 10px;border:1px solid #999;"></td></tr>{{/tunjangan_variabel}}
+{{#potongan}}<tr><td style="padding:6px 10px;border:1px solid #999;">{label}</td><td style="padding:6px 10px;border:1px solid #999;"></td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">{amount}</td></tr>{{/potongan}}
+<tr style="background:#f5f5f5;font-weight:bold;"><td style="padding:8px 10px;border:1.5px solid #000;">Total</td><td style="padding:8px 10px;border:1.5px solid #000;text-align:right;">{{gaji_kotor}}</td><td style="padding:8px 10px;border:1.5px solid #000;text-align:right;">{{total_potongan}}</td></tr>
+<tr style="font-weight:bold;font-size:12pt;background:#e6f3ff;"><td style="padding:10px;border:1.5px solid #000;" colspan="2">${upahLabel} Diterima (Bersih)</td><td style="padding:10px;border:1.5px solid #000;text-align:right;">{{gaji_bersih}}</td></tr>
 </tbody>
 </table>
 
-<table style="width:100%;margin-top:30px;"><tbody><tr>
-<td style="width:50%;"><p style="margin:0;">Tanggal Terima: {{tanggal_terima}}</p></td>
-<td style="text-align:right;vertical-align:top;">
-<p style="margin:0 0 5px 0;">{{kota}}, {{tanggal_terima}}</p>
-<p style="margin:0 0 60px 0;">${signerRole}</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;">( ............................. )</p>
-</td>
-</tr></tbody></table>
+<div style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-start;">
+<div style="text-align:left;">
+<p style="margin:0;">Tanggal Terima: {{tanggal_terima}}</p>
+<p style="margin:8px 0 0;">Diterima oleh,</p>
+<p style="margin:60px 0 0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( {{nama}} )</p>
+</div>
+<div style="text-align:right;">
+<p style="margin:0;">{{kota}}, {{tanggal_terima}}</p>
+<p style="margin:8px 0 0;">${signerRole},</p>
+<p style="margin:60px 0 0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( ............................. )</p>
+</div>
+</div>
 
 </div>`
 }
