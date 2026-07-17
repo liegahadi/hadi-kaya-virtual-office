@@ -1465,3 +1465,655 @@ async function callLLM(messages, tools) {
 - Implementasi: 1 shared module `src/lib/agents/llm-router.ts`
 
 ---
+
+## 20. TAB BERKAS — IMPLEMENTASI LENGKAP (Phase 1–5, 15–17 Juli 2026)
+
+Section ini mendokumentasikan semua yang sudah dibangun di Tab Berkas (BerkasViewV2, Bank Builder, Annotation Editor) — termasuk code structure, perubahan yang terjadi, dan keputusan teknis. Ini menjadi baseline sebelum kita lanjut ke fase AI Agents.
+
+### 20.1 Arsitektur Tab Berkas (Current State)
+
+Tab Berkas adalah jantung operasional sistem — tempat owner mengelola data konsumen, generate dokumen KPR, upload berkas, dan test template annotation.
+
+**Komponen utama:**
+
+```
+src/components/
+├── berkas-view-v2.tsx              (2500+ lines, main view)
+├── bank-builder/
+│   ├── bank-builder.tsx             (Bank Builder modal + Dokumen Wajib config)
+│   ├── bank-builder-modal.tsx       (Modal wrapper)
+│   └── bank-annotation-editor.tsx   (Visual PDF annotation editor)
+├── berkas/
+│   └── bank-template-preview.tsx    (PDF canvas overlay preview, real-time)
+└── berkas-docs/docs/                (React components per dokumen)
+
+src/lib/berkas/
+├── types.ts                          (BerkasState, ApplicantData, PropertyData, SpouseData)
+├── constants.ts                      (CompanySetting defaults, ALL_DOC_TYPES, dll)
+├── formatters.ts                     (Date format helpers)
+├── upload-helper.ts                  (File hash, upload utils)
+├── flpp-overlay/                     (BTN FLPP — fields.ts + generate.ts)
+├── ajb-overlay/                      (BTN AJB — fields.ts + generate.ts)
+├── bsb-overlay/                      (BSB Syariah 6 dokumen — fields.ts + generate.ts)
+├── spr-mandiri-overlay/              (Mandiri SPR — fields.ts + generate.ts)
+├── mandiri-overlay/                  (Mandiri Surat Pernyataan — fields.ts + generate.ts)
+├── surat/                            (Surat tidak punya rumah, surat penghasilan, dll)
+├── docx-template/                    (docxtemplater wrapper untuk SK Kerja + Slip Gaji)
+└── templates/                        (Sample templates)
+
+src/app/api/documents/
+├── generate-flpp/route.ts            (BTN FLPP generator)
+├── preview-flpp/route.ts             (BTN FLPP preview)
+├── generate-ajb/route.ts             (BTN AJB)
+├── generate-bsb/route.ts             (BSB Syariah)
+├── generate-mandiri/route.ts         (Mandiri Surat Pernyataan)
+├── generate-spr-mandiri/route.ts     (Mandiri SPR)
+├── preview-*/route.ts                (Mirrors untuk preview)
+├── fill-docx-template/route.ts       (SK Kerja + Slip Gaji via docxtemplater)
+└── preview-docx-template/route.ts    (HTML preview untuk SK/Slip)
+
+src/app/api/bank-config/
+├── route.ts                          (CRUD BankConfig + PUT untuk update documents JSON)
+└── [id]/
+    └── template/
+        ├── route.ts                  (POST upload template, GET templates, DELETE template permanen)
+        ├── pdf-proxy/route.ts        (Proxy PDF dari local/Drive → frontend, avoid CORS)
+        ├── render/route.ts           (Server-side pdf-lib overlay untuk download)
+        └── (scan-annotations folder dihapus pas rollback ke b3d6f00)
+
+public/templates/                     (Local template PDFs: btn-flpp.pdf, bsb-*.pdf, spr-mandiri.pdf, dll)
+```
+
+### 20.2 Bank Config Builder — Sistem Multi-Bank
+
+**Konsep:** 1 bank bisa punya banyak template PDF (FLPP, SPR, AJB, dll). Setiap template punya annotations (posisi field di PDF) yang map ke field database konsumen.
+
+**Struktur data (BankConfig.documents JSON):**
+```json
+{
+  "requiredDocuments": ["ktp", "kk", "npwp", "akta-nikah", ...],
+  "formboxFields": ["applicant.fullName", "applicant.ktpNumber", ...],
+  "customDocs": [{"id": "custom-doc-xxx", "label": "Form BCA Syariah", "category": "perusahaan"}],
+  "customFields": [{"id": "custom-field-xxx", "label": "No. NPWP Pasangan", "category": "pasangan"}],
+  "customComposites": [
+    {
+      "id": "composite-xxx-pasangan",
+      "label": "TTL Pasangan Composite",
+      "category": "pasangan",
+      "source1": "spouse.pob",
+      "source2": "spouse.dob",
+      "separator": ", ",
+      "dateFormat": "long"
+    }
+  ],
+  "templates": [
+    {
+      "id": "tpl-xxx",
+      "name": "SPR MANDIRI",
+      "stage": "entry",
+      "fileId": "drive-xxx" | null,
+      "templatePath": "/public/templates/mandiri/spr-mandiri.pdf" | null,
+      "fileName": "SPR MANDIRI v1.pdf",
+      "version": 1,
+      "annotations": [
+        {
+          "id": "scan-p1-i0",
+          "page": 1,
+          "x": 0.438, "y": 0.111,
+          "width": 0.065, "height": 0.015,
+          "label": "No surat",
+          "fieldMapping": "custom.text",
+          "fieldType": "text",
+          "fontSize": 10
+        }
+      ]
+    }
+  ]
+}
+```
+
+**4 source of truth yang sync:**
+1. **Parent** (Bank Builder > Dokumen Wajib): `requiredDocuments` + `formboxFields` + `customDocs` + `customFields` + `customComposites`
+2. **Child 1 — Upload Sidebar** (BerkasViewV2 left sidebar): loop `requiredUploads` dari DB, dynamic
+3. **Child 2 — Formbox Sidebar** (BerkasViewV2 left sidebar): `isFieldVisible(fieldId)` check `bankFormboxFields`
+4. **Child 3 — Field Mapping Dropdown** (Bank Builder > Annotation): `buildGroupedWithCustoms()` filter by `formboxFields`
+
+### 20.3 FORMBOX_CATEGORIES — Parent Schema (6 kategori, 38+ fields)
+
+6 kategori dengan fieldType metadata:
+1. **Perusahaan (Developer)** — 13 fields: companyName, directorName, directorNik, directorPhone, directorAddress, officeAddress, city, btnAccount, mandiriAccount, bsbAccount, btnBranch, mandiriBranch, bsbBranch
+2. **Data Nasabah** — 16 fields: fullName, ktpNumber, pob, dob, address, rtRw, kelurahan, kecamatan, city, postalCode, phone, npwpNumber, btnAccountNumber, domicileAddress, email, nip
+3. **Pekerjaan Debitur** — 5 fields: jobTitle, companyName, companyAddress, companyPhone, monthlyIncome
+4. **Data Pasangan** — 5 fields: fullName, ktpNumber, pob, dob, address
+5. **Pekerjaan Pasangan** — 2 fields: job, jobType
+6. **Unit Properti** — 18 fields: projectName, houseAddress, blockLetter, houseNumber, landSize, houseSize, shmNumber, nibNumber, price, dpAmount, plafonKpr, tenor, dateOfDocument, akadDate, akadNumber, lpaDate, lpaNumber, sp3kDate
+
+**fieldType** (10 types): text, number, date, phone, email, currency, address, longtext, image, file
+
+### 20.4 Auto-Derived Fields (Composite + Transform)
+
+**8 auto-derived fields** — muncul otomatis di Field Mapping dropdown saat sub-field di-check:
+
+| ID | Label | Source | Output Example |
+|---|---|---|---|
+| `applicant.pobDobComposite` | Tempat, Tgl Lahir (gabungan) | applicant.pob + applicant.dob | "Jakarta, 17 Agustus 1990" |
+| `spouse.pobDobComposite` | Tempat, Tgl Lahir Pasangan (gabungan) | spouse.pob + spouse.dob | "Bandung, 5 Mei 1992" |
+| `company.cityLongDateComposite` | Kota + Tanggal Panjang | company.city + dateOfDocument | "Pangkalpinang, 17 Agustus 2026" |
+| `property.blokRumahComposite` | Blok - No Rumah | property.blockLetter + property.houseNumber | "E-6" |
+| `property.ltlbComposite` | Luas Tanah / Luas Bangunan | property.landSize + property.houseSize | "36/84" |
+| `property.sprRomanMonth` | Bulan SPR (Romawi) | dateOfDocument | "VIII" |
+| `property.sprMonthName` | Nama Bulan | dateOfDocument | "Agustus" |
+| `property.sprLongDate` | Tanggal Panjang | dateOfDocument | "17 Agustus 2026" |
+| `property.sprShortDate` | Tanggal Pendek | dateOfDocument | "17/08/2026" |
+
+**Plus user-defined custom composites** — user bikin sendiri di Bank Builder > Dokumen Wajib > Custom Composite Fields. Format: 2 source fields + separator + optional date format.
+
+### 20.5 Wiring Diagram (Parent → Children Sync)
+
+```
+PARENT (BankConfig DB — documents JSON):
+┌──────────────────────────────────────────────────────────┐
+│ • requiredDocuments (ktp, kk, npwp, ...)                 │
+│ • formboxFields (applicant.fullName, applicant.nik, ...)  │
+│ • customDocs (custom-doc-xxx, label, category)            │
+│ • customFields (custom-field-xxx, label, category)        │
+│ • customComposites (composite-xxx, source1, source2, ...) │
+└──────────────────────────────────────────────────────────┘
+        │ save (PUT /api/bank-config)
+        │ → bankConfigVersion++ (state di BerkasViewV2)
+        │ → useEffect re-fetch BankConfig
+        ↓
+CHILDREN (3 tempat yang harus ikut parent):
+┌──────────────────┬──────────────────┬──────────────────┐
+│ Upload Sidebar   │ Formbox Sidebar  │ Field Mapping    │
+│ (left sidebar)   │ (left sidebar)   │ (Bank Builder    │
+│                  │ pengisian data   │  > Annotation)   │
+│                  │ konsumen         │                  │
+│ ✅ Dynamic loop  │ ✅ isFieldVisible│ ✅ buildGrouped  │
+│   dari required- │   per field      │   WithCustoms()  │
+│   Documents      │ ✅ Custom field  │   filter by      │
+│ ✅ Custom doc    │   render per     │   formboxFields  │
+│   muncul otomatis│   kategori       │ ✅ Custom field  │
+│                  │ ✅ 'NGANGGUR' →  │   muncul sbg     │
+│                  │   'TIDAK BEKERJA'│   '(Custom)'     │
+│                  │                  │ ✅ Auto-derived  │
+│                  │                  │   muncul sbg     │
+│                  │                  │   '(Auto)'       │
+│                  │                  │ ✅ Custom        │
+│                  │                  │   composite      │
+│                  │                  │   '(Composite)'  │
+└──────────────────┴──────────────────┴──────────────────┘
+```
+
+### 20.6 Bank Builder Annotation Editor (Visual PDF Editor)
+
+**Fitur lengkap:**
+- Zoom (50%–300%) + page navigation
+- Grid overlay (toggle, 30% opacity)
+- Drag-move + 4 resize handles per annotation
+- Font size (6–72px)
+- Multi-template support (1 bank bisa multiple PDFs: FLPP, SPR, AJB, dll)
+- Template versioning (v1 → v2 → v3, replace existing)
+- Test dari Konsumen Existing (pilih konsumen → auto-fill test data ke annotation)
+- Real-time preview: text muncul di annotation box saat value ada
+- Template deletion permanen (file disk + DB + Drive)
+- Storage: local disk (preferred) ATAU Google Drive (fallback)
+
+**Field Mapping dropdown struktur** (urutan SESUAI parent):
+1. Data Perusahaan (Global)
+2. Data Nasabah
+3. Data Pekerjaan / Wirausaha (Debitur)
+4. Data Pasangan Nasabah
+5. Data Pekerjaan Pasangan
+6. Unit Properti
+7. Sistem (Realtime) — always show all
+8. Custom — always show all
+
+### 20.7 Preview vs Download Coordinate System
+
+**Critical fix (Phase 5):** Preview (Canvas) dan Download (pdf-lib) punya origin berbeda — sebelum fix, text position beda antara preview dan download.
+
+**Canvas (Preview — client-side):**
+- Origin: top-left, Y goes DOWN
+- `ctx.textBaseline = 'top'`
+- Text drawn at `y + 2` (relative to TOP of box)
+
+**PDF (Download — server-side, pdf-lib):**
+- Origin: bottom-left, Y goes UP
+- `y_bottom = pageHeight - (ann.y * pageHeight) - boxHeightPx`
+- Text drawn with baseline at `textY = y_bottom + boxHeightPx - fontSize - 2` (match TOP of box)
+
+**Sekarang coordinate preview == download.** Saat user drag annotation ke posisi X, hasil preview dan hasil download sama persis.
+
+### 20.8 BTN/BSB Hardcoded Overlay vs Bank Builder Template
+
+**2 approach berjalan paralel:**
+
+| Approach | Banks | Code | Workflow |
+|---|---|---|---|
+| **Hardcoded overlay** (BTN, BSB, Mandiri SPR, Mandiri Pernyataan) | BTN, BSB_SYARIAH, MANDIRI (via legacy) | `src/lib/berkas/{flpp,ajb,bsb,spr-mandiri,mandiri}-overlay/fields.ts + generate.ts` | Klik tombol → fetch /api/documents/generate-xxx → return PDF |
+| **Bank Builder template** (Mandiri future, BNI, BCA, dll) | Bank manapun yang setup via Bank Builder | Bank Builder > Template PDF + Annotation | Pilih template di Preview Dokumen → fetch /api/bank-config/[id]/template/render → return PDF |
+
+**isFieldVisible() rule:**
+- BTN + BSB_SYARIAH → return `true` (semua field visible, hardcoded behavior)
+- Mandiri + bank future → check `bankFormboxFields` (only show if checked in Bank Builder)
+
+### 20.9 PENDING REQUIREMENT — DINA Task
+
+**SK Kerja, Slip Gaji (7 lembar), Laporan Keuangan 6 Bulan Terakhir** — saat ini manual via template upload (docxtemplater). User ingin **DINA yang fully handle** task ini:
+- DINA chat: "bikin SK Kerja untuk Budi" → DINA otomatis:
+  - Ambil data konsumen dari DB
+  - Generate docx dari template
+  - Save ke Google Drive
+  - Kirim file ke user via WhatsApp/DM
+- Slip Gaji auto-generate 7 lembar (current month + 6 bulan ke belakang)
+- Laporan Keuangan 6 bulan terakhir (untuk wirausaha)
+
+**Saat ini:**
+- ✅ Backend ready: `/api/documents/fill-docx-template` + `/api/documents/preview-docx-template`
+- ✅ DINA v3 tools already defined: `generate_sk_kerja`, `generate_slip_gaji`, `generate_laporan_keuangan` (di `src/lib/agents/dina-tools-v3.ts`)
+- ⏳ Implementation: DINA belum bisa otomatis upload template baru (user masih perlu upload manual dulu)
+- ⏳ Testing: belum di-test end-to-end via DINA chat
+
+### 20.10 Phase History (15–17 Juli 2026)
+
+| Phase | Commit | What |
+|---|---|---|
+| Phase 1 | `aab5d97` | Refactor FIELD_MAPPINGS_GROUPED — hapus field extra, mirror parent urutan, fix catMap bug |
+| Phase 2 | `854b8a7` | Auto-derived fields (composite + transform) muncul otomatis di dropdown |
+| Phase 3 | `fc28544` | Expand test data mapping + add composite Blok/LT-LB + 'NGANGGUR' → 'TIDAK BEKERJA' |
+| Phase 4 | `9541585` | Sidebar render custom fields dari DB + add missing parent fields (one-time) |
+| Phase 5 | `58b7d82` | Fix preview vs download coordinate mismatch + alamat perumahan wiring + user-defined custom composite UI |
+
+**Rollback history:**
+- `b3d6f00` — Rollback dari Adobe approach (5 commit Adobe annotation dibuang)
+- `16ff1ba` — Empty commit trigger Vercel redeploy setelah force push
+- `59e9700` — feat(bank-builder): hapus template permanen
+- `fc28544` → `9541585` → `58b7d82` — Phase 3-5 development sequential
+
+### 20.11 Current State (Snapshot 17 Juli 2026)
+
+**Working:**
+- ✅ Tab Berkas full functional (BTN, BSB, Mandiri overlay + Bank Builder templates)
+- ✅ Bank Builder complete: Dokumen Wajib + Form Box Fields + Custom Composite + Template PDF + Annotation Editor + Hapus Template
+- ✅ Parent → 3 children sync (upload sidebar, formbox sidebar, field mapping dropdown)
+- ✅ Custom fields auto-render di sidebar + auto-save ke DB
+- ✅ Custom composites user-defined
+- ✅ 8 auto-derived composite + transform fields
+- ✅ Preview == Download coordinate match
+- ✅ Alamat perumahan (property.houseAddress) wired end-to-end
+- ✅ Delete template permanen (file + DB + Drive)
+- ✅ 'NGANGGUR' → 'TIDAK BEKERJA' display label
+- ✅ Local file storage preferred (Drive optional)
+
+**Pending:**
+- ⏳ DINA fully handle SK Kerja + Slip Gaji + Laporan Keuangan generation
+- ⏳ Smart rendering by fieldType di sidebar (currency → Rp prefix, phone → +62 format, dll)
+- ⏳ Re-introduce Adobe annotation scan (different branch, future)
+- ⏳ BTN/BSB setup via Bank Builder (saat ini hardcoded, change kalau user update berkas BTN/BSB)
+
+---
+
+## 21. AI AGENTS ROADMAP — DINA & Friends
+
+Section ini jadi blueprint untuk pengembangan AI agents berikutnya. Dari yang user describe, ada 5 AI persona utama (1 already done, 4 next) + 10 marketing AI.
+
+### 21.1 User Vision (Quote dari owner)
+
+> 1 AI buat berkas, dia yg bantu generate dan buatin semua berkas, kecuali edit" surat pemerintahan (DONE — DINA)
+> 1 AI untuk finance, dia yg buat PO, bikin laporan, bikin pengajuan pembelian pembayaran, yang susahnya ya dia ni harus bisa fleksibel, karna bos ni, tiap mgg pasti SOP berubah WKWKWKWL, bos yg bikin sop, boss juga yg suka melanggar SOP
+> 1 AI buat mesen barang sekaligus tracking material, dan progress pembangunan
+> 1 AI sebagai leader marketing, dia yg bikin dan generate foto ataupun video, terus kirim ke 10 AI marketing yg melakukan promosi chat dengan konsumen
+
+### 21.2 AI Agents Roster (Current + Planned)
+
+| # | Agent | Role | Status | Complexity |
+|---|---|---|---|---|
+| 1 | **DINA** | Document AI — generate semua berkas KPR | ✅ v3 Function Calling | HIGH |
+| 2 | **RINA** | Finance AI — PO, laporan, pengajuan dana, pembayaran | 🟡 Existing chat API, basic | HIGH (SOP dynamic) |
+| 3 | **MITRA** | Material AI — pesan barang + tracking material + progress pembangunan | 🟡 Existing chat API, basic | MEDIUM-HIGH |
+| 4 | **RATNA** | Leader Marketing AI — generate foto/video + kirim ke 10 marketing | 🟡 Existing chat API, basic | HIGH (image gen) |
+| 5–14 | **10 Marketing AI** (Ayu, Bima, Citra, Dian, Eka, Fajar, Gita, Hadi, Indah, Joko) | Promosi chat dengan konsumen | 🟡 Existing chat API, basic | MEDIUM (per-agent persona) |
+
+**Total: 14 AI agents** (1 DINA + 1 RINA + 1 MITRA + 1 RATNA + 10 Marketing)
+
+### 21.3 Where to Start — Proposed Flow
+
+**Pertanyaan user: "kita harus prepare atau start dari mana?"**
+
+Jawabanku: **Mulai dari DINA end-to-end test dulu, baru lanjut ke agent berikutnya.** Reasoning:
+
+1. DINA paling critical (berkas = core business) — harus PERFECT sebelum kita serah-terima ke agent lain
+2. DINA v3 (Function Calling) sudah built, tapi belum di-test end-to-end via WhatsApp
+3. Pattern yang dibikin untuk DINA → reuse untuk RINA/MITRA/RATNA (LLM Router, BaseAgent, tools, memory)
+4. Kalau DINA jalan smooth, agent lain tinggal ikut pattern
+
+**Proposed order:**
+1. **DINA Phase 1** — Test function calling via dashboard chat (input: text, output: tool calls + final reply). Verify 10 tools jalan.
+2. **DINA Phase 2** — WhatsApp deployment (1 nomor WA untuk DINA, scan QR, owner chat ke DINA)
+3. **DINA Phase 3** — Generate SK Kerja + Slip Gaji + Laporan Keuangan end-to-end via chat
+4. **DINA Phase 4** — Pending reasoning (DINA bingung → minta owner answer di Memory tab)
+5. **RATNA (Leader Marketing)** — Image/video generation via z-ai-web-dev-sdk, distribute ke 10 marketing AI
+6. **10 Marketing AI** — Persona-based chat dengan konsumen, melayani FAQ + objection handling
+7. **RINA (Finance)** — PO, laporan, pengajuan dana. HARDCORE: SOP dynamic (boss changes weekly)
+8. **MITRA (Material)** — Pesan barang + tracking + progress pembangunan (foto progress, material stock)
+
+### 21.4 Requirements per AI Agent
+
+#### 21.4.1 DINA (Document AI) — Generate Berkas
+
+**Already done:**
+- ✅ Function calling v3 (10 tools: upload_berkas, generate_sk_kerja, generate_slip_gaji, generate_laporan_keuangan, get_customer_status, update_customer_field, create_customer, delete_customer, send_file, query_experience)
+- ✅ LLM Router (Gemini → Nemotron fallback)
+- ✅ Multi-account rotation support
+- ✅ Anti-curhat, anti-confusion nama system prompt
+- ✅ Pending action confirmation (delete → "ya"/"batal")
+
+**Pending (Phase 1–4):**
+- ⏳ End-to-end test via dashboard chat
+- ⏳ WhatsApp deployment (1 nomor, scan QR, owner chat DINA langsung)
+- ⏳ Generate SK Kerja end-to-end (chat → generate → save Drive → send file)
+- ⏳ Generate Slip Gaji 7 lembar end-to-end
+- ⏳ Generate Laporan Keuangan 6 bulan end-to-end
+- ⏳ Pending reasoning (confused → "pending question" → owner answer di Memory tab → auto-save as lesson learned)
+
+**Tools DINA butuh tambahan:**
+- `template_upload` — DINA minta user upload template SK/Slip baru (kalau belum ada)
+- `template_list` — DINA check template apa yang sudah ada
+- `pending_question_create` — DINA bikin pending question kalau bingung
+- `pending_question_resolve` — Owner answer, DINA save as memory
+
+#### 21.4.2 RINA (Finance AI) — PO, Laporan, Pengajuan Dana
+
+**Use case:**
+- Owner chat: "bikin PO untuk beli semen 50 sak" → RINA generate PO PDF
+- Owner chat: "laporan pengeluaran minggu ini" → RINA generate laporan
+- Owner chat: "pengajuan dana minggu depan 50jt" → RINA bikin pengajuan
+
+**Yang susah: SOP dynamic**
+- Boss ubah SOP tiap minggu (literal)
+- Boss juga pelanggar SOP-nya sendiri
+- RINA harus adaptif: kalau SOP berubah, RINA ikut
+- Kalau boss minta yang melanggar SOP, RINA warning tapi tetap jalanin (dengan catatan)
+
+**Tools RINA butuh:**
+- `create_po` — bikin PO baru (vendor + items + qty + price)
+- `generate_laporan_mingguan` — laporan pengeluaran + pemasukan mingguan
+- `generate_pengajuan_dana` — pengajuan dana ke boss
+- `record_payment` — catat pembayaran keluar
+- `get_sop` — ambil SOP active terbaru
+- `update_sop` — owner update SOP (RINA ikut)
+- `flag_sop_violation` — RINA warning kalau request melanggar SOP (tapi tetap jalanin kalau owner insist)
+- `query_vendor` — cari vendor dengan harga terbaik
+- `query_material_price` — cek harga material terkini
+
+**Prisma models ready:** PO, POLine, Supplier, SupplierPayment, FundRequest, RAB, RABLine, MaterialStock, MaterialUsage — semua sudah ada di schema.
+
+**Penting:** RINA harus **conversation-driven SOP update** — owner bilang "mulai sekarang PO semen harus minta approval dulu" → RINA auto-update SOP di DB → next time RINA enforce SOP baru.
+
+#### 21.4.3 MITRA (Material AI) — Pesan Barang + Tracking Material + Progress Pembangunan
+
+**Use case:**
+- Owner chat: "pesan 100 batu bata untuk Blok C" → MITRA bikin PO otomatis (atau koordinasi sama RINA)
+- Owner chat: "stock semen sisa berapa?" → MITRA cek MaterialStock
+- Owner chat: "foto progress Blok C minggu ini" → MITRA minta owner upload foto, save ke ProgressPhoto
+- Owner chat: "material yang dipakai Blok C minggu ini apa aja?" → MITRA query MaterialUsage
+
+**Tools MITRA butuh:**
+- `create_material_request` — pesan material baru (auto-route ke RINA untuk PO)
+- `check_material_stock` — cek stock material di gudang
+- `record_material_usage` — catat material terpakai per unit/blok
+- `upload_progress_photo` — upload foto progress pembangunan
+- `get_progress_report` — laporan progress per blok/unit
+- `query_unit_status` — cek status pembangunan unit (sudah sampe tahap apa)
+- `list_pending_material_requests` — material yang belum dipesan
+
+**Prisma models ready:** MaterialStock, MaterialUsage, ProgressPhoto, UnitBudgetTracking, Unit — semua sudah ada di schema.
+
+**Sinergi dengan RINA:** MITRA handle "apa yang dibutuhkan" + RINA handle "beli dari mana + berapa + cara bayar". Bisa jadi MITRA → RINA handoff via internal messaging.
+
+#### 21.4.4 RATNA (Leader Marketing AI) — Generate Foto/Video + Distribute
+
+**Use case:**
+- Owner chat: "bikin foto rumah Blok E yang baru selesai, kirim ke marketing" → RATNA:
+  - Generate foto rumah (image generation via z-ai-web-dev-sdk, OR ambil dari progress photo yang sudah ada)
+  - Bikin caption marketing (kombinasi: harga, type, keunggulan, CTA)
+  - Distribute ke 10 marketing AI (via internal messaging)
+  - 10 marketing AI terima + forward ke prospek masing-masing
+
+**Tools RATNA butuh:**
+- `generate_marketing_image` — generate foto rumah ilustrasi (z-ai image gen)
+- `edit_existing_photo` — edit progress photo jadi marketing material (tambah text, filter, dll)
+- `generate_marketing_caption` — bikin caption untuk postingan
+- `generate_video_script` — bikin script video pendek (Reels/TikTok)
+- `distribute_to_marketing_agents` — kirim konten ke 10 marketing AI
+- `get_marketing_performance` — analytics: berapa prospek yang convert dari konten tertentu
+- `schedule_content` — jadwal posting (kalau integrasi dengan IG/TikTok/FB API)
+
+**Tech needed:**
+- z-ai-web-dev-sdk image generation (free)
+- z-ai-web-dev-sdk image editing (free)
+- Maybe Canva API untuk template design (optional, kalau z-ai kurang)
+- Internal agent-to-agent messaging system (belum ada, perlu dibikin)
+
+#### 21.4.5 10 Marketing AI — Promosi Chat dengan Konsumen
+
+**Persona-based chat:**
+- 10 persona berbeda (Ayu: cheerful, Bima: informatif, Citra: manipulatif, dll)
+- Masing-masing handle prospek tertentu (1 prospek = 1 marketing AI, locked)
+- Chat dengan prospek via WhatsApp
+- FAQ + objection handling (knowledge base already seeded: 25 FAQ + 10 objection + 7 product info)
+
+**Use case:**
+- Prospek WA: "rumah subsidi-nya berapa?" → Ayu jawab pakai knowledge base
+- Prospek WA: "DP-nya bisa cicil?" → Bima jawab + upsell SBUM
+- Prospek WA: "aku kerja di batam, bisa KPR?" → Citra handle (objection handling, remote KPR)
+- Prospek WA: "mau survey dulu" → Dian schedule survey, koordinasi sama owner
+
+**Tools Marketing AI butuh:**
+- `get_prospect_info` — ambil data prospek yang chat
+- `get_knowledge` — cari FAQ/objection/product info yang relevan
+- `schedule_survey` — jadwalkan survey
+- `assign_to_owner` — handoff ke owner kalau prospek hot lead
+- `record_prospect_response` — catat response prospek (untuk analytics)
+- `escalate_to_dina` — handoff ke DINA kalau prospek mau proses KPR (mulai berkas)
+- `query_team_capacity` — check marketing AI lain yang available (kalau 1 AI overload)
+
+**Penting:**
+- Setiap marketing AI punya nomor WA sendiri (multi-account Baileys)
+- 1 marketing AI handle max N prospek (cap, kalau overload → redistribute)
+- Persona consistency (Ayu selalu cheerful, ga boleh tiba-tiba jadi informatif)
+
+### 21.5 Cross-Agent Communication
+
+**Internal agent-to-agent messaging** — belum ada, perlu dibangun. Use case:
+- RATNA → 10 Marketing: "ini foto baru, distribute ke prospek masing-masing"
+- MITRA → RINA: "butuh 50 sak semen untuk Blok C, tolong PO"
+- DINA → Marketing AI: "konsumen Budi udah selesai berkas, lanjut survey"
+- Marketing AI → DINA: "prospect Asep mau proses KPR, tolong handle berkas"
+
+**Schema proposal:**
+```prisma
+model AgentMessage {
+  id          String   @id @default(cuid())
+  fromAgentId String?  // NULL = dari human (owner)
+  toAgentId   String?  // NULL = broadcast
+  type        String   // REQUEST | RESPONSE | BROADCAST | HANDOFF
+  subject     String
+  body        String
+  payload     String?  // JSON: data terstruktur (file URL, customer ID, dll)
+  status      String   @default("PENDING") // PENDING | READ | ACTIONED | ARCHIVED
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+  actionedAt  DateTime?
+  
+  fromAgent   Agent?   @relation("AgentMsgFrom", fields: [fromAgentId], references: [id])
+  toAgent     Agent?   @relation("AgentMsgTo", fields: [toAgentId], references: [id])
+}
+```
+
+### 21.6 Memory System — Pending Reasoning
+
+**Konsep "pending reasoning"** (sudah disinggung di section 19.6):
+- Agent bingung → bikin "pending question" entry
+- Owner answer di Memory Tab
+- Setelah "Done", auto-save as memory (Title + Description + Resolution)
+- Bukan Q&A pattern matching, tapi **lessons learned**
+
+**Penting untuk RINA (SOP dynamic):**
+- Boss ubah SOP → RINA bingung → pending question: "SOP baru kah perubahan ini?"
+- Owner answer → RINA save as memory → next time RINA ikuti SOP baru
+
+**Penting untuk Marketing AI:**
+- Prospek tanya hal baru yang ga ada di knowledge base → marketing AI pending question: "prospek tanya X, jawaban apa?"
+- Owner answer → save as knowledge item baru → semua marketing AI updated
+
+### 21.7 LLM Router — Shared Infrastructure
+
+**Sudah dibangun** (`src/lib/agents/llm-router.ts`):
+- Multi-provider (Gemini → Nemotron → Llama → OpenRouter → Ollama future)
+- Multi-account rotation (multiple API keys per provider)
+- `callLLM()` untuk non-tool calls
+- `callLLMWithTools()` untuk function calling (Gemini native + OpenAI-compatible)
+- Round-robin antar API key
+- Auto-skip on retryable errors (429, 5xx, timeout)
+
+**Berlaku untuk SEMUA agent** — DINA, RINA, MITRA, RATNA, 10 Marketing. Tidak ada exception.
+
+### 21.8 WhatsApp Multi-Agent Architecture
+
+**Saat ini:** 1 nomor WA untuk DINA (Belum jalan — WA IP blocked).
+
+**Target:** 14 nomor WA (1 per agent):
+- DINA: 6287761323344 (sudah dipunya, belum connect)
+- RINA: perlu beli nomor baru
+- MITRA: perlu beli nomor baru
+- RATNA: perlu beli nomor baru
+- 10 Marketing: perlu beli 10 nomor baru
+
+**Tech:**
+- Baileys (`@whiskeysockets/baileys`) — multi-account ready
+- Setiap nomor WA jalan di session Baileys terpisah
+- Incoming message routing: nomor tujuan → agent ID → trigger chat handler
+
+**Hosting challenge:**
+- Vercel ga support persistent WebSocket (Baileys butuh koneksi terus-menerus)
+- Plan: Hostinger VPS (1 VPS jalanin 14 Baileys sessions)
+- Atau: Railway/Render (kalau budget boleh)
+
+### 21.9 What I Want to Start With (My Recommendation)
+
+**Karena user nanya "apa yang ingin kamu mulai?" — pilihan aku:**
+
+**Option A — DINA WhatsApp end-to-end** (recommended):
+- Test DINA function calling via WA (bukan dashboard)
+- Owner chat DINA langsung, ga perlu buka dashboard
+- Verify: "status Budi", "bikin SK Kerja Jenni", "hapus konsumen yang fake"
+- Kalau jalan smooth → pattern siap apply ke agent lain
+
+**Option B — RATNA + 10 Marketing** (foundational untuk marketing):
+- Marketing adalah ujung depan (cari prospek → convert → customer)
+- Tanpa marketing, ga ada customer → ga ada berkas → DINA idle
+- Tapi RATNA butuh image gen infra + 10 nomor WA = banyak invest awal
+
+**Option C — RINA Finance** (critical untuk operasional):
+- Finance = darah operasional (PO, payment, laporan)
+- Tapi RINA paling kompleks (SOP dynamic)
+- Risk: kalau RINA ga robust, owner frustrasi
+
+**Option D — MITRA Material + Progress** (operasional):
+- Tracking material + progress = visibility
+- Tapi ga urgent (saat ini masih manual, masih bisa jalan)
+
+**My pick: Option A.** Reasoning:
+1. DINA paling ready (v3 sudah built, tinggal deploy)
+2. ROI paling tinggi (berkas = core business, owner paling sering pake)
+3. Pattern DINA → reuse untuk agent lain (ga bikin dari nol)
+4. Owner paling familiar dengan DINA use case → feedback cepat
+
+### 21.10 Required Infrastructure Before AI Agents Deploy
+
+**Yang harus siap sebelum agent manapun go-live:**
+
+1. **Vercel environment variables:**
+   - `GEMINI_API_KEYS` (comma-separated, multi-account)
+   - `OPENROUTER_API_KEYS` (comma-separated)
+   - `GOOGLE_OAUTH_CLIENT_ID` + `SECRET` (sudah ada, untuk Drive)
+   - `DATABASE_URL` (Aiven PostgreSQL, sudah ada)
+   - `WA_SESSION_PATH` (kalau di VPS, kalau Vercel ga support persistent)
+
+2. **Database migrations:**
+   - `AgentMessage` model (cross-agent messaging)
+   - `PendingQuestion` model (pending reasoning)
+   - `Memory` model extensions (lessons learned category)
+   - `SOP` model (untuk RINA — SOP active versioning)
+
+3. **VPS setup (untuk Baileys):**
+   - Hostinger VPS (or Railway)
+   - Node.js 20+
+   - PM2 process manager (jaga 14 Baileys sessions tetap jalan)
+   - Nginx reverse proxy (WA webhook → Next.js API)
+
+4. **Phone numbers (SIM cards):**
+   - 14 nomor WA baru (DINA sudah ada 1, tinggal 13 lagi)
+   - Atau: mulai dari 1 dulu (DINA), tambah nominal kalau agent lain go-live
+
+5. **Multi-account LLM API keys:**
+   - Gemini: daftar 3-5 akun (free tier 15 RPM per akun → 45-75 RPM total)
+   - OpenRouter: daftar 2-3 akun (free models)
+   - Future: Ollama self-hosted (kalau mau 100% free)
+
+6. **Internal agent messaging system:**
+   - Build `AgentMessage` schema + API
+   - Setiap agent poll/subscribe messages addressed to them
+   - Optional: WebSocket untuk real-time (kalau di VPS)
+
+### 21.11 Open Questions untuk Owner
+
+Sebelum mulai execute, butuh jawaban:
+
+1. **WhatsApp nomor:** Mau beli 14 nomor baru sekaligus, atau mulai dari 1 (DINA) dulu?
+2. **VPS budget:** Hostinger VPS OK? Mau pakai Railway/Render (lebih mahal tapi simpler)?
+3. **Gemini API keys:** Mau daftar 3-5 akun baru sekaligus, atau 1 dulu?
+4. **SOP RINA:** Bisa kasih contoh SOP yang sering berubah? Biar aku design schema-nya.
+5. **Image generation RATNA:** Mau pakai z-ai (free, ilustrasi) atau butuh foto real rumah? Kalau real, perlu progress photo pipeline dulu.
+6. **Marketing AI personas:** 10 persona yang sudah ada (Ayu/Bima/Citra/...) masih relevant? Atau mau redesign?
+7. **Priority urutan agent:** Setuju dengan my pick (DINA dulu), atau owner prefer urutan lain?
+
+---
+
+## 22. NEXT STEPS — Action Items
+
+Berdasarkan section 21, next concrete steps:
+
+### Step 1 (Immediate — DINA WhatsApp)
+1. Setup Hostinger VPS (or Railway) untuk Baileys
+2. Deploy DINA WA bot (1 nomor: 6287761323344)
+3. Test owner chat → DINA response via WA
+4. Verify 10 tools jalan via WA (bukan dashboard)
+
+### Step 2 (Short-term — DINA Generate Berkas)
+1. Test generate_sk_kerja via WA chat
+2. Test generate_slip_gaji (7 lembar otomatis)
+3. Test generate_laporan_keuangan (wirausaha)
+4. Verify file auto-save ke Drive + auto-send ke owner
+
+### Step 3 (Mid-term — Agent Infrastructure)
+1. Build `AgentMessage` schema + API (cross-agent messaging)
+2. Build `PendingQuestion` model + UI (pending reasoning)
+3. Build `SOP` model (untuk RINA)
+4. Add DINA tools: `template_upload`, `template_list`, `pending_question_create`, `pending_question_resolve`
+
+### Step 4 (Long-term — RINA/MITRA/RATNA/Marketing)
+1. RINA — finance AI with dynamic SOP
+2. MITRA — material + progress tracking
+3. RATNA — marketing leader with image gen
+4. 10 Marketing AI — persona-based prospek chat
+
+### Step 5 (Future — Multi-Team)
+1. Apply Teams concept (section 16) untuk onboarding tim lain
+2. Self-service Bank Builder (sudah siap, tinggal pakai)
+3. Per-team custom AI persona (kalau tim lain butuh persona beda)
+
+---
+
