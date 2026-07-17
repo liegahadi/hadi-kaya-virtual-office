@@ -2117,3 +2117,109 @@ Berdasarkan section 21, next concrete steps:
 
 ---
 
+
+## 23. AI AGENTS ROADMAP — DEFERRED (17 Juli 2026)
+
+**Status:** Deferred sampai Tab Berkas fully complete.
+
+### 23.1 Decision Context
+Setelah eksplorasi mendalam (section 21-22), disimpulkan bahwa AI Agents roadmap (DINA WhatsApp, RINA, MITRA, RATNA, 10 Marketing) ditunda dulu sampai:
+
+1. Tab Berkas fully functional (SK Kerja + Slip Gaji + Laporan Keuangan untuk semua bank)
+2. 9router infrastructure ready (LLM router dengan multi-provider fallback)
+3. VPS hosting disiapkan (untuk Baileys WA bot persistent connection)
+
+### 23.2 9router — What We Learned
+
+**9router** (https://github.com/decolua/9router):
+- Open-source local proxy/router untuk LLM (22.4K stars, MIT, v0.5.35)
+- 40+ providers (Kiro AI free unlimited Claude 4.5, OpenCode Free, Vertex AI, OpenRouter, dll)
+- 3-tier fallback: Subscription → Cheap → Free
+- Multi-account per provider (round-robin)
+- RTK token saver (20-40% hemat)
+- Custom combos (fallback chain per agent)
+- Format translation (OpenAI ↔ Claude ↔ Gemini)
+- Cloud sync across devices
+- Dashboard UI di port 20128
+
+### 23.3 Deployment Options Investigated
+
+| Opsi | Biaya | Trade-off | Status |
+|---|---|---|---|
+| HF Space free tier | FREE | Docker Spaces butuh PRO ($9/bln) | ❌ Blocked |
+| Hostinger VPS | Rp 50-70K/bln | Bayar via bank transfer (no card) | ✅ Recommended |
+| Komputer + CF Tunnel | FREE | Laptop harus on 24/7 | ⚠️ Tidak reliable |
+| Oracle Cloud Always Free | FREE | Signup strict, butuh card untuk verifikasi | ⚠️ Risk ditolak |
+| Render Free | FREE | No persistent disk free, 15-min sleep | ❌ Not viable |
+
+**Konklusi:** Hostinger VPS via bank transfer = paling realistis. Bisa host 9router + n8n + WA bot Baileys dalam 1 VPS.
+
+### 23.4 MiroFish Integration
+- **MiroFish** (github.com/666ghj/MiroFish, 68.7K stars, AGPL-3.0) = AI prediction engine (swarm intelligence)
+- Fungsi: simulasi multi-agent untuk predict outcome (e.g., "kalau harga naik 5%, apa yang terjadi?")
+- Bertabrakan dengan 9router? **TIDAK.** MiroFish bisa pakai 9router sebagai LLM gateway
+- Bertabrakan dengan n8n? **TIDAK.** n8n bisa call MiroFish via HTTP node
+- Bertabrakan dengan OpenClaw? **TIDAK.** OpenClaw = messaging client yang pakai 9router
+
+**All tools saling melengkapi:**
+```
+        ┌─────────────┐
+        │ 9router     │ ← LLM router (VPS)
+        └──────┬──────┘
+               │
+   ┌───────────┼───────────┬───────────────┐
+   ↓           ↓           ↓               ↓
+hadi-kaya   n8n          OpenClaw       MiroFish
+(Vercel)   (workflow)   (messaging)   (prediction)
+```
+
+### 23.5 When to Resume AI Agents
+Setelah semua ini selesai:
+1. ✅ Tab Berkas fully complete (SK Kerja + Slip Gaji + Laporan Keuangan untuk semua bank)
+2. ✅ Buy Hostinger VPS (Rp 600K/tahun)
+3. ✅ Deploy 9router di VPS
+4. ✅ Connect providers (Kiro AI, OpenCode Free, Gemini, OpenRouter)
+5. ✅ Update hadi-kaya code → thin wrapper ke 9router
+6. ✅ Test DINA dashboard chat dengan 9router backend
+7. ⏳ Deploy WA bot Baileys di VPS (1 nomor DINA dulu)
+8. ⏳ Test DINA WA end-to-end
+9. ⏳ Extend ke RINA, MITRA, RATNA, 10 Marketing (bertahap)
+
+### 23.6 LLM Rate Limit Problem — Root Cause
+Per 1 chat message, DINA v3 (function calling) bisa call LLM 3-5 kali:
+- Round 1: LLM decide call `get_customer_status("Budi")` → 1st call
+- Round 2: LLM decide call `generate_sk_kerja(customerId)` → 2nd call
+- Round 3: LLM produce final text reply → 3rd call
+
+5 message berurutan × 3 calls = 15 calls = KENA LIMIT (Gemini free 15 RPM).
+
+**Solutions investigated (untuk implementasi future):**
+- Multi-account rotation (5 akun Gemini = 75 RPM)
+- 9router fallback (Kiro free unlimited → OpenCode → Gemini)
+- Reduce LLM rounds (force final reply setelah 1 tool call)
+- Smart caching (kalau same question, return cached)
+
+### 23.7 Vercel Cron Ping — Risk Analysis
+Untuk keep HF Space alive (kalau pakai HF):
+- Vercel free cron = 1x daily (tidak cukup untuk ping tiap 10 menit)
+- Vercel Pro cron = $20/bulan (mahal)
+- Alternatif: cron-job.org (free, interval bebas)
+- Ping GET / (no LLM call) = tidak kena LLM rate limit
+- Tapi HF Space sleep mechanism = kalau 30 min idle, sleep → ping tiap 10 min OK
+
+**Tapi HF Space free Docker butuh PRO** → ini blocking issue.
+
+### 23.8 Action Items (When Resumed)
+1. Beli Hostinger VPS via bank transfer (Rp 600K/tahun)
+2. Setup Docker + 9router + n8n di VPS
+3. Connect 4 providers (Kiro OAuth, OpenCode toggle, Gemini API key, OpenRouter API key)
+4. Bikin 3 combos (dina-combo, rina-combo, marketing-combo)
+5. Setup Cloudflare Tunnel untuk HTTPS (free)
+6. Update hadi-kaya llm-router.ts → thin wrapper ke 9router
+7. Set Vercel env vars (LLM_ENDPOINT, LLM_API_KEY, LLM_MODEL_*)
+8. Test DINA dashboard chat dengan 9router backend
+9. Deploy WA bot Baileys di VPS (1 nomor DINA: 6287761323344)
+10. Test DINA WA end-to-end
+
+---
+
