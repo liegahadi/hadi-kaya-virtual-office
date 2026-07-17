@@ -127,6 +127,8 @@ function fillSection(html: string, data: Record<string, any>): string {
 
 // Build the COMBINED document: SK + page break + 7 slip sheets
 // All in one HTML string ready to be loaded into Tiptap editor
+// NOTE: Slip body sudah punya page-break-after:always di div outer-nya,
+// jadi TIDAK perlu tambah PAGE_BREAK helper antar slip (double page break = halaman kosong)
 export function buildCombinedDocument(templateId: string, state: BerkasState): string {
   const template = COMBINED_TEMPLATES.find(t => t.id === templateId) || COMBINED_TEMPLATES[0]
   const style = template.id.replace('combined-', '')
@@ -137,13 +139,15 @@ export function buildCombinedDocument(templateId: string, state: BerkasState): s
   // Build SK section (filled)
   const skHtml = fillSection(getSkBody(style), skData)
 
-  // Build 7 slip sections (each filled with its own slip data, but sharing kop surat fields)
-  const pageBreak = '<p style="page-break-after:always;">&nbsp;</p><hr style="page-break-after:always;border:none;">'
+  // Build 7 slip sections (each filled with its own slip data)
+  // Slip body sudah punya page-break-after:always, jadi langsung concatenate tanpa PAGE_BREAK
   const slipPages = slipData.slips.map((slip: any) => {
     return fillSection(getSlipBody(style), slip)
-  }).join(`\n${pageBreak}\n`)
+  }).join('\n')
 
-  // Combine: SK + page break + 7 slips
+  // Combine: SK + slips (slip pertama akan auto page-break dari SK section)
+  // Tambah 1 page break setelah SK section supaya slip pertama mulai di halaman baru
+  const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>'
   return `${skHtml}
 ${pageBreak}
 ${slipPages}`
