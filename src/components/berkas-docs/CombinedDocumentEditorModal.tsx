@@ -20,9 +20,10 @@ import Image from '@tiptap/extension-image'
 import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { BerkasState } from '@/lib/berkas/types'
+import { BerkasState, JobType } from '@/lib/berkas/types'
 import { COMBINED_TEMPLATES, COMBINED_CATEGORIES } from '@/lib/berkas/templates/combined-templates'
-import { buildCombinedDocument } from '@/lib/berkas/templates/engine'
+import { LAPORAN_KEUANGAN_TEMPLATES, LAPORAN_KEUANGAN_CATEGORIES } from '@/lib/berkas/templates/laporan-keuangan-templates'
+import { buildDocumentByJobType } from '@/lib/berkas/templates/engine'
 
 interface CombinedDocumentEditorModalProps {
   open: boolean
@@ -135,19 +136,26 @@ export function CombinedDocumentEditorModal({ open, onClose, state, savedHtml, o
     }
   }, [open, editor, savedHtml])
 
+  // Auto-detect jobType: karyawan → SK+Slip, wirausaha → Laporan Keuangan
+  const isWirausaha = state.applicant.jobType === JobType.ENTREPRENEUR || state.applicant.jobType === 'Wirausaha' as any
+  const activeTemplates = isWirausaha ? LAPORAN_KEUANGAN_TEMPLATES : COMBINED_TEMPLATES
+  const activeCategories = isWirausaha ? LAPORAN_KEUANGAN_CATEGORIES : COMBINED_CATEGORIES
+  const docTypeLabel = isWirausaha ? 'Laporan Keuangan 6 Bulan' : 'SK Kerja + 7 Slip Gaji'
+
   const handleSelectTemplate = useCallback((templateId: string) => {
     if (!editor) return
     try {
-      // Generate combined document HTML (SK + 7 slips) with form data filled
-      const combinedHtml = buildCombinedDocument(templateId, state)
+      // Auto-switch: wirausaha → Laporan Keuangan, karyawan → SK+Slip
+      const combinedHtml = buildDocumentByJobType(templateId, state)
       editor.commands.setContent(combinedHtml)
       setSelectedTemplate(templateId)
       setView('editor')
-      toast.success(`Template "${COMBINED_TEMPLATES.find(t => t.id === templateId)?.name}" dimuat. SK Kerja + 7 Slip Gaji siap diedit.`)
+      const tplName = activeTemplates.find(t => t.id === templateId)?.name || templateId
+      toast.success(`Template "${tplName}" dimuat. ${docTypeLabel} siap diedit.`)
     } catch (err) {
       toast.error('Gagal load template: ' + (err instanceof Error ? err.message : 'unknown'))
     }
-  }, [editor, state])
+  }, [editor, state, activeTemplates, docTypeLabel])
 
   // Toolbar handlers
   const setFontFamily = (font: string) => {
@@ -270,8 +278,14 @@ ${html}
     }
   }
 
-  // Filter templates
-  const filteredTemplates = COMBINED_TEMPLATES.filter(t => {
+  // Filter templates — pakai activeTemplates (auto-switch berdasarkan jobType)
+  // Reset activeCategory kalau jobType berubah (category list beda)
+  useEffect(() => {
+    setActiveCategory('all')
+    setSearchQuery('')
+    setView(savedHtml ? 'editor' : 'templates')
+  }, [isWirausaha])
+  const filteredTemplates = activeTemplates.filter(t => {
     const matchesSearch = !searchQuery ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -303,7 +317,7 @@ ${html}
                 Editor Dokumen (SK Kerja + Slip Gaji)
                 {selectedTemplate && view === 'editor' && (
                   <span className="ml-2 text-xs font-normal text-slate-500">
-                    · {COMBINED_TEMPLATES.find(t => t.id === selectedTemplate)?.name}
+                    · {activeTemplates.find(t => t.id === selectedTemplate)?.name}
                   </span>
                 )}
               </h2>
@@ -350,7 +364,7 @@ ${html}
                   />
                 </div>
                 <div className="text-sm text-slate-600">
-                  {filteredTemplates.length} dari {COMBINED_TEMPLATES.length} template
+                  {filteredTemplates.length} dari {activeTemplates.length} template ({isWirausaha ? 'Wirausaha' : 'Karyawan'})
                 </div>
               </div>
               <div className="flex gap-1.5 flex-wrap">
@@ -365,7 +379,7 @@ ${html}
                 >
                   Semua
                 </button>
-                {COMBINED_CATEGORIES.map(cat => (
+                {activeCategories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}

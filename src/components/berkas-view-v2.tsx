@@ -905,6 +905,21 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
   function updateSpouse(field: keyof SpouseData, val: any) {
     setState(s => ({ ...s, spouse: { ...(s.spouse || { fullName: '', ktpNumber: '', pob: '', dob: '', job: '', address: '', isWorking: false, jobType: 'NGANGGUR' as SpouseJobType }), [field]: val } }))
   }
+  // Update wirausaha data (nested di applicant.wirausaha)
+  // Field: namaUsaha, jenisUsaha, alamatUsaha, lamaUsaha, nib,
+  //        pendapatanMin, pendapatanMax, pengeluaranMin, pengeluaranMax, labaMin, labaMax
+  function updateWirausaha(field: string, val: any) {
+    setState(s => ({
+      ...s,
+      applicant: {
+        ...s.applicant,
+        wirausaha: {
+          ...((s.applicant as any).wirausaha || {}),
+          [field]: val,
+        },
+      } as any,
+    }))
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -1897,6 +1912,23 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
             {isFieldVisible('applicant.monthlyIncome') && <FormField label="Gaji Bersih / Bulan" type="number" value={state.applicant.monthlyIncome} onChange={v => updateApplicant('monthlyIncome', parseInt(v) || 0)} />}
             {renderCustomFieldsForCategory('pekerjaan-debitur', true)}
           </FormSection>
+          {/* === Wirausaha fields — muncul hanya kalau jobType = WIRAUSAHA === */}
+          {state.applicant.jobType === JobType.ENTREPRENEUR && (
+          <FormSection icon={<Briefcase className="w-3 h-3" />} title="Detail Usaha Wirausaha">
+            {isFieldVisible('wirausaha.namaUsaha') && <FormField label="Nama Usaha" value={(state.applicant as any).wirausaha?.namaUsaha || (state.applicant as any)['wirausaha.namaUsaha'] || ''} onChange={v => updateWirausaha('namaUsaha', v)} />}
+            {isFieldVisible('wirausaha.jenisUsaha') && <FormField label="Jenis Usaha" value={(state.applicant as any).wirausaha?.jenisUsaha || (state.applicant as any)['wirausaha.jenisUsaha'] || ''} onChange={v => updateWirausaha('jenisUsaha', v)} />}
+            {isFieldVisible('wirausaha.alamatUsaha') && <FormField label="Alamat Usaha" value={(state.applicant as any).wirausaha?.alamatUsaha || (state.applicant as any)['wirausaha.alamatUsaha'] || ''} onChange={v => updateWirausaha('alamatUsaha', v)} full />}
+            {isFieldVisible('wirausaha.lamaUsaha') && <FormField label="Lama Usaha (tahun)" type="number" value={(state.applicant as any).wirausaha?.lamaUsaha || (state.applicant as any)['wirausaha.lamaUsaha'] || ''} onChange={v => updateWirausaha('lamaUsaha', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.nib') && <FormField label="NIB (Nomor Induk Berusaha)" value={(state.applicant as any).wirausaha?.nib || (state.applicant as any)['wirausaha.nib'] || ''} onChange={v => updateWirausaha('nib', v)} />}
+            {isFieldVisible('wirausaha.pendapatanMin') && <FormField label="Pendapatan Min/Bulan" type="number" value={(state.applicant as any).wirausaha?.pendapatanMin || (state.applicant as any)['wirausaha.pendapatanMin'] || ''} onChange={v => updateWirausaha('pendapatanMin', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.pendapatanMax') && <FormField label="Pendapatan Max/Bulan" type="number" value={(state.applicant as any).wirausaha?.pendapatanMax || (state.applicant as any)['wirausaha.pendapatanMax'] || ''} onChange={v => updateWirausaha('pendapatanMax', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.pengeluaranMin') && <FormField label="Pengeluaran Min/Bulan" type="number" value={(state.applicant as any).wirausaha?.pengeluaranMin || (state.applicant as any)['wirausaha.pengeluaranMin'] || ''} onChange={v => updateWirausaha('pengeluaranMin', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.pengeluaranMax') && <FormField label="Pengeluaran Max/Bulan" type="number" value={(state.applicant as any).wirausaha?.pengeluaranMax || (state.applicant as any)['wirausaha.pengeluaranMax'] || ''} onChange={v => updateWirausaha('pengeluaranMax', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.labaMin') && <FormField label="Laba Bersih Min/Bulan" type="number" value={(state.applicant as any).wirausaha?.labaMin || (state.applicant as any)['wirausaha.labaMin'] || ''} onChange={v => updateWirausaha('labaMin', parseInt(v) || 0)} />}
+            {isFieldVisible('wirausaha.labaMax') && <FormField label="Laba Bersih Max/Bulan" type="number" value={(state.applicant as any).wirausaha?.labaMax || (state.applicant as any)['wirausaha.labaMax'] || ''} onChange={v => updateWirausaha('labaMax', parseInt(v) || 0)} />}
+            {renderCustomFieldsForCategory('wirausaha', true)}
+          </FormSection>
+          )}
           {/* BSB-specific: Bendaharawan fields — pertahankan untuk BSB saja */}
           {bank === 'BSB_SYARIAH' && (
           <FormSection icon={<User className="w-3 h-3" />} title="Data Bendaharawan & Atasan (BSB)">

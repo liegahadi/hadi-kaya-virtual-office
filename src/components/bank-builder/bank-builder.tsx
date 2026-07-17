@@ -996,6 +996,23 @@ const FORMBOX_CATEGORIES = [
     ],
   },
   {
+    id: 'wirausaha',
+    label: 'Pekerjaan Wirausaha (UMKM) — hanya muncul kalau jobType = Wirausaha',
+    fields: [
+      { id: 'wirausaha.namaUsaha', label: 'Nama Usaha', fieldType: 'text', default: true },
+      { id: 'wirausaha.jenisUsaha', label: 'Jenis Usaha', fieldType: 'text', default: true },
+      { id: 'wirausaha.alamatUsaha', label: 'Alamat Usaha', fieldType: 'address', default: true },
+      { id: 'wirausaha.lamaUsaha', label: 'Lama Usaha (tahun)', fieldType: 'number', default: true },
+      { id: 'wirausaha.nib', label: 'NIB (Nomor Induk Berusaha)', fieldType: 'text', default: false },
+      { id: 'wirausaha.pendapatanMin', label: 'Pendapatan Min/Bulan', fieldType: 'currency', default: true },
+      { id: 'wirausaha.pendapatanMax', label: 'Pendapatan Max/Bulan', fieldType: 'currency', default: true },
+      { id: 'wirausaha.pengeluaranMin', label: 'Pengeluaran Min/Bulan', fieldType: 'currency', default: true },
+      { id: 'wirausaha.pengeluaranMax', label: 'Pengeluaran Max/Bulan', fieldType: 'currency', default: true },
+      { id: 'wirausaha.labaMin', label: 'Laba Bersih Min/Bulan', fieldType: 'currency', default: true },
+      { id: 'wirausaha.labaMax', label: 'Laba Bersih Max/Bulan', fieldType: 'currency', default: true },
+    ],
+  },
+  {
     id: 'properti',
     label: 'Info Properti yang Diambil',
     fields: [
