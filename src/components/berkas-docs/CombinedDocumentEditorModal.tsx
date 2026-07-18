@@ -250,14 +250,7 @@ export function CombinedDocumentEditorModal({ open, onClose, state, savedHtml, o
     try {
       const html = editor.getHTML()
       // Wrap with print CSS for proper page breaks in Word
-      const wrappedHtml = `<div style="font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000;">
-<style>
-  @page { size: A4; margin: 1.5cm 2cm; }
-  table { border-collapse: collapse; }
-  .editor-image { max-width: 100%; }
-  p[style*="page-break-after"] { page-break-after: always; }
-  hr[style*="page-break-after"] { page-break-after: always; border: none; }
-</style>
+      const wrappedHtml = `<div style="font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; color: #000;">
 ${html}
 </div>`
 
@@ -361,7 +354,17 @@ ${html}
 
         {/* Template Picker View */}
         {view === 'templates' && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+          <div className="flex-1 overflow-hidden flex bg-slate-50">
+            {/* Sidebar Form (kiri) — untuk SK + Slip Gaji (karyawan only) */}
+            {!isWirausaha && (
+              <SlipGajiSidebar state={state} onUpdate={(field, val) => {
+                // Update state.applicant fields for engine saat pilih template
+                // state di-pass dari BerkasViewV2, jadi update via editor setelah pilih template
+              }} />
+            )}
+
+            {/* Template List (kanan) */}
+            <div className="flex-1 overflow-hidden flex flex-col">
             {/* AI Generate Tab — khusus wirausaha */}
             {isWirausaha && <AiGeneratePanel state={state} onGenerate={(html) => { editor?.commands.setContent(html); setView('editor') }} />}
 
@@ -444,23 +447,13 @@ ${html}
               <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
               <p>🎨 Pilih template → data form otomatis terisi → edit bebas (font, ukuran, layout, <strong>paste logo</strong>) → simpan & download .docx</p>
             </div>
+            </div>
           </div>
         )}
 
         {/* Editor View */}
         {view === 'editor' && editor && (
-          <div className="flex-1 overflow-hidden flex bg-slate-100">
-            {/* Sidebar Form (kiri) — untuk SK + Slip Gaji (karyawan) */}
-            {!isWirausaha && (
-              <SlipGajiSidebar state={state} onUpdate={(field, val) => {
-                // Update state via onUpdate prop (dipass dari BerkasViewV2)
-                // Karena modal ga punya onUpdate, kita update via editor content regenerate
-                // Untuk simplicity, user edit langsung di Tiptap editor
-              }} />
-            )}
-
-            {/* Editor + Toolbar (kanan) */}
-            <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden flex flex-col bg-slate-100">
             {/* Toolbar */}
             <div className="bg-white border-b p-2 flex flex-wrap items-center gap-1 shrink-0">
               {/* Font family */}
@@ -705,7 +698,6 @@ ${html}
               <div className="max-w-[210mm] mx-auto bg-white shadow-lg min-h-[297mm]">
                 <EditorContent editor={editor} />
               </div>
-            </div>
             </div>
           </div>
         )}

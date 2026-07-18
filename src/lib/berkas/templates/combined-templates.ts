@@ -189,8 +189,8 @@ function slipRow(label: string, pendapatan: string, potongan: string, bold = fal
 }
 
 // SK Kerja body — sesuai ekspektasi PDF user
-// NO kop surat, identity pakai paragraph simple dengan padding-left supaya ':' aligned
-// Signature: stacked di kanan bawah (cuma Pimpinan, bukan 2 kolom sejajar)
+// NO kop surat, identity pakai BORDERLESS TABLE (2 kolom) supaya ':' aligned seperti Tab di Word
+// Signature: stacked di kanan bawah (cuma Pimpinan)
 function buildSkBody(style: string): string {
   const signatoryRole = style === 'gov' ? 'Kepala {perusahaan}' : style === 'informal' ? 'Pemilik Usaha' : 'Pimpinan {perusahaan}'
 
@@ -201,19 +201,23 @@ function buildSkBody(style: string): string {
 
 <p style="margin-bottom:12px;">Yang bertanda tangan di bawah ini:</p>
 
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Nama</span>: ${signatoryRole}</p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Jabatan</span>: Pimpinan / Direktur</p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Perusahaan</span>: {perusahaan}</p>
-<p style="margin:4px 0 16px 30px;"><span style="display:inline-block;width:160px;">Alamat</span>: {alamat_perusahaan}</p>
+<table style="width:100%;border:none;border-collapse:collapse;margin:0 0 15px 30px;font-size:11pt;">
+<tr style="border:none;"><td style="border:none;width:170px;padding:2px 0;">Nama</td><td style="border:none;width:10px;">:</td><td style="border:none;padding:2px 0;">${signatoryRole}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Jabatan</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">Pimpinan / Direktur</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Perusahaan</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{perusahaan}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Alamat</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{alamat_perusahaan}</td></tr>
+</table>
 
 <p style="margin-bottom:12px;">Dengan ini menerangkan bahwa:</p>
 
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Nama</span>: <strong>{nama}</strong></p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">NIK</span>: {nik}</p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Tempat/Tgl Lahir</span>: {tempat_lahir}, {tanggal_lahir}</p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Jabatan</span>: {jabatan}</p>
-<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Lama Bekerja</span>: {lama_bekerja} tahun</p>
-<p style="margin:4px 0 20px 30px;"><span style="display:inline-block;width:160px;">Gaji per Bulan</span>: {gaji}</p>
+<table style="width:100%;border:none;border-collapse:collapse;margin:0 0 20px 30px;font-size:11pt;">
+<tr style="border:none;"><td style="border:none;width:170px;padding:2px 0;">Nama</td><td style="border:none;width:10px;">:</td><td style="border:none;padding:2px 0;"><strong>{nama}</strong></td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">NIK</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{nik}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Tempat/Tgl Lahir</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{tempat_lahir}, {tanggal_lahir}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Jabatan</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{jabatan}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Lama Bekerja</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{lama_bekerja} tahun</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Gaji per Bulan</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{gaji}</td></tr>
+</table>
 
 <p style="text-align:justify;margin:20px 0;line-height:1.6;">Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).</p>
 
@@ -240,9 +244,11 @@ function buildSlipBody(style: string): string {
 <p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Periode: {periode}</p>
 
-<p style="margin:4px 0;"><span style="display:inline-block;width:100px;">Nama</span>: <strong>{nama}</strong></p>
-<p style="margin:4px 0;"><span style="display:inline-block;width:100px;">NIK</span>: {nik}</p>
-<p style="margin:4px 0 15px;"><span style="display:inline-block;width:100px;">Jabatan</span>: {jabatan}</p>
+<table style="width:100%;border:none;border-collapse:collapse;margin:0 0 15px 0;font-size:11pt;">
+<tr style="border:none;"><td style="border:none;width:100px;padding:2px 0;">Nama</td><td style="border:none;width:10px;">:</td><td style="border:none;padding:2px 0;"><strong>{nama}</strong></td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">NIK</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{nik}</td></tr>
+<tr style="border:none;"><td style="border:none;padding:2px 0;">Jabatan</td><td style="border:none;">:</td><td style="border:none;padding:2px 0;">{jabatan}</td></tr>
+</table>
 
 <table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
 <thead>

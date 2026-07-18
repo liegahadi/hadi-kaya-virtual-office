@@ -42,9 +42,10 @@ async function callZaiChat(systemPrompt: string, userPrompt: string): Promise<st
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${ZAI_CONFIG.apiKey}`,
     'X-Z-AI-From': 'Z',
+    'X-Chat-Id': ZAI_CONFIG.chatId,
+    'X-User-Id': ZAI_CONFIG.userId,
+    'X-Token': ZAI_CONFIG.token,
   }
-  if (ZAI_CONFIG.chatId) headers['X-Chat-Id'] = ZAI_CONFIG.chatId
-  if (ZAI_CONFIG.userId) headers['X-User-Id'] = ZAI_CONFIG.userId
 
   const body = {
     messages: [
