@@ -188,62 +188,49 @@ function slipRow(label: string, pendapatan: string, potongan: string, bold = fal
 </tr>`
 }
 
-// SK Kerja body — NO KOP SURAT (user edit sendiri di Word)
-// Layout: ONE display:table untuk identitas (kolom align konsisten), signature 2 kolom sejajar
+// SK Kerja body — sesuai ekspektasi PDF user
+// NO kop surat, identity pakai paragraph simple dengan padding-left supaya ':' aligned
+// Signature: stacked di kanan bawah (cuma Pimpinan, bukan 2 kolom sejajar)
 function buildSkBody(style: string): string {
   const signatoryRole = style === 'gov' ? 'Kepala {perusahaan}' : style === 'informal' ? 'Pemilik Usaha' : 'Pimpinan {perusahaan}'
 
-  return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.6;color:#000;">
+  return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;">
 
-<p style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline;margin:25px 0 5px;letter-spacing:0.5px;">SURAT KETERANGAN KERJA</p>
+<p style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline;margin:30px 0 5px;letter-spacing:0.5px;">SURAT KETERANGAN KERJA</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 30px;">No: .../SK/{bulan}/{tahun}</p>
 
-<p style="margin-bottom:15px;">Yang bertanda tangan di bawah ini:</p>
+<p style="margin-bottom:12px;">Yang bertanda tangan di bawah ini:</p>
 
-<div style="display:table;width:100%;margin:0 0 20px 30px;">
-${idRow('Nama', signatoryRole)}
-${idRow('Jabatan', 'Pimpinan / Direktur')}
-${idRow('Perusahaan', '{perusahaan}')}
-${idRow('Alamat', '{alamat_perusahaan}')}
-</div>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Nama</span>: ${signatoryRole}</p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Jabatan</span>: Pimpinan / Direktur</p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Perusahaan</span>: {perusahaan}</p>
+<p style="margin:4px 0 16px 30px;"><span style="display:inline-block;width:160px;">Alamat</span>: {alamat_perusahaan}</p>
 
-<p style="margin-bottom:15px;">Dengan ini menerangkan bahwa:</p>
+<p style="margin-bottom:12px;">Dengan ini menerangkan bahwa:</p>
 
-<div style="display:table;width:100%;margin:0 0 25px 30px;">
-${idRow('Nama', '{nama}', true)}
-${idRow('NIK', '{nik}')}
-${idRow('Tempat/Tgl Lahir', '{tempat_lahir}, {tanggal_lahir}')}
-${idRow('Jabatan', '{jabatan}')}
-${idRow('Lama Bekerja', '{lama_bekerja} tahun')}
-${idRow('Gaji per Bulan', '{gaji}')}
-</div>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Nama</span>: <strong>{nama}</strong></p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">NIK</span>: {nik}</p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Tempat/Tgl Lahir</span>: {tempat_lahir}, {tanggal_lahir}</p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Jabatan</span>: {jabatan}</p>
+<p style="margin:4px 0 4px 30px;"><span style="display:inline-block;width:160px;">Lama Bekerja</span>: {lama_bekerja} tahun</p>
+<p style="margin:4px 0 20px 30px;"><span style="display:inline-block;width:160px;">Gaji per Bulan</span>: {gaji}</p>
 
-<p style="text-align:justify;margin:25px 0;text-indent:36px;line-height:1.7;">Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).</p>
+<p style="text-align:justify;margin:20px 0;line-height:1.6;">Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).</p>
 
-<p style="margin-bottom:40px;text-indent:36px;">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
+<p style="margin-bottom:50px;">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
 
-<div style="display:table;width:100%;margin-top:30px;">
-<div style="display:table-row;">
-<div style="display:table-cell;width:50%;text-align:center;vertical-align:top;">
-<p style="margin:0 0 5px 0;">Karyawan,</p>
-<p style="margin:0 0 70px 0;">&nbsp;</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:200px;text-align:center;">( {nama} )</p>
-</div>
-<div style="display:table-cell;width:50%;text-align:center;vertical-align:top;">
+<div style="text-align:right;margin-top:30px;">
 <p style="margin:0 0 5px 0;">{kota}, {tanggal}</p>
-<p style="margin:0 0 5px 0;">${signatoryRole},</p>
-<p style="margin:0 0 55px 0;">&nbsp;</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:200px;text-align:center;">( ............................. )</p>
-</div>
-</div>
+<p style="margin:0 0 60px 0;">${signatoryRole},</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;min-width:200px;text-align:center;">( ............................. )</p>
 </div>
 
 </div>`
 }
 
-// Slip Gaji body (single sheet) — 1 BULAN = 1 HALAMAN
-// Pakai REAL <table> (Tiptap Table extension sudah installed)
-// Wrap dengan div yang paksa page-break + min-height
+// Slip Gaji body — sesuai ekspektasi PDF user
+// Simple: title + periode + identity (paragraph) + table 3 kolom + signature kiri
+// NO kop surat, NO display:table (pakai paragraph simple)
 function buildSlipBody(style: string): string {
   const signerRole = style === 'gov' ? 'Bendahara Pengeluaran' : style === 'informal' ? 'Pemilik Usaha' : 'Bagian Keuangan'
   const upahLabel = style === 'informal' ? 'Upah' : 'Gaji'
@@ -253,11 +240,9 @@ function buildSlipBody(style: string): string {
 <p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Periode: {periode}</p>
 
-<div style="display:table;width:100%;margin:0 0 15px 0;font-size:11pt;line-height:1.7;">
-<div style="display:table-row;"><div style="display:table-cell;width:120px;padding:4px 8px 4px 0;">Nama</div><div style="display:table-cell;width:14px;">:</div><div style="display:table-cell;padding:4px 8px;font-weight:bold;">{nama}</div><div style="display:table-cell;width:30px;"></div><div style="display:table-cell;width:80px;padding:4px 8px 4px 0;">NIK</div><div style="display:table-cell;width:14px;">:</div><div style="display:table-cell;padding:4px 8px;">{nik}</div></div>
-<div style="display:table-row;"><div style="display:table-cell;padding:4px 8px 4px 0;">Jabatan</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{jabatan}</div><div style="display:table-cell;"></div><div style="display:table-cell;padding:4px 8px 4px 0;">Tanggal</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{tanggal_terima}</div></div>
-<div style="display:table-row;"><div style="display:table-cell;padding:4px 8px 4px 0;">Perusahaan</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{perusahaan}</div></div>
-</div>
+<p style="margin:4px 0;"><span style="display:inline-block;width:100px;">Nama</span>: <strong>{nama}</strong></p>
+<p style="margin:4px 0;"><span style="display:inline-block;width:100px;">NIK</span>: {nik}</p>
+<p style="margin:4px 0 15px;"><span style="display:inline-block;width:100px;">Jabatan</span>: {jabatan}</p>
 
 <table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
 <thead>
@@ -277,19 +262,17 @@ ${slipRow(`${upahLabel} Diterima (Bersih)`, '', '{gaji_bersih}', true, '#e6f3ff'
 </tbody>
 </table>
 
-<div style="display:table;width:100%;margin-top:40px;">
-<div style="display:table-row;">
-<div style="display:table-cell;width:50%;vertical-align:top;">
-<p style="margin:0 0 5px 0;">Tanggal Terima: {tanggal_terima}</p>
-<p style="margin:0 0 60px 0;">Diterima oleh,</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( {nama} )</p>
+<div style="margin-top:40px;">
+<p style="margin:0 0 5px 0;">Diterima oleh,</p>
+<p style="margin:0 0 50px 0;">&nbsp;</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;min-width:180px;text-align:center;">( {nama} )</p>
 </div>
-<div style="display:table-cell;width:50%;vertical-align:top;text-align:right;">
+
+<div style="text-align:right;margin-top:-110px;">
 <p style="margin:0 0 5px 0;">{kota}, {tanggal_terima}</p>
-<p style="margin:0 0 60px 0;">${signerRole},</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( ............................. )</p>
-</div>
-</div>
+<p style="margin:0 0 5px 0;">${signerRole},</p>
+<p style="margin:0 0 50px 0;">&nbsp;</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;min-width:180px;text-align:center;">( ............................. )</p>
 </div>
 
 </div>`

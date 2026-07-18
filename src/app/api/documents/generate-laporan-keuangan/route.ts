@@ -21,43 +21,52 @@
 //   - Total yang match target laba bersih user
 
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
-import fs from 'fs'
-import path from 'path'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120  // 2 menit untuk AI generate
 
-// Fallback: load config manual kalau ZAI.create() gagal (Vercel standalone build issue)
-async function createZAI() {
-  try {
-    return await ZAI.create()
-  } catch (err) {
-    // Coba baca config dari berbagai path
-    const configPaths = [
-      path.join(process.cwd(), '.z-ai-config'),
-      '/etc/.z-ai-config',
-      path.join(process.env.HOME || '/tmp', '.z-ai-config'),
-    ]
-    for (const filePath of configPaths) {
-      try {
-        if (fs.existsSync(filePath)) {
-          const configStr = fs.readFileSync(filePath, 'utf-8')
-          const config = JSON.parse(configStr)
-          if (config.baseUrl && config.apiKey) {
-            // ZAI constructor tidak exported, pakai workaround: write ke /tmp
-            const tmpPath = '/tmp/.z-ai-config'
-            fs.writeFileSync(tmpPath, configStr)
-            process.chdir('/tmp')
-            return await ZAI.create()
-          }
-        }
-      } catch (e) {
-        // continue to next path
-      }
-    }
-    throw err
+// Hardcoded z-ai config (Vercel block filesystem access via "Removing unpermitted intrinsics")
+// Supaya ga dependency ke .z-ai-config file di runtime
+const ZAI_CONFIG = {
+  baseUrl: 'https://internal-api.z.ai/v1',
+  apiKey: 'Z.ai',
+  chatId: 'chat-f06846fc-648f-4dd5-adc6-1033ce58ef0c',
+  token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZmU4MGI1YWMtNWM2ZC00ZjEzLWJjZjctMjI0NmFlZTUxNWFjIiwiY2hhdF9pZCI6ImNoYXQtZjA2ODQ2ZmMtNjQ4Zi00ZGQ1LWFkYzYtMTAzM2NlNThlZjBjIiwicGxhdGZvcm0iOiJ6YWkifQ.owCuUI9B-Qsh-n4v2Tnhh2Ivr3I_FuwPOtXkzpSzRyk',
+  userId: 'fe80b5ac-5c6d-4f13-bcf7-2246aee515ac',
+}
+
+// Direct fetch to z-ai API (bypass SDK yang butuh filesystem access)
+async function callZaiChat(systemPrompt: string, userPrompt: string): Promise<string> {
+  const url = `${ZAI_CONFIG.baseUrl}/chat/completions`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${ZAI_CONFIG.apiKey}`,
+    'X-Z-AI-From': 'Z',
   }
+  if (ZAI_CONFIG.chatId) headers['X-Chat-Id'] = ZAI_CONFIG.chatId
+  if (ZAI_CONFIG.userId) headers['X-User-Id'] = ZAI_CONFIG.userId
+
+  const body = {
+    messages: [
+      { role: 'assistant', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    thinking: { type: 'disabled' },
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`ZAI API error ${res.status}: ${errText.substring(0, 200)}`)
+  }
+
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || ''
 }
 
 interface LaporanRequest {
@@ -244,17 +253,10 @@ INGAT:
 - LABA BERSIH harus match target (range atau per bulan)
 - Output: HANYA HTML, tanpa penjelasan, tanpa markdown`
 
-    // Call z-ai LLM (dengan fallback untuk Vercel standalone build)
-    const zai = await createZAI()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      thinking: { type: 'disabled' },
-    })
+    // Call z-ai API directly (hardcoded config, no filesystem dependency)
+    const aiResponse = await callZaiChat(systemPrompt, userPrompt)
 
-    let html = completion.choices[0]?.message?.content || ''
+    let html = aiResponse
 
     // Clean up: remove markdown code blocks if AI added them
     html = html.replace(/```html\n?/g, '').replace(/```\n?/g, '')
