@@ -190,29 +190,136 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
 
   if (!open) return null
 
-  // === SLIP GAJI FORM HELPERS (inline form within modal) ===
+  // === SLIP GAJI PER BULAN (7 set) ===
+  // State: 7 bulan, masing-masing dengan gaji pokok, tunjangan, potongan, bonus
   const a = state.applicant as any
-  const gajiPokok = a.gajiPokok || 0
-  const tunjanganTetap: Array<{ label: string; amount: number }> = a.tunjanganTetap || []
-  const tunjanganVariabel: Array<{ label: string; amount: number }> = a.tunjanganVariabel || []
-  const potongan: Array<{ label: string; amount: number }> = a.potongan || []
+  const now = new Date()
+  const bulanList: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - 6 + i, 15)
+    bulanList.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+  }
 
-  const addSlipItem = (field: string) => {
-    if (!onUpdate) return
-    const current = (a[field] || []) as Array<{ label: string; amount: number }>
-    onUpdate(field as keyof ApplicantData, [...current, { label: '', amount: 0 }] as any)
+  // Initialize slip data per bulan (dari state existing atau default)
+  const [slipBulanan, setSlipBulanan] = useState<Array<{
+    bulan: string
+    tanggalTerima: number
+    modePeriode: 'bulan-periode' | 'plus-1-bulan'
+    gajiPokok: number
+    tunjangan: Array<{ label: string; amount: number }>
+    potongan: Array<{ label: string; amount: number }>
+    bonus: Array<{ label: string; amount: number }>
+  }>>(() => {
+    const existing = a.slipBulanan
+    if (existing && Array.isArray(existing) && existing.length === 7) return existing
+    // Default: pakai data global
+    const gajiPokokDefault = a.gajiPokok || a.monthlyIncome || 0
+    const tunjanganDefault = a.tunjanganTetap || []
+    const potonganDefault = a.potongan || []
+    const bonusDefault = a.tunjanganVariabel || []
+    const tanggalDefault = a.tanggalTerimaGaji ? parseInt(a.tanggalTerimaGaji) : 25
+    return bulanList.map(bulan => ({
+      bulan,
+      tanggalTerima: tanggalDefault,
+      modePeriode: 'bulan-periode' as const,
+      gajiPokok: gajiPokokDefault,
+      tunjangan: [...tunjanganDefault],
+      potongan: [...potonganDefault],
+      bonus: [...bonusDefault],
+    }))
+  })
+
+  const [expandedBulan, setExpandedBulan] = useState<number>(0) // index bulan yang terbuka
+
+  // Helper: update slip per bulan
+  const updateSlipBulan = (idx: number, field: string, val: any) => {
+    setSlipBulan(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], [field]: val }
+      return updated
+    })
   }
-  const updateSlipItem = (field: string, idx: number, key: 'label' | 'amount', val: any) => {
-    if (!onUpdate) return
-    const current = (a[field] || []) as Array<{ label: string; amount: number }>
-    const updated = [...current]
-    updated[idx] = { ...updated[idx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
-    onUpdate(field as keyof ApplicantData, updated as any)
+
+  // Helper: add/remove/update items per bulan
+  const addSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus') => {
+    setSlipBulan(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], [type]: [...updated[idx][type], { label: '', amount: 0 }] }
+      return updated
+    })
   }
-  const removeSlipItem = (field: string, idx: number) => {
-    if (!onUpdate) return
-    const current = (a[field] || []) as Array<{ label: string; amount: number }>
-    onUpdate(field as keyof ApplicantData, current.filter((_, i) => i !== idx) as any)
+  const updateSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number, key: 'label' | 'amount', val: any) => {
+    setSlipBulan(prev => {
+      const updated = [...prev]
+      const items = [...updated[idx][type]]
+      items[itemIdx] = { ...items[itemIdx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
+      updated[idx] = { ...updated[idx], [type]: items }
+      return updated
+    })
+  }
+  const removeSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number) => {
+    setSlipBulan(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], [type]: updated[idx][type].filter((_, i) => i !== itemIdx) }
+      return updated
+    })
+  }
+
+  // Auto-calc per bulan
+  const calcTotal = (slip: typeof slipBulanan[0]) => {
+    const totalTunjangan = slip.tunjangan.reduce((s, t) => s + (t.amount || 0), 0)
+    const totalPotongan = slip.potongan.reduce((s, p) => s + (p.amount || 0), 0)
+    const totalBonus = slip.bonus.reduce((s, b) => s + (b.amount || 0), 0)
+    const gajiKotor = slip.gajiPokok + totalTunjangan + totalBonus
+    const gajiBersih = gajiKotor - totalPotongan
+    return { totalTunjangan, totalPotongan, totalBonus, gajiKotor, gajiBersih }
+  }
+
+  const fmt = (n: number) => 'Rp. ' + (n || 0).toLocaleString('id-ID') + ',-'
+
+  // Sync slipBulanan ke state.applicant (untuk engine saat create doc)
+  useEffect(() => {
+    if (onUpdate) {
+      onUpdate('slipBulanan' as keyof ApplicantData, slipBulanan as any)
+      // Also sync global fields untuk backward compat dengan template-filler
+      const first = slipBulanan[0]
+      if (first) {
+        onUpdate('gajiPokok' as keyof ApplicantData, first.gajiPokok as any)
+        onUpdate('tunjanganTetap' as keyof ApplicantData, first.tunjangan as any)
+        onUpdate('tunjanganVariabel' as keyof ApplicantData, first.bonus as any)
+        onUpdate('potongan' as keyof ApplicantData, first.potongan as any)
+        onUpdate('tanggalTerimaGaji' as keyof ApplicantData, String(first.tanggalTerima) as any)
+      }
+    }
+  }, [slipBulanan])
+
+  // === CACHE DOC ID per customer ===
+  // Saat modal buka, cek apakah sudah ada Google Doc ID untuk customer ini
+  useEffect(() => {
+    if (open && customerId) {
+      // Cek dari uploadedFiles (passed via state)
+      const cachedDocId = (state.applicant as any).combinedDocId
+      if (cachedDocId && !createdDoc) {
+        // Ada cached doc — langsung buka editor
+        setCreatedDoc({
+          docId: cachedDocId,
+          fileName: `SK_Slip_Gaji_${state.applicant.fullName || 'Konsumen'}`,
+          editUrl: `https://docs.google.com/document/d/${cachedDocId}/edit`,
+          embedUrl: `https://docs.google.com/document/d/${cachedDocId}/edit?rm=minimal&embedded=true`,
+          downloadUrl: `/api/documents/google-docs/${cachedDocId}/download`,
+        })
+        setView('editor')
+      }
+    }
+  }, [open, customerId])
+
+  // Save doc ID ke state saat create doc berhasil
+  const handleCreateDocCached = async (template: TemplateInfo) => {
+    await handleCreateDoc(template)
+    // Cache doc ID ke state
+    if (createdDoc && onUpdate) {
+      onUpdate('combinedDocId' as keyof ApplicantData, createdDoc.docId as any)
+    }
   }
 
   // Show configuration warning if Google OAuth not set up yet
@@ -394,150 +501,130 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
               }} />
             ) : (
             <>
-            {/* KARYAWAN: Slip Gaji Form + Template Picker (existing) */}
-            <div className="w-[380px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
-              <div className="p-4 border-b bg-emerald-50 sticky top-0 z-10">
+            {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker */}
+            <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
+              <div className="p-3 border-b bg-emerald-50 sticky top-0 z-10">
                 <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> Form Slip Gaji
+                  <FileText className="w-4 h-4" /> Form Slip Gaji (7 Bulan)
                 </h3>
-                <p className="text-[10px] text-emerald-700 mt-0.5">Data ini otomatis dipakai saat generate Slip Gaji (7 bulan)</p>
+                <p className="text-[10px] text-emerald-700 mt-0.5">Isi per bulan. Total auto-calc. Pilih template di kanan → generate.</p>
               </div>
 
-              <div className="p-4 space-y-4">
-                {/* Gaji Pokok + Tanggal Terima */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-medium text-slate-600">Gaji Pokok</label>
-                    <input type="number" value={gajiPokok} disabled={!onUpdate}
-                      onChange={e => onUpdate?.('gajiPokok' as keyof ApplicantData, parseInt(e.target.value) || 0)}
-                      className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-slate-600">Tanggal Terima (1-31)</label>
-                    <input type="number" min="1" max="31" value={a.tanggalTerimaGaji || '25'} disabled={!onUpdate}
-                      onChange={e => onUpdate?.('tanggalTerimaGaji' as keyof ApplicantData, e.target.value as any)}
-                      placeholder="25"
-                      className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                  </div>
-                </div>
-
-                {/* Tunjangan Tetap */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-700">Tunjangan Tetap</span>
-                    <button onClick={() => addSlipItem('tunjanganTetap')} disabled={!onUpdate}
-                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Tambah
-                    </button>
-                  </div>
-                  {tunjanganTetap.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada tunjangan tetap</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {tunjanganTetap.map((t, i) => (
-                        <div key={i} className="flex gap-1">
-                          <input value={t.label} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('tunjanganTetap', i, 'label', e.target.value)}
-                            placeholder="Nama tunjangan"
-                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <input type="number" value={t.amount} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('tunjanganTetap', i, 'amount', e.target.value)}
-                            placeholder="Jumlah"
-                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <button onClick={() => removeSlipItem('tunjanganTetap', i)} disabled={!onUpdate}
-                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+              <div className="p-2 space-y-2">
+                {slipBulanan.map((slip, idx) => {
+                  const total = calcTotal(slip)
+                  const isExpanded = expandedBulan === idx
+                  return (
+                    <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden">
+                      {/* Accordion Header */}
+                      <button
+                        onClick={() => setExpandedBulan(isExpanded ? -1 : idx)}
+                        className={cn('w-full flex items-center justify-between p-2 text-left transition-colors',
+                          isExpanded ? 'bg-emerald-100' : 'bg-slate-50 hover:bg-slate-100')}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={cn('text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center',
+                            isExpanded ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}>{idx + 1}</span>
+                          <span className="text-xs font-medium text-slate-800">{slip.bulan}</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        <span className="text-[10px] font-bold text-emerald-700">{fmt(total.gajiBersih)}</span>
+                      </button>
 
-                {/* Tunjangan Variabel */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-700">Tunjangan Variabel</span>
-                    <button onClick={() => addSlipItem('tunjanganVariabel')} disabled={!onUpdate}
-                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Tambah
-                    </button>
-                  </div>
-                  {tunjanganVariabel.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada tunjangan variabel</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {tunjanganVariabel.map((t, i) => (
-                        <div key={i} className="flex gap-1">
-                          <input value={t.label} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('tunjanganVariabel', i, 'label', e.target.value)}
-                            placeholder="Nama tunjangan"
-                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <input type="number" value={t.amount} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('tunjanganVariabel', i, 'amount', e.target.value)}
-                            placeholder="Jumlah"
-                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <button onClick={() => removeSlipItem('tunjanganVariabel', i)} disabled={!onUpdate}
-                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                      {/* Accordion Body */}
+                      {isExpanded && (
+                        <div className="p-2 space-y-2 bg-white">
+                          {/* Tanggal Terima + Mode Periode */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="text-[9px] font-medium text-slate-500">Tgl Terima (1-31)</label>
+                              <input type="number" min="1" max="31" value={slip.tanggalTerima}
+                                onChange={e => updateSlipBulan(idx, 'tanggalTerima', parseInt(e.target.value) || 25)}
+                                className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-medium text-slate-500">Mode Periode</label>
+                              <select value={slip.modePeriode}
+                                onChange={e => updateSlipBulan(idx, 'modePeriode', e.target.value)}
+                                className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500">
+                                <option value="bulan-periode">Bulan Periode</option>
+                                <option value="plus-1-bulan">+1 Bulan Periode</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Gaji Pokok */}
+                          <div>
+                            <label className="text-[9px] font-medium text-slate-500">Gaji Pokok (Rp)</label>
+                            <input type="number" value={slip.gajiPokok || ''}
+                              onChange={e => updateSlipBulan(idx, 'gajiPokok', parseInt(e.target.value) || 0)}
+                              className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
+                          </div>
+
+                          {/* Tunjangan */}
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[9px] font-bold text-slate-600">Tunjangan</span>
+                              <button onClick={() => addSlipItemBulan(idx, 'tunjangan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                            </div>
+                            {slip.tunjangan.map((t, i) => (
+                              <div key={i} className="flex gap-1 mb-0.5">
+                                <input value={t.label} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'label', e.target.value)}
+                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="number" value={t.amount || ''} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'amount', e.target.value)}
+                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <button onClick={() => removeSlipItemBulan(idx, 'tunjangan', i)} className="text-red-500 text-[10px]">✕</button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Bonus */}
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[9px] font-bold text-slate-600">Bonus</span>
+                              <button onClick={() => addSlipItemBulan(idx, 'bonus')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                            </div>
+                            {slip.bonus.map((b, i) => (
+                              <div key={i} className="flex gap-1 mb-0.5">
+                                <input value={b.label} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'label', e.target.value)}
+                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="number" value={b.amount || ''} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'amount', e.target.value)}
+                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <button onClick={() => removeSlipItemBulan(idx, 'bonus', i)} className="text-red-500 text-[10px]">✕</button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Potongan */}
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[9px] font-bold text-slate-600">Potongan</span>
+                              <button onClick={() => addSlipItemBulan(idx, 'potongan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                            </div>
+                            {slip.potongan.map((p, i) => (
+                              <div key={i} className="flex gap-1 mb-0.5">
+                                <input value={p.label} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'label', e.target.value)}
+                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="number" value={p.amount || ''} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'amount', e.target.value)}
+                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <button onClick={() => removeSlipItemBulan(idx, 'potongan', i)} className="text-red-500 text-[10px]">✕</button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Auto-Calc Summary */}
+                          <div className="bg-emerald-50 border border-emerald-200 rounded p-1.5 space-y-0.5">
+                            <div className="flex justify-between text-[9px] text-slate-600"><span>Gaji Pokok:</span><span>{fmt(slip.gajiPokok)}</span></div>
+                            <div className="flex justify-between text-[9px] text-slate-600"><span>+ Tunjangan:</span><span>{fmt(total.totalTunjangan)}</span></div>
+                            <div className="flex justify-between text-[9px] text-slate-600"><span>+ Bonus:</span><span>{fmt(total.totalBonus)}</span></div>
+                            <div className="flex justify-between text-[9px] text-slate-600"><span>- Potongan:</span><span>{fmt(total.totalPotongan)}</span></div>
+                            <div className="border-t border-emerald-300 my-0.5"></div>
+                            <div className="flex justify-between text-[10px] font-bold text-emerald-800"><span>Gaji Bersih:</span><span>{fmt(total.gajiBersih)}</span></div>
+                          </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
-
-                {/* Potongan */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-700">Potongan</span>
-                    <button onClick={() => addSlipItem('potongan')} disabled={!onUpdate}
-                      className="text-[10px] px-2 py-0.5 rounded border border-emerald-500 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Tambah
-                    </button>
-                  </div>
-                  {potongan.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded">Belum ada potongan (BPJS, Pajak, dll)</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {potongan.map((p, i) => (
-                        <div key={i} className="flex gap-1">
-                          <input value={p.label} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('potongan', i, 'label', e.target.value)}
-                            placeholder="Nama potongan (BPJS, Pajak, dll)"
-                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <input type="number" value={p.amount} disabled={!onUpdate}
-                            onChange={e => updateSlipItem('potongan', i, 'amount', e.target.value)}
-                            placeholder="Jumlah"
-                            className="w-24 border border-slate-300 rounded px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                          <button onClick={() => removeSlipItem('potongan', i)} disabled={!onUpdate}
-                            className="text-red-500 hover:bg-red-50 rounded px-1 disabled:opacity-50">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Kop Surat */}
-                <div>
-                  <label className="text-[10px] font-medium text-slate-600">Kop Surat (paste dari Word/Google Docs)</label>
-                  <textarea value={a.kopSurat || ''} disabled={!onUpdate}
-                    onChange={e => onUpdate?.('kopSurat' as keyof ApplicantData, e.target.value as any)}
-                    placeholder="Paste kop surat perusahaan di sini (dari Word/Google Docs)..."
-                    className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1.5 text-xs min-h-[80px] text-slate-900 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100" />
-                  <p className="text-[9px] text-slate-500 mt-0.5">Tip: Copy dari Word/Google Docs → paste di sini. Logo & formatting akan ikut.</p>
-                </div>
-
-                {/* Logo Generator */}
-                <LogoGenerator
-                  companyName={state.applicant.companyName || ''}
-                  onInsertLogo={(logoHtml) => {
-                    const current = a.kopSurat || ''
-                    onUpdate?.('kopSurat' as keyof ApplicantData, current + (current ? '\n' : '') + logoHtml)
-                  }}
-                />
+                  )
+                })}
               </div>
             </div>
 
