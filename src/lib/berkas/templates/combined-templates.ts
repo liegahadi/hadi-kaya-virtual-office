@@ -166,19 +166,18 @@ function buildKop(style: string): string {
   }
 }
 
-// Helper: baris identitas untuk SK Kerja — LAYOUT PARAGRAF yang RAPIH
-// Pakai display:table (CSS, bukan HTML <table>) supaya kolom otomatis align
-// Tiptap preserve display:table-cell karena bukan flexbox
+// Helper: baris identitas untuk SK Kerja — gunakan ONE display:table untuk SEMUA rows
+// supaya kolom align konsisten (label 170px + : 14px + value sisanya)
 function idRow(label: string, value: string, strong = false): string {
   const strongStyle = strong ? 'font-weight:bold;' : ''
-  return `<div style="display:table;width:100%;margin:4px 0;font-size:11pt;line-height:1.7;">
-<div style="display:table-cell;width:170px;vertical-align:bottom;padding-right:8px;">${label}</div>
-<div style="display:table-cell;width:14px;vertical-align:bottom;">:</div>
-<div style="display:table-cell;vertical-align:bottom;border-bottom:1px dotted #000;padding:0 6px 2px;${strongStyle}">${value}</div>
+  return `<div style="display:table-row;">
+<div style="display:table-cell;width:170px;padding:3px 8px 3px 0;vertical-align:bottom;font-size:11pt;">${label}</div>
+<div style="display:table-cell;width:14px;padding:3px 0;vertical-align:bottom;font-size:11pt;">:</div>
+<div style="display:table-cell;padding:3px 6px 3px 0;vertical-align:bottom;border-bottom:1px dotted #000;font-size:11pt;${strongStyle}">${value}</div>
 </div>`
 }
 
-// Helper: baris pendapatan/potongan untuk Slip Gaji — pakai REAL TABLE (Tiptap Table extension installed)
+// Helper: baris pendapatan/potongan untuk Slip Gaji — pakai REAL TABLE row
 function slipRow(label: string, pendapatan: string, potongan: string, bold = false, bg = ''): string {
   const bgStyle = bg ? `background:${bg};` : ''
   const boldStyle = bold ? 'font-weight:bold;' : ''
@@ -189,30 +188,28 @@ function slipRow(label: string, pendapatan: string, potongan: string, bold = fal
 </tr>`
 }
 
-// SK Kerja body — LAYOUT PARAGRAF (NO TABLE) dengan dotted underline
+// SK Kerja body — NO KOP SURAT (user edit sendiri di Word)
+// Layout: ONE display:table untuk identitas (kolom align konsisten), signature 2 kolom sejajar
 function buildSkBody(style: string): string {
-  const kop = buildKop(style as any)
   const signatoryRole = style === 'gov' ? 'Kepala {perusahaan}' : style === 'informal' ? 'Pemilik Usaha' : 'Pimpinan {perusahaan}'
 
   return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.6;color:#000;">
 
-${kop}
-
 <p style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline;margin:25px 0 5px;letter-spacing:0.5px;">SURAT KETERANGAN KERJA</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 30px;">No: .../SK/{bulan}/{tahun}</p>
 
-<p style="margin-bottom:18px;">Yang bertanda tangan di bawah ini:</p>
+<p style="margin-bottom:15px;">Yang bertanda tangan di bawah ini:</p>
 
-<div style="margin:0 0 25px 30px;">
+<div style="display:table;width:100%;margin:0 0 20px 30px;">
 ${idRow('Nama', signatoryRole)}
 ${idRow('Jabatan', 'Pimpinan / Direktur')}
 ${idRow('Perusahaan', '{perusahaan}')}
 ${idRow('Alamat', '{alamat_perusahaan}')}
 </div>
 
-<p style="margin-bottom:18px;">Dengan ini menerangkan bahwa:</p>
+<p style="margin-bottom:15px;">Dengan ini menerangkan bahwa:</p>
 
-<div style="margin:0 0 25px 30px;">
+<div style="display:table;width:100%;margin:0 0 25px 30px;">
 ${idRow('Nama', '{nama}', true)}
 ${idRow('NIK', '{nik}')}
 ${idRow('Tempat/Tgl Lahir', '{tempat_lahir}, {tanggal_lahir}')}
@@ -225,10 +222,20 @@ ${idRow('Gaji per Bulan', '{gaji}')}
 
 <p style="margin-bottom:40px;text-indent:36px;">Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>
 
-<div style="text-align:right;margin-top:40px;">
-<p style="margin:0 0 6px 0;">{kota}, {tanggal}</p>
-<p style="margin:0 0 80px 0;">${signatoryRole},</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;border-top:1px solid #000;padding-top:6px;min-width:200px;text-align:center;">( ............................. )</p>
+<div style="display:table;width:100%;margin-top:30px;">
+<div style="display:table-row;">
+<div style="display:table-cell;width:50%;text-align:center;vertical-align:top;">
+<p style="margin:0 0 5px 0;">Karyawan,</p>
+<p style="margin:0 0 70px 0;">&nbsp;</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:200px;text-align:center;">( {nama} )</p>
+</div>
+<div style="display:table-cell;width:50%;text-align:center;vertical-align:top;">
+<p style="margin:0 0 5px 0;">{kota}, {tanggal}</p>
+<p style="margin:0 0 5px 0;">${signatoryRole},</p>
+<p style="margin:0 0 55px 0;">&nbsp;</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:200px;text-align:center;">( ............................. )</p>
+</div>
+</div>
 </div>
 
 </div>`
@@ -238,13 +245,10 @@ ${idRow('Gaji per Bulan', '{gaji}')}
 // Pakai REAL <table> (Tiptap Table extension sudah installed)
 // Wrap dengan div yang paksa page-break + min-height
 function buildSlipBody(style: string): string {
-  const kop = buildKop(style as any)
   const signerRole = style === 'gov' ? 'Bendahara Pengeluaran' : style === 'informal' ? 'Pemilik Usaha' : 'Bagian Keuangan'
   const upahLabel = style === 'informal' ? 'Upah' : 'Gaji'
 
   return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;width:100%;min-height:90vh;padding:20px 0;page-break-after:always;break-after:page;">
-
-${kop}
 
 <p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Periode: {periode}</p>
