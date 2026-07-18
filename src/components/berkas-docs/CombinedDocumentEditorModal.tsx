@@ -18,7 +18,7 @@ import { Color } from '@tiptap/extension-color'
 import { Highlight } from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
-import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette, Image as ImageIcon } from 'lucide-react'
+import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { BerkasState, JobType } from '@/lib/berkas/types'
@@ -362,6 +362,9 @@ ${html}
         {/* Template Picker View */}
         {view === 'templates' && (
           <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+            {/* AI Generate Tab — khusus wirausaha */}
+            {isWirausaha && <AiGeneratePanel state={state} onGenerate={(html) => { editor?.commands.setContent(html); setView('editor') }} />}
+
             <div className="p-4 border-b bg-white">
               <div className="flex gap-3 items-center mb-3">
                 <div className="relative flex-1 max-w-md">
@@ -694,6 +697,242 @@ ${html}
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// =========================================================
+// AI Generate Panel — khusus wirausaha
+// Form input + call /api/documents/generate-laporan-keuangan
+// Output HTML langsung ke Tiptap editor
+// =========================================================
+function AiGeneratePanel({ state, onGenerate }: { state: BerkasState; onGenerate: (html: string) => void }) {
+  const [jenisUsaha, setJenisUsaha] = useState(state.applicant.jobTitle || '')
+  const [targetMode, setTargetMode] = useState<'range' | 'perBulan'>('range')
+  const [labaMin, setLabaMin] = useState('5000000')
+  const [labaMax, setLabaMax] = useState('6000000')
+  const [periodeCount, setPeriodeCount] = useState<6 | 7>(6)
+  const [biayaKhusus, setBiayaKhusus] = useState('')
+  const [namaUsaha, setNamaUsaha] = useState(state.applicant.companyName || '')
+  const [alamatUsaha, setAlamatUsaha] = useState(state.applicant.companyAddress || '')
+  const [ig, setIg] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Generate periode list untuk perBulan mode
+  const now = new Date()
+  const bulanList: string[] = []
+  for (let i = periodeCount - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 15)
+    bulanList.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+  }
+  const [labaPerBulan, setLabaPerBulan] = useState<Record<string, string>>(
+    Object.fromEntries(bulanList.map(b => [b, '5000000']))
+  )
+
+  const handleGenerate = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const payload: any = {
+        jenisUsaha: jenisUsaha || 'Usaha UMKM',
+        targetLabaMode: targetMode,
+        periodeCount,
+        biayaKhusus,
+        kopSurat: {
+          namaUsaha: namaUsaha || 'Nama Usaha',
+          alamat: alamatUsaha || 'Alamat Usaha',
+          ig,
+        },
+      }
+
+      if (targetMode === 'range') {
+        payload.targetLabaMin = parseInt(labaMin) || 0
+        payload.targetLabaMax = parseInt(labaMax) || 0
+      } else {
+        payload.labaPerBulan = bulanList.map(bulan => ({
+          bulan,
+          laba: parseInt(labaPerBulan[bulan] || '0') || 0,
+        }))
+      }
+
+      const res = await fetch('/api/documents/generate-laporan-keuangan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (data.success) {
+        onGenerate(data.html)
+      } else {
+        setError(data.error || 'Gagal generate. Coba lagi.')
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-violet-50 to-pink-50 border-b border-violet-200 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🤖</span>
+          <h3 className="text-sm font-bold text-violet-900">AI Generate Laporan Keuangan</h3>
+          <span className="text-[10px] bg-violet-600 text-white px-2 py-0.5 rounded-full">NEW</span>
+        </div>
+        <p className="text-xs text-violet-700 mb-3">
+          AI akan generate rincian pendapatan, HPP, dan biaya operasional otomatis berdasarkan target laba bersih yang Anda input. Hasil bisa diedit di Tiptap editor.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Jenis Usaha</label>
+            <input
+              type="text"
+              value={jenisUsaha}
+              onChange={e => setJenisUsaha(e.target.value)}
+              placeholder="e.g., Laundry, Softlens, Camping, Kusen Kayu"
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Nama Usaha (Kop Surat)</label>
+            <input
+              type="text"
+              value={namaUsaha}
+              onChange={e => setNamaUsaha(e.target.value)}
+              placeholder="e.g., ZEELALENS, Toko Haji Ambon"
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Alamat Usaha</label>
+            <input
+              type="text"
+              value={alamatUsaha}
+              onChange={e => setAlamatUsaha(e.target.value)}
+              placeholder="Alamat lengkap usaha"
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Instagram (optional)</label>
+            <input
+              type="text"
+              value={ig}
+              onChange={e => setIg(e.target.value)}
+              placeholder="e.g., zeelalens (tanpa @)"
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Periode</label>
+            <select
+              value={periodeCount}
+              onChange={e => setPeriodeCount(parseInt(e.target.value) as 6 | 7)}
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            >
+              <option value={6}>6 Bulan Terakhir</option>
+              <option value={7}>7 Bulan Terakhir</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Mode Target Laba</label>
+            <select
+              value={targetMode}
+              onChange={e => setTargetMode(e.target.value as 'range' | 'perBulan')}
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+            >
+              <option value="range">Range (Min - Max)</option>
+              <option value="perBulan">Per Bulan (Nominal Pasti)</option>
+            </select>
+          </div>
+          {targetMode === 'range' && (
+            <div className="col-span-1">
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Target Laba/Bulan (Rp)</label>
+              <div className="flex gap-1 items-center">
+                <input
+                  type="number"
+                  value={labaMin}
+                  onChange={e => setLabaMin(e.target.value)}
+                  placeholder="Min"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+                />
+                <span className="text-xs text-slate-400">-</span>
+                <input
+                  type="number"
+                  value={labaMax}
+                  onChange={e => setLabaMax(e.target.value)}
+                  placeholder="Max"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {targetMode === 'perBulan' && (
+          <div className="mb-3 bg-white/60 rounded p-2 border border-violet-200">
+            <label className="text-[10px] font-medium text-slate-600 uppercase mb-1 block">Laba Bersih Per Bulan (Rp)</label>
+            <div className="grid grid-cols-2 gap-2">
+              {bulanList.map(bulan => (
+                <div key={bulan} className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-600 w-32 truncate">{bulan}</span>
+                  <input
+                    type="number"
+                    value={labaPerBulan[bulan] || ''}
+                    onChange={e => setLabaPerBulan(prev => ({ ...prev, [bulan]: e.target.value }))}
+                    className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3">
+          <label className="text-[10px] font-medium text-slate-600 uppercase">Biaya Khusus (optional)</label>
+          <textarea
+            value={biayaKhusus}
+            onChange={e => setBiayaKhusus(e.target.value)}
+            placeholder="e.g., gaji karyawan 1.3jt/bulan, listrik 500rb, no sewa, transportasi 200rb"
+            rows={2}
+            className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500"
+          />
+          <p className="text-[10px] text-slate-500 mt-1">
+            Kalau diisi, AI akan pakai biaya ini. Kalau kosong, AI decide sendiri berdasarkan jenis usaha.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+            ⚠️ {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleGenerate}
+          disabled={loading || !jenisUsaha || !namaUsaha}
+          className="w-full py-2 px-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white text-sm font-bold rounded hover:from-violet-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              AI sedang generate... (30-60 detik)
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              Generate dengan AI
+            </>
+          )}
+        </button>
       </div>
     </div>
   )
