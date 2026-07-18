@@ -36,7 +36,7 @@ import { PernyataanPengecekanSHGB } from '@/components/berkas-docs/docs/notaris/
 import { SuratKuasaNotaris } from '@/components/berkas-docs/docs/notaris/SuratKuasaNotaris'
 // SlipGajiForm + LokasiTempatKerja removed from sidebar — now in modals (CombinedDocEditorModal + LokasiKerjaModal)
 import { TemplatePopover } from '@/components/berkas-docs/docs/common/TemplatePopover'
-import { CombinedDocEditorModal } from '@/components/berkas-docs/CombinedDocEditorModal'
+import { CombinedDocumentEditorModal } from '@/components/berkas-docs/CombinedDocumentEditorModal'
 import { LokasiKerjaModal } from '@/components/berkas-docs/LokasiKerjaModal'
 
 // ============================================================
@@ -2648,13 +2648,13 @@ function BerkasEditor({ customer, onRefresh, projectId, bankConfigVersion = 0 }:
         </div>
       )}
 
-      {/* Combined Doc Editor Modal (Google Docs API - edit langsung di Google Docs) */}
-      <CombinedDocEditorModal
+      {/* Combined Doc Editor Modal (Tiptap editor - SK Kerja + Slip Gaji / Laporan Keuangan) */}
+      <CombinedDocumentEditorModal
         open={combinedDocModalOpen}
         onClose={() => setCombinedDocModalOpen(false)}
         state={state}
-        customerId={customer.id}
-        onUpdate={(field, val) => updateApplicant(field as keyof ApplicantData, val)}
+        savedHtml={uploadedFiles['combined-doc-html'] || null}
+        onSave={(html) => setUploadedFiles(prev => ({ ...prev, 'combined-doc-html': html }))}
       />
 
       {/* Lokasi Kerja Modal - Google Maps form + embed + denah */}
