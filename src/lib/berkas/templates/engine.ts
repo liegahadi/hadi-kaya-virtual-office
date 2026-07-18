@@ -258,7 +258,7 @@ export function buildLaporanKeuanganData(state: BerkasState): Record<string, any
 }
 
 // Build the LAPORAN KEUANGAN document (untuk wirausaha):
-// 7 halaman laporan bulanan + 1 halaman akumulatif = 8 halaman total
+// 6-7 halaman laporan bulanan (1 per bulan) — NO akumulatif (jarang dipakai UMKM)
 // NO SK Kerja (wirausaha tidak butuh SK Kerja)
 export function buildLaporanKeuanganDocument(templateId: string, state: BerkasState): string {
   const template = LAPORAN_KEUANGAN_TEMPLATES.find(t => t.id === templateId) || LAPORAN_KEUANGAN_TEMPLATES[0]
@@ -266,18 +266,13 @@ export function buildLaporanKeuanganDocument(templateId: string, state: BerkasSt
 
   const data = buildLaporanKeuanganData(state)
 
-  // Build 7 laporan bulanan (masing-masing 1 halaman dengan page-break-after)
+  // Build 6-7 laporan bulanan (masing-masing 1 halaman dengan page-break-after)
+  // NO akumulatif (mengikuti pola real-world UMKM)
   const laporanPages = data.laporan.map((lap: any) => {
     return fillSection(getLaporanBulananBody(style), lap)
   }).join('\n')
 
-  // Build 1 halaman akumulatif (halaman terakhir, tanpa page-break-after)
-  const akumulatifHtml = fillSection(getLaporanAkumulatifBody(style), data.akumulatif)
-
-  // Combine: 7 laporan bulanan + 1 akumulatif
-  // Laporan bulanan sudah punya page-break-after, jadi langsung concatenate
-  return `${laporanPages}
-${akumulatifHtml}`
+  return laporanPages
 }
 
 // Auto-switch: karyawan → SK+Slip, wirausaha → Laporan Keuangan

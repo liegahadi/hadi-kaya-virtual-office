@@ -1,10 +1,11 @@
 // LAPORAN KEUANGAN TEMPLATES — Wirausaha (UMKM)
 // 20 template untuk wirausaha: UMKM makanan, toko, gerobak, MUA, jasa foto, kafe, dll
-// Setiap template = 1 file dengan 7 halaman (6 bulan terakhir + bulan ini)
+// Setiap template = 1 file dengan 6-7 halaman (1 halaman per bulan)
 // Setiap halaman = Laporan Keuangan 1 bulan (Pendapatan + Pengeluaran + Laba Bersih)
-// PLUS 1 halaman akumulatif 6 bulan di akhir
+// NO akumulatif — mengikuti pola real-world (jarang usaha UMKM pakai akumulatif)
 //
-// Layout: DIV-based (NO TABLE) supaya Tiptap support
+// Layout: REAL TABLE (Tiptap Table extension sudah installed) untuk pendapatan/pengeluaran
+// Identitas pakai display:table (CSS) supaya rapih
 // Value: Range Min-Max (bukan nominal pasti) — bank biasanya minta range
 
 export interface LaporanKeuanganTemplate {
@@ -14,9 +15,17 @@ export interface LaporanKeuanganTemplate {
   description: string
 }
 
-// Helper: baris pendapatan/pengeluaran untuk Laporan Keuangan
-// Layout: label (kiri, 50%) | range min-max (kanan, 50%)
-// Range format: "Rp. 1.000.000 - Rp. 2.000.000"
+// Helper: baris identitas — display:table (CSS) supaya kolom rapih align
+function idRow(label: string, value: string, strong = false): string {
+  const strongStyle = strong ? 'font-weight:bold;' : ''
+  return `<div style="display:table;width:100%;margin:4px 0;font-size:11pt;line-height:1.7;">
+<div style="display:table-cell;width:170px;vertical-align:bottom;padding-right:8px;">${label}</div>
+<div style="display:table-cell;width:14px;vertical-align:bottom;">:</div>
+<div style="display:table-cell;vertical-align:bottom;border-bottom:1px dotted #000;padding:0 6px 2px;${strongStyle}">${value}</div>
+</div>`
+}
+
+// Helper: baris pendapatan/pengeluaran untuk Laporan Keuangan (REAL TABLE row)
 function lapRow(label: string, rangeMin: string, rangeMax: string, bold = false, bg = ''): string {
   const bgStyle = bg ? `background:${bg};` : ''
   const boldStyle = bold ? 'font-weight:bold;' : ''
@@ -27,19 +36,10 @@ function lapRow(label: string, rangeMin: string, rangeMax: string, bold = false,
       : rangeMax
         ? `Rp. ${rangeMax}`
         : '-'
-  return `<p style="margin:0;padding:6px 10px;border-bottom:1px solid #ccc;font-size:11pt;${bgStyle}${boldStyle}">` +
-    `<span style="display:inline-block;width:55%;vertical-align:middle;">${label}</span>` +
-    `<span style="display:inline-block;width:45%;vertical-align:middle;text-align:right;">${range}</span>` +
-    `</p>`
-}
-
-// Helper: baris identitas
-function idRow(label: string, value: string, strong = false): string {
-  return `<p style="margin:6px 0;font-size:11pt;line-height:1.8;">` +
-    `<span style="display:inline-block;width:160px;vertical-align:bottom;">${label}</span>` +
-    `<span style="display:inline-block;width:12px;">:</span>` +
-    `<span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px 1px;${strong ? 'font-weight:bold;' : ''}">${value}</span>` +
-    `</p>`
+  return `<tr style="${bgStyle}${boldStyle}">
+<td style="padding:6px 10px;border:1px solid #999;font-size:11pt;">${label}</td>
+<td style="padding:6px 10px;border:1px solid #999;font-size:11pt;text-align:right;">${range}</td>
+</tr>`
 }
 
 // Helper: build kop surat untuk wirausaha
@@ -170,11 +170,9 @@ function buildKopLaporan(style: string): string {
   }
 }
 
-// Build 1 halaman Laporan Keuangan (1 bulan)
-// Layout: kop + identitas + pendapatan + pengeluaran + laba bersih
+// Build 1 halaman Laporan Keuangan (1 bulan) — REAL TABLE untuk pendapatan/pengeluaran
 function buildLaporanBulanan(style: string): string {
   const kop = buildKopLaporan(style)
-  const upahLabel = 'Laba'
 
   return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;width:100%;min-height:90vh;padding:20px 0;page-break-after:always;break-after:page;">
 
@@ -191,101 +189,42 @@ ${idRow('Alamat Usaha', '{alamat_usaha}')}
 ${idRow('NIB', '{nib}')}
 </div>
 
-<div style="border:1.5px solid #000;margin-bottom:15px;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#16a34a;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-PENDAPATAN
-</p>
-<div>
+<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
+<thead>
+<tr style="background:#16a34a;color:#fff;">
+<th style="padding:8px 10px;border:1px solid #000;text-align:left;">PENDAPATAN</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;">Range (Rp)</th>
+</tr>
+</thead>
+<tbody>
 {{#pendapatan}}${lapRow('{label}', '{min}', '{max}', false)}{{/pendapatan}}
 ${lapRow('Total Pendapatan', '{total_pendapatan_min}', '{total_pendapatan_max}', true, '#f0fdf4')}
-</div>
-</div>
+</tbody>
+</table>
 
-<div style="border:1.5px solid #000;margin-bottom:15px;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#dc2626;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-PENGELUARAN
-</p>
-<div>
+<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
+<thead>
+<tr style="background:#dc2626;color:#fff;">
+<th style="padding:8px 10px;border:1px solid #000;text-align:left;">PENGELUARAN</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;">Range (Rp)</th>
+</tr>
+</thead>
+<tbody>
 {{#pengeluaran}}${lapRow('{label}', '{min}', '{max}', false)}{{/pengeluaran}}
 ${lapRow('Total Pengeluaran', '{total_pengeluaran_min}', '{total_pengeluaran_max}', true, '#fef2f2')}
-</div>
-</div>
+</tbody>
+</table>
 
-<div style="border:1.5px solid #000;margin-bottom:15px;background:#e6f3ff;">
-<p style="margin:0;padding:10px;border-bottom:1.5px solid #000;background:#1e3a8a;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-LABA BERSIH
-</p>
-<p style="margin:0;padding:12px 10px;font-size:14pt;font-weight:bold;text-align:center;">
-Rp. {laba_min} - Rp. {laba_max}
-</p>
-</div>
+<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;background:#e6f3ff;">
+<thead>
+<tr style="background:#1e3a8a;color:#fff;">
+<th style="padding:10px;border:1px solid #000;text-align:center;font-size:12pt;">LABA BERSIH</th>
+<th style="padding:10px;border:1px solid #000;text-align:right;font-size:12pt;">Rp. {laba_min} - Rp. {laba_max}</th>
+</tr>
+</thead>
+</table>
 
 <div style="margin-top:40px;text-align:right;">
-<p style="margin:0 0 6px 0;">{kota}, {tanggal}</p>
-<p style="margin:0 0 80px 0;">Pemilik Usaha,</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;border-top:1px solid #000;padding-top:6px;min-width:200px;text-align:center;">( {nama} )</p>
-</div>
-
-</div>`
-}
-
-// Build halaman akumulatif 6 bulan
-function buildLaporanAkumulatif(style: string): string {
-  const kop = buildKopLaporan(style)
-
-  return `<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;width:100%;min-height:90vh;padding:20px 0;">
-
-${kop}
-
-<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">REKAPITULASI LAPORAN KEUANGAN</p>
-<p style="text-align:center;font-size:11pt;margin:5px 0 20px;">6 Bulan Terakhir (Akumulatif)</p>
-
-<div style="margin:0 0 15px 0;">
-${idRow('Nama Usaha', '{nama_usaha}', true)}
-${idRow('Jenis Usaha', '{jenis_usaha}')}
-${idRow('Pemilik', '{nama}', true)}
-${idRow('Periode', '{periode_awal} - {periode_akhir}')}
-</div>
-
-<div style="border:1.5px solid #000;margin-bottom:15px;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#16a34a;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-TOTAL PENDAPATAN 6 BULAN
-</p>
-<p style="margin:0;padding:12px 10px;font-size:14pt;font-weight:bold;text-align:center;">
-Rp. {total_pendapatan_6bln_min} - Rp. {total_pendapatan_6bln_max}
-</p>
-</div>
-
-<div style="border:1.5px solid #000;margin-bottom:15px;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#dc2626;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-TOTAL PENGELUARAN 6 BULAN
-</p>
-<p style="margin:0;padding:12px 10px;font-size:14pt;font-weight:bold;text-align:center;">
-Rp. {total_pengeluaran_6bln_min} - Rp. {total_pengeluaran_6bln_max}
-</p>
-</div>
-
-<div style="border:1.5px solid #000;margin-bottom:15px;background:#e6f3ff;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#1e3a8a;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-RATA-RATA LABA BERSIH PER BULAN
-</p>
-<p style="margin:0;padding:12px 10px;font-size:14pt;font-weight:bold;text-align:center;">
-Rp. {rata_laba_min} - Rp. {rata_laba_max}
-</p>
-</div>
-
-<div style="border:1.5px solid #000;margin-bottom:15px;background:#fefce8;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#ca8a04;color:#fff;font-weight:bold;font-size:12pt;text-align:center;">
-TOTAL LABA BERSIH 6 BULAN
-</p>
-<p style="margin:0;padding:12px 10px;font-size:16pt;font-weight:bold;text-align:center;">
-Rp. {total_laba_6bln_min} - Rp. {total_laba_6bln_max}
-</p>
-</div>
-
-<p style="text-align:justify;margin:25px 0;text-indent:36px;line-height:1.7;">Demikian laporan keuangan usaha ini dibuat dengan sebenarnya untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR). Data yang tercantum adalah perkiraan rentang (min-max) pendapatan dan pengeluaran usaha berdasarkan catatan keuangan 6 bulan terakhir.</p>
-
-<div style="text-align:right;margin-top:40px;">
 <p style="margin:0 0 6px 0;">{kota}, {tanggal}</p>
 <p style="margin:0 0 80px 0;">Pemilik Usaha,</p>
 <p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;border-top:1px solid #000;padding-top:6px;min-width:200px;text-align:center;">( {nama} )</p>
@@ -299,9 +238,11 @@ export function getLaporanBulananBody(style: string): string {
   return buildLaporanBulanan(style)
 }
 
-// Get body laporan akumulatif (1 halaman terakhir) — used by engine
+// Get body laporan akumulatif — DEPRECATED (jarang dipakai, dipertahankan untuk backward compat)
 export function getLaporanAkumulatifBody(style: string): string {
-  return buildLaporanAkumulatif(style)
+  // Return empty string — akumulatif tidak digunakan lagi
+  // (jika diperlukan di masa depan, bisa diimplementasi ulang)
+  return ''
 }
 
 // =========================================================

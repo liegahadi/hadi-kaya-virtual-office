@@ -17,6 +17,7 @@ import { Underline } from '@tiptap/extension-underline'
 import { Color } from '@tiptap/extension-color'
 import { Highlight } from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { X, Download, Save, ChevronLeft, Search, FileText, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, Highlighter, Palette, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -75,6 +76,16 @@ export function CombinedDocumentEditorModal({ open, onClose, state, savedHtml, o
         HTMLAttributes: {
           class: 'editor-image',
         },
+      }),
+      // Table support — for Slip Gaji & Laporan Keuangan
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: { class: 'tiptap-table' },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell.configure({
+        HTMLAttributes: { class: 'tiptap-cell' },
       }),
     ],
     content: '',
@@ -605,6 +616,78 @@ ${html}
 
             {/* Editor Area */}
             <div className="flex-1 overflow-y-auto p-4">
+              {/* Page Break Preview + Table styling — inject global CSS */}
+              <style dangerouslySetInnerHTML={{ __html: `
+                /* PAGE BREAK PREVIEW — visual garis pemisah antar halaman */
+                .tiptap-editor div[style*="page-break-after:always"],
+                .tiptap-editor div[style*="page-break-after: always"],
+                .tiptap-editor p[style*="page-break-after:always"],
+                .tiptap-editor p[style*="page-break-after: always"] {
+                  position: relative;
+                  border-bottom: 2px dashed #dc2626 !important;
+                  margin: 20px 0 !important;
+                  padding: 8px 0 !important;
+                  background: linear-gradient(to right, transparent 0%, #fee2e2 50%, transparent 100%);
+                }
+                .tiptap-editor div[style*="page-break-after:always"]::after,
+                .tiptap-editor div[style*="page-break-after: always"]::after,
+                .tiptap-editor p[style*="page-break-after:always"]::after,
+                .tiptap-editor p[style*="page-break-after: always"]::after {
+                  content: "──── Page Break ────";
+                  position: absolute;
+                  left: 50%;
+                  bottom: -12px;
+                  transform: translateX(-50%);
+                  background: #dc2626;
+                  color: white;
+                  padding: 2px 12px;
+                  border-radius: 10px;
+                  font-size: 9pt;
+                  font-weight: bold;
+                  letter-spacing: 0.5px;
+                }
+
+                /* TABLE STYLING — Slip Gaji & Laporan Keuangan */
+                .tiptap-table {
+                  border-collapse: collapse !important;
+                  width: 100% !important;
+                  margin: 10px 0 !important;
+                  border: 1.5px solid #000 !important;
+                }
+                .tiptap-table td, .tiptap-table th {
+                  border: 1px solid #999 !important;
+                  padding: 6px 10px !important;
+                  vertical-align: top !important;
+                }
+                .tiptap-table th {
+                  background: #e8e8e8 !important;
+                  font-weight: bold !important;
+                  text-align: center !important;
+                }
+                .tiptap-table .tiptap-cell {
+                  min-width: 60px;
+                }
+                /* Selected cell highlight */
+                .tiptap-table .selectedCell::after {
+                  content: "";
+                  position: absolute;
+                  top: 0; left: 0; right: 0; bottom: 0;
+                  background: rgba(35, 165, 213, 0.2);
+                  pointer-events: none;
+                  z-index: 100;
+                }
+
+                /* Kop surat styling */
+                .tiptap-editor img {
+                  max-width: 100% !important;
+                  height: auto !important;
+                }
+
+                /* Make sure font + size persistent */
+                .tiptap-editor p {
+                  margin: 6px 0 !important;
+                }
+              `}} />
               <div className="max-w-[210mm] mx-auto bg-white shadow-lg min-h-[297mm]">
                 <EditorContent editor={editor} />
               </div>

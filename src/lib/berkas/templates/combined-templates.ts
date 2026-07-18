@@ -166,28 +166,27 @@ function buildKop(style: string): string {
   }
 }
 
-// Helper: baris identitas — DIV-based (no table)
-// Label lebar tetap 160px (inline-block) + separator ":" + value dengan dotted underline
-// Tiptap support inline-block dengan width
+// Helper: baris identitas untuk SK Kerja — LAYOUT PARAGRAF yang RAPIH
+// Pakai display:table (CSS, bukan HTML <table>) supaya kolom otomatis align
+// Tiptap preserve display:table-cell karena bukan flexbox
 function idRow(label: string, value: string, strong = false): string {
-  return `<p style="margin:6px 0;font-size:11pt;line-height:1.8;">` +
-    `<span style="display:inline-block;width:160px;vertical-align:bottom;">${label}</span>` +
-    `<span style="display:inline-block;width:12px;">:</span>` +
-    `<span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px 1px;${strong ? 'font-weight:bold;' : ''}">${value}</span>` +
-    `</p>`
+  const strongStyle = strong ? 'font-weight:bold;' : ''
+  return `<div style="display:table;width:100%;margin:4px 0;font-size:11pt;line-height:1.7;">
+<div style="display:table-cell;width:170px;vertical-align:bottom;padding-right:8px;">${label}</div>
+<div style="display:table-cell;width:14px;vertical-align:bottom;">:</div>
+<div style="display:table-cell;vertical-align:bottom;border-bottom:1px dotted #000;padding:0 6px 2px;${strongStyle}">${value}</div>
+</div>`
 }
 
-// Helper: baris pendapatan/potongan untuk Slip Gaji — DIV-based (no table)
-// Layout: label (kiri, lebar 55%) | pendapatan (kanan, 22.5%) | potongan (kanan, 22.5%)
-// Pakai 3 span inline-block dengan width tetap
+// Helper: baris pendapatan/potongan untuk Slip Gaji — pakai REAL TABLE (Tiptap Table extension installed)
 function slipRow(label: string, pendapatan: string, potongan: string, bold = false, bg = ''): string {
   const bgStyle = bg ? `background:${bg};` : ''
   const boldStyle = bold ? 'font-weight:bold;' : ''
-  return `<p style="margin:0;padding:6px 10px;border-bottom:1px solid #ccc;font-size:11pt;${bgStyle}${boldStyle}">` +
-    `<span style="display:inline-block;width:55%;vertical-align:middle;">${label}</span>` +
-    `<span style="display:inline-block;width:22.5%;vertical-align:middle;text-align:right;">${pendapatan}</span>` +
-    `<span style="display:inline-block;width:22.5%;vertical-align:middle;text-align:right;">${potongan}</span>` +
-    `</p>`
+  return `<tr style="${bgStyle}${boldStyle}">
+<td style="padding:6px 10px;border:1px solid #999;font-size:11pt;width:55%;">${label}</td>
+<td style="padding:6px 10px;border:1px solid #999;font-size:11pt;text-align:right;width:22.5%;">${pendapatan}</td>
+<td style="padding:6px 10px;border:1px solid #999;font-size:11pt;text-align:right;width:22.5%;">${potongan}</td>
+</tr>`
 }
 
 // SK Kerja body — LAYOUT PARAGRAF (NO TABLE) dengan dotted underline
@@ -236,7 +235,7 @@ ${idRow('Gaji per Bulan', '{gaji}')}
 }
 
 // Slip Gaji body (single sheet) — 1 BULAN = 1 HALAMAN
-// DIV-based (NO TABLE) supaya Tiptap support
+// Pakai REAL <table> (Tiptap Table extension sudah installed)
 // Wrap dengan div yang paksa page-break + min-height
 function buildSlipBody(style: string): string {
   const kop = buildKop(style as any)
@@ -250,39 +249,43 @@ ${kop}
 <p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">SLIP ${upahLabel.toUpperCase()}</p>
 <p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Periode: {periode}</p>
 
-<div style="margin:0 0 15px 0;">
-${idRow('Nama', '{nama}', true)}
-${idRow('NIK', '{nik}')}
-${idRow('Jabatan', '{jabatan}')}
-${idRow('Perusahaan', '{perusahaan}')}
+<div style="display:table;width:100%;margin:0 0 15px 0;font-size:11pt;line-height:1.7;">
+<div style="display:table-row;"><div style="display:table-cell;width:120px;padding:4px 8px 4px 0;">Nama</div><div style="display:table-cell;width:14px;">:</div><div style="display:table-cell;padding:4px 8px;font-weight:bold;">{nama}</div><div style="display:table-cell;width:30px;"></div><div style="display:table-cell;width:80px;padding:4px 8px 4px 0;">NIK</div><div style="display:table-cell;width:14px;">:</div><div style="display:table-cell;padding:4px 8px;">{nik}</div></div>
+<div style="display:table-row;"><div style="display:table-cell;padding:4px 8px 4px 0;">Jabatan</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{jabatan}</div><div style="display:table-cell;"></div><div style="display:table-cell;padding:4px 8px 4px 0;">Tanggal</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{tanggal_terima}</div></div>
+<div style="display:table-row;"><div style="display:table-cell;padding:4px 8px 4px 0;">Perusahaan</div><div style="display:table-cell;">:</div><div style="display:table-cell;padding:4px 8px;">{perusahaan}</div></div>
 </div>
 
-<div style="border:1.5px solid #000;margin-bottom:15px;">
-<p style="margin:0;padding:8px 10px;border-bottom:1.5px solid #000;background:#e8e8e8;font-weight:bold;font-size:11pt;">
-<span style="display:inline-block;width:55%;">Keterangan</span>
-<span style="display:inline-block;width:22.5%;text-align:right;">Pendapatan</span>
-<span style="display:inline-block;width:22.5%;text-align:right;">Potongan</span>
-</p>
-<div>
-${slipRow(`${upahLabel} Pokok`, '{gaji_pokok}', '', false)}
-{{#tunjangan_tetap}}${slipRow('{label}', '{amount}', '', false)}{{/tunjangan_tetap}}
-{{#tunjangan_variabel}}${slipRow('{label}', '{amount}', '', false)}{{/tunjangan_variabel}}
-{{#potongan}}${slipRow('{label}', '', '{amount}', false)}{{/potongan}}
+<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
+<thead>
+<tr style="background:#e8e8e8;">
+<th style="padding:8px 10px;border:1px solid #000;text-align:left;width:55%;">Keterangan</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;width:22.5%;">Pendapatan</th>
+<th style="padding:8px 10px;border:1px solid #000;text-align:right;width:22.5%;">Potongan</th>
+</tr>
+</thead>
+<tbody>
+${slipRow(`${upahLabel} Pokok`, '{gaji_pokok}', '')}
+{{#tunjangan_tetap}}${slipRow('{label}', '{amount}', '')}{{/tunjangan_tetap}}
+{{#tunjangan_variabel}}${slipRow('{label}', '{amount}', '')}{{/tunjangan_variabel}}
+{{#potongan}}${slipRow('{label}', '', '{amount}')}{{/potongan}}
 ${slipRow('Total', '{gaji_kotor}', '{total_potongan}', true, '#f5f5f5')}
 ${slipRow(`${upahLabel} Diterima (Bersih)`, '', '{gaji_bersih}', true, '#e6f3ff')}
-</div>
-</div>
+</tbody>
+</table>
 
-<div style="margin-top:40px;">
+<div style="display:table;width:100%;margin-top:40px;">
+<div style="display:table-row;">
+<div style="display:table-cell;width:50%;vertical-align:top;">
 <p style="margin:0 0 5px 0;">Tanggal Terima: {tanggal_terima}</p>
-<p style="margin:0 0 5px 0;">Diterima oleh,</p>
-<p style="margin:50px 0 0 0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( {nama} )</p>
+<p style="margin:0 0 60px 0;">Diterima oleh,</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( {nama} )</p>
 </div>
-
-<div style="text-align:right;margin-top:-110px;">
+<div style="display:table-cell;width:50%;vertical-align:top;text-align:right;">
 <p style="margin:0 0 5px 0;">{kota}, {tanggal_terima}</p>
-<p style="margin:0 0 5px 0;">${signerRole},</p>
-<p style="margin:50px 0 0 0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( ............................. )</p>
+<p style="margin:0 0 60px 0;">${signerRole},</p>
+<p style="margin:0;font-weight:bold;text-decoration:underline;border-top:1px solid #000;padding-top:4px;display:inline-block;min-width:180px;text-align:center;">( ............................. )</p>
+</div>
+</div>
 </div>
 
 </div>`
