@@ -13,10 +13,10 @@
 // 4. "Download .docx" button → GET /api/documents/google-docs/[id]/download
 //    → Server exports Google Doc as .docx via Drive API
 import React, { useState, useEffect } from 'react'
-import { X, Download, FileText, ChevronLeft, Search, ExternalLink, Loader2, AlertCircle, RefreshCw, Plus, Trash2 } from 'lucide-react'
+import { X, Download, FileText, ChevronLeft, Search, ExternalLink, Loader2, AlertCircle, RefreshCw, Plus, Trash2, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { BerkasState, ApplicantData } from '@/lib/berkas/types'
+import { BerkasState, ApplicantData, JobType } from '@/lib/berkas/types'
 import { LogoGenerator } from '@/components/berkas-docs/LogoGenerator'
 
 interface CombinedDocEditorModalProps {
@@ -373,10 +373,18 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
           </div>
         </div>
 
-        {/* Template Picker View — with Slip Gaji form on left side */}
+        {/* Template Picker View — auto-switch: karyawan → templates, wirausaha → AI generate */}
         {view === 'templates' && (
           <div className="flex-1 overflow-hidden flex bg-slate-50">
-            {/* LEFT: Slip Gaji Form (always visible in template picker view) */}
+            {/* WIRAUSAHA: AI Generate Panel (no template picker, no SK Kerja) */}
+            {state.applicant.jobType === JobType.ENTREPRENEUR ? (
+              <WirausahaAiPanel state={state} customerId={customerId} onDocCreated={(doc) => {
+                setCreatedDoc(doc)
+                setView('editor')
+              }} />
+            ) : (
+            <>
+            {/* KARYAWAN: Slip Gaji Form + Template Picker (existing) */}
             <div className="w-[380px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
               <div className="p-4 border-b bg-emerald-50 sticky top-0 z-10">
                 <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
@@ -581,6 +589,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                 <p>🎨 Klik template → buka Google Doc baru (auto-isi data form di kiri) → edit langsung di Google Docs → download .docx</p>
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -611,6 +621,212 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
             />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// =========================================================
+// WirausahaAiPanel — AI Generate Laporan Keuangan (no SK Kerja)
+// Form input → call /api/documents/generate-laporan-keuangan
+// → upload HTML ke Google Drive sebagai Google Doc
+// → return CreatedDoc untuk embed di editor
+// =========================================================
+function WirausahaAiPanel({ state, customerId, onDocCreated }: {
+  state: BerkasState
+  customerId?: string
+  onDocCreated: (doc: CreatedDoc) => void
+}) {
+  const [jenisUsaha, setJenisUsaha] = useState(state.applicant.jobTitle || '')
+  const [targetMode, setTargetMode] = useState<'range' | 'perBulan'>('range')
+  const [labaMin, setLabaMin] = useState('5000000')
+  const [labaMax, setLabaMax] = useState('6000000')
+  const [periodeCount, setPeriodeCount] = useState<6 | 7>(6)
+  const [biayaKhusus, setBiayaKhusus] = useState('')
+  const [namaUsaha, setNamaUsaha] = useState(state.applicant.companyName || '')
+  const [alamatUsaha, setAlamatUsaha] = useState(state.applicant.companyAddress || '')
+  const [ig, setIg] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const now = new Date()
+  const bulanList: string[] = []
+  for (let i = periodeCount - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 15)
+    bulanList.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+  }
+  const [labaPerBulan, setLabaPerBulan] = useState<Record<string, string>>(
+    Object.fromEntries(bulanList.map(b => [b, '5000000']))
+  )
+
+  const handleGenerate = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      // Step 1: AI generate HTML
+      const payload: any = {
+        jenisUsaha: jenisUsaha || 'Usaha UMKM',
+        targetLabaMode: targetMode,
+        periodeCount,
+        biayaKhusus,
+        kopSurat: {
+          namaUsaha: namaUsaha || 'Nama Usaha',
+          alamat: alamatUsaha || 'Alamat Usaha',
+          ig,
+        },
+      }
+      if (targetMode === 'range') {
+        payload.targetLabaMin = parseInt(labaMin) || 0
+        payload.targetLabaMax = parseInt(labaMax) || 0
+      } else {
+        payload.labaPerBulan = bulanList.map(bulan => ({
+          bulan, laba: parseInt(labaPerBulan[bulan] || '0') || 0,
+        }))
+      }
+
+      const res = await fetch('/api/documents/generate-laporan-keuangan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        setError(data.error || 'Gagal generate. Coba lagi.')
+        return
+      }
+
+      // Step 2: Upload HTML ke Google Drive sebagai Google Doc
+      const uploadRes = await fetch('/api/documents/google-docs/upload-html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: data.html,
+          fileName: `Laporan_Keuangan_${namaUsaha || jenisUsaha}_${new Date().toISOString().split('T')[0]}`,
+          customerId,
+        }),
+      })
+      const uploadData = await uploadRes.json()
+      if (!uploadData.success) {
+        setError('AI generate OK, tapi gagal upload ke Google Drive: ' + (uploadData.error || 'unknown'))
+        return
+      }
+
+      onDocCreated({
+        docId: uploadData.docId,
+        fileName: uploadData.fileName,
+        editUrl: uploadData.editUrl,
+        embedUrl: uploadData.embedUrl,
+        downloadUrl: uploadData.downloadUrl,
+      })
+      toast.success('Laporan Keuangan berhasil di-generate & dibuka di Google Docs!')
+    } catch (err: any) {
+      setError(err?.message || 'Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-violet-50 to-pink-50">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-2xl">🤖</span>
+          <h2 className="text-lg font-bold text-violet-900">AI Generate Laporan Keuangan</h2>
+          <span className="text-[10px] bg-violet-600 text-white px-2 py-0.5 rounded-full">Wirausaha — No SK Kerja</span>
+        </div>
+        <p className="text-sm text-violet-700 mb-6">
+          AI akan generate rincian pendapatan, HPP, dan biaya operasional otomatis berdasarkan target laba bersih.
+          Hasil dibuka di Google Docs editor (bisa edit langsung).
+        </p>
+
+        <div className="bg-white rounded-lg border border-violet-200 p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Jenis Usaha</label>
+              <input type="text" value={jenisUsaha} onChange={e => setJenisUsaha(e.target.value)}
+                placeholder="e.g., Laundry, Softlens, Camping"
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Nama Usaha (Kop Surat)</label>
+              <input type="text" value={namaUsaha} onChange={e => setNamaUsaha(e.target.value)}
+                placeholder="e.g., ZEELALENS"
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Alamat Usaha</label>
+              <input type="text" value={alamatUsaha} onChange={e => setAlamatUsaha(e.target.value)}
+                placeholder="Alamat lengkap"
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Instagram (optional)</label>
+              <input type="text" value={ig} onChange={e => setIg(e.target.value)}
+                placeholder="e.g., zeelalens"
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Periode</label>
+              <select value={periodeCount} onChange={e => setPeriodeCount(parseInt(e.target.value) as 6 | 7)}
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500">
+                <option value={6}>6 Bulan Terakhir</option>
+                <option value={7}>7 Bulan Terakhir</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-600 uppercase">Mode Target Laba</label>
+              <select value={targetMode} onChange={e => setTargetMode(e.target.value as 'range' | 'perBulan')}
+                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500">
+                <option value="range">Range (Min - Max)</option>
+                <option value="perBulan">Per Bulan (Nominal Pasti)</option>
+              </select>
+            </div>
+            {targetMode === 'range' && (
+              <div>
+                <label className="text-[10px] font-medium text-slate-600 uppercase">Target Laba/Bulan (Rp)</label>
+                <div className="flex gap-1 items-center">
+                  <input type="number" value={labaMin} onChange={e => setLabaMin(e.target.value)} placeholder="Min"
+                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+                  <span className="text-xs text-slate-400">-</span>
+                  <input type="number" value={labaMax} onChange={e => setLabaMax(e.target.value)} placeholder="Max"
+                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {targetMode === 'perBulan' && (
+            <div className="bg-violet-50 rounded p-2 border border-violet-200">
+              <label className="text-[10px] font-medium text-slate-600 uppercase mb-1 block">Laba Bersih Per Bulan (Rp)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {bulanList.map(bulan => (
+                  <div key={bulan} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-600 w-32 truncate">{bulan}</span>
+                    <input type="number" value={labaPerBulan[bulan] || ''} onChange={e => setLabaPerBulan(prev => ({ ...prev, [bulan]: e.target.value }))}
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-[10px] font-medium text-slate-600 uppercase">Biaya Khusus (optional)</label>
+            <textarea value={biayaKhusus} onChange={e => setBiayaKhusus(e.target.value)} rows={2}
+              placeholder="e.g., gaji karyawan 1.3jt/bulan, listrik 500rb, no sewa"
+              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-violet-500" />
+          </div>
+
+          {error && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">⚠️ {error}</div>}
+
+          <button onClick={handleGenerate} disabled={loading || !jenisUsaha || !namaUsaha}
+            className="w-full py-2.5 px-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white text-sm font-bold rounded hover:from-violet-700 hover:to-pink-700 disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> AI sedang generate... (30-60 detik)</>) : (<><Sparkles className="w-4 h-4" /> Generate dengan AI → Buka di Google Docs</>)}
+          </button>
+        </div>
       </div>
     </div>
   )
