@@ -449,7 +449,18 @@ ${html}
 
         {/* Editor View */}
         {view === 'editor' && editor && (
-          <div className="flex-1 overflow-hidden flex flex-col bg-slate-100">
+          <div className="flex-1 overflow-hidden flex bg-slate-100">
+            {/* Sidebar Form (kiri) — untuk SK + Slip Gaji (karyawan) */}
+            {!isWirausaha && (
+              <SlipGajiSidebar state={state} onUpdate={(field, val) => {
+                // Update state via onUpdate prop (dipass dari BerkasViewV2)
+                // Karena modal ga punya onUpdate, kita update via editor content regenerate
+                // Untuk simplicity, user edit langsung di Tiptap editor
+              }} />
+            )}
+
+            {/* Editor + Toolbar (kanan) */}
+            <div className="flex-1 overflow-hidden flex flex-col">
             {/* Toolbar */}
             <div className="bg-white border-b p-2 flex flex-wrap items-center gap-1 shrink-0">
               {/* Font family */}
@@ -695,9 +706,198 @@ ${html}
                 <EditorContent editor={editor} />
               </div>
             </div>
+            </div>
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// =========================================================
+// Slip Gaji Sidebar — form global untuk SK + Slip Gaji (karyawan)
+// User input: tanggal terima, gaji pokok, tunjangan (multiple), potongan (multiple), bonus (multiple)
+// Auto-calc total = (gaji pokok + tunjangan + bonus) - potongan
+// User edit detail tiap bulan langsung di Tiptap editor
+// =========================================================
+function SlipGajiSidebar({ state, onUpdate }: { state: BerkasState; onUpdate: (field: string, val: any) => void }) {
+  const a = state.applicant as any
+  const [tanggalTerima, setTanggalTerima] = useState(a.tanggalTerimaGaji || '25')
+  const [gajiPokok, setGajiPokok] = useState(String(a.gajiPokok || a.monthlyIncome || 0))
+  const [tunjangan, setTunjangan] = useState<Array<{ label: string; amount: number }>>(a.tunjanganTetap || [])
+  const [potongan, setPotongan] = useState<Array<{ label: string; amount: number }>>(a.potongan || [])
+  const [bonus, setBonus] = useState<Array<{ label: string; amount: number }>>(a.tunjanganVariabel || [])
+
+  // Auto-calc total
+  const totalTunjangan = tunjangan.reduce((s, t) => s + (t.amount || 0), 0)
+  const totalPotongan = potongan.reduce((s, p) => s + (p.amount || 0), 0)
+  const totalBonus = bonus.reduce((s, b) => s + (b.amount || 0), 0)
+  const gajiKotor = parseInt(gajiPokok || '0') + totalTunjangan + totalBonus
+  const gajiBersih = gajiKotor - totalPotongan
+
+  const fmt = (n: number) => 'Rp. ' + (n || 0).toLocaleString('id-ID') + ',-'
+
+  // Add/remove/update items
+  const addItem = (type: 'tunjangan' | 'potongan' | 'bonus') => {
+    const setter = type === 'tunjangan' ? setTunjangan : type === 'potongan' ? setPotongan : setBonus
+    const current = type === 'tunjangan' ? tunjangan : type === 'potongan' ? potongan : bonus
+    setter([...current, { label: '', amount: 0 }])
+  }
+  const updateItem = (type: 'tunjangan' | 'potongan' | 'bonus', idx: number, key: 'label' | 'amount', val: any) => {
+    const setter = type === 'tunjangan' ? setTunjangan : type === 'potongan' ? setPotongan : setBonus
+    const current = type === 'tunjangan' ? tunjangan : type === 'potongan' ? potongan : bonus
+    const updated = [...current]
+    updated[idx] = { ...updated[idx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
+    setter(updated)
+  }
+  const removeItem = (type: 'tunjangan' | 'potongan' | 'bonus', idx: number) => {
+    const setter = type === 'tunjangan' ? setTunjangan : type === 'potongan' ? setPotongan : setBonus
+    const current = type === 'tunjangan' ? tunjangan : type === 'potongan' ? potongan : bonus
+    setter(current.filter((_, i) => i !== idx))
+  }
+
+  // Sync ke state (untuk auto-calc di engine saat generate ulang)
+  useEffect(() => {
+    onUpdate('tanggalTerimaGaji', tanggalTerima)
+    onUpdate('gajiPokok', parseInt(gajiPokok) || 0)
+    onUpdate('tunjanganTetap', tunjangan)
+    onUpdate('tunjanganVariabel', bonus)
+    onUpdate('potongan', potongan)
+  }, [tanggalTerima, gajiPokok, tunjangan, bonus, potongan])
+
+  return (
+    <div className="w-72 bg-white border-r border-slate-200 overflow-y-auto p-3 shrink-0">
+      <h3 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1">
+        <FileText className="w-3 h-3" /> Form Slip Gaji
+      </h3>
+      <p className="text-[10px] text-slate-500 mb-3">
+        Isi sekali untuk semua bulan. Untuk variasi per bulan, edit langsung di editor.
+      </p>
+
+      {/* Tanggal Terima */}
+      <div className="mb-3">
+        <label className="text-[10px] font-medium text-slate-600 uppercase">Tanggal Terima Gaji</label>
+        <input
+          type="number"
+          value={tanggalTerima}
+          onChange={e => setTanggalTerima(e.target.value)}
+          min="1" max="31"
+          className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+        />
+      </div>
+
+      {/* Gaji Pokok */}
+      <div className="mb-3">
+        <label className="text-[10px] font-medium text-slate-600 uppercase">Gaji Pokok (Rp)</label>
+        <input
+          type="number"
+          value={gajiPokok}
+          onChange={e => setGajiPokok(e.target.value)}
+          className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+        />
+      </div>
+
+      {/* Tunjangan */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[10px] font-medium text-slate-600 uppercase">Tunjangan</label>
+          <button onClick={() => addItem('tunjangan')} className="text-[10px] text-cyan-600 hover:text-cyan-700">+ Tambah</button>
+        </div>
+        {tunjangan.map((item, idx) => (
+          <div key={idx} className="flex gap-1 mb-1">
+            <input
+              type="text"
+              value={item.label}
+              onChange={e => updateItem('tunjangan', idx, 'label', e.target.value)}
+              placeholder="Nama tunjangan"
+              className="flex-1 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="number"
+              value={item.amount || ''}
+              onChange={e => updateItem('tunjangan', idx, 'amount', e.target.value)}
+              placeholder="Nominal"
+              className="w-20 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <button onClick={() => removeItem('tunjangan', idx)} className="text-red-500 hover:text-red-700 text-[10px]">✕</button>
+          </div>
+        ))}
+        {tunjangan.length === 0 && <p className="text-[9px] text-slate-400 italic">Belum ada tunjangan</p>}
+      </div>
+
+      {/* Bonus */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[10px] font-medium text-slate-600 uppercase">Bonus</label>
+          <button onClick={() => addItem('bonus')} className="text-[10px] text-cyan-600 hover:text-cyan-700">+ Tambah</button>
+        </div>
+        {bonus.map((item, idx) => (
+          <div key={idx} className="flex gap-1 mb-1">
+            <input
+              type="text"
+              value={item.label}
+              onChange={e => updateItem('bonus', idx, 'label', e.target.value)}
+              placeholder="Nama bonus"
+              className="flex-1 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="number"
+              value={item.amount || ''}
+              onChange={e => updateItem('bonus', idx, 'amount', e.target.value)}
+              placeholder="Nominal"
+              className="w-20 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <button onClick={() => removeItem('bonus', idx)} className="text-red-500 hover:text-red-700 text-[10px]">✕</button>
+          </div>
+        ))}
+        {bonus.length === 0 && <p className="text-[9px] text-slate-400 italic">Belum ada bonus</p>}
+      </div>
+
+      {/* Potongan */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[10px] font-medium text-slate-600 uppercase">Potongan</label>
+          <button onClick={() => addItem('potongan')} className="text-[10px] text-cyan-600 hover:text-cyan-700">+ Tambah</button>
+        </div>
+        {potongan.map((item, idx) => (
+          <div key={idx} className="flex gap-1 mb-1">
+            <input
+              type="text"
+              value={item.label}
+              onChange={e => updateItem('potongan', idx, 'label', e.target.value)}
+              placeholder="Nama potongan"
+              className="flex-1 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="number"
+              value={item.amount || ''}
+              onChange={e => updateItem('potongan', idx, 'amount', e.target.value)}
+              placeholder="Nominal"
+              className="w-20 px-1.5 py-1 text-[10px] border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
+            />
+            <button onClick={() => removeItem('potongan', idx)} className="text-red-500 hover:text-red-700 text-[10px]">✕</button>
+          </div>
+        ))}
+        {potongan.length === 0 && <p className="text-[9px] text-slate-400 italic">Belum ada potongan</p>}
+      </div>
+
+      {/* Total Calculation */}
+      <div className="mt-4 p-2 bg-cyan-50 border border-cyan-200 rounded">
+        <p className="text-[10px] font-bold text-cyan-900 mb-1">Auto-Calculation</p>
+        <div className="space-y-0.5 text-[10px] text-slate-700">
+          <div className="flex justify-between"><span>Gaji Pokok:</span><span>{fmt(parseInt(gajiPokok) || 0)}</span></div>
+          <div className="flex justify-between"><span>+ Tunjangan:</span><span>{fmt(totalTunjangan)}</span></div>
+          <div className="flex justify-between"><span>+ Bonus:</span><span>{fmt(totalBonus)}</span></div>
+          <div className="flex justify-between"><span>- Potongan:</span><span>{fmt(totalPotongan)}</span></div>
+          <div className="border-t border-cyan-300 my-1"></div>
+          <div className="flex justify-between font-bold text-cyan-900"><span>Gaji Kotor:</span><span>{fmt(gajiKotor)}</span></div>
+          <div className="flex justify-between font-bold text-emerald-700 text-[11px]"><span>Gaji Bersih:</span><span>{fmt(gajiBersih)}</span></div>
+        </div>
+      </div>
+
+      <p className="text-[9px] text-slate-400 mt-2 italic">
+        Total dihitung otomatis. Untuk variasi per bulan, edit langsung di editor Tiptap.
+      </p>
     </div>
   )
 }

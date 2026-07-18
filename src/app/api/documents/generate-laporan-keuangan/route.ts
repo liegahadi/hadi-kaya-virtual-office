@@ -22,9 +22,43 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import fs from 'fs'
+import path from 'path'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120  // 2 menit untuk AI generate
+
+// Fallback: load config manual kalau ZAI.create() gagal (Vercel standalone build issue)
+async function createZAI() {
+  try {
+    return await ZAI.create()
+  } catch (err) {
+    // Coba baca config dari berbagai path
+    const configPaths = [
+      path.join(process.cwd(), '.z-ai-config'),
+      '/etc/.z-ai-config',
+      path.join(process.env.HOME || '/tmp', '.z-ai-config'),
+    ]
+    for (const filePath of configPaths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const configStr = fs.readFileSync(filePath, 'utf-8')
+          const config = JSON.parse(configStr)
+          if (config.baseUrl && config.apiKey) {
+            // ZAI constructor tidak exported, pakai workaround: write ke /tmp
+            const tmpPath = '/tmp/.z-ai-config'
+            fs.writeFileSync(tmpPath, configStr)
+            process.chdir('/tmp')
+            return await ZAI.create()
+          }
+        }
+      } catch (e) {
+        // continue to next path
+      }
+    }
+    throw err
+  }
+}
 
 interface LaporanRequest {
   jenisUsaha: string
@@ -210,8 +244,8 @@ INGAT:
 - LABA BERSIH harus match target (range atau per bulan)
 - Output: HANYA HTML, tanpa penjelasan, tanpa markdown`
 
-    // Call z-ai LLM
-    const zai = await ZAI.create()
+    // Call z-ai LLM (dengan fallback untuk Vercel standalone build)
+    const zai = await createZAI()
     const completion = await zai.chat.completions.create({
       messages: [
         { role: 'assistant', content: systemPrompt },
