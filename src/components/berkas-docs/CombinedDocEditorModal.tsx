@@ -229,6 +229,7 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
   })
 
   const [expandedBulan, setExpandedBulan] = useState<number>(0) // index bulan yang terbuka
+  const [wirausahaMode, setWirausahaMode] = useState<'formbox' | 'ai'>('formbox') // default: formbox manual
 
   // Helper: update slip per bulan
   const updateSlipBulan = (idx: number, field: string, val: any) => {
@@ -504,15 +505,34 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
           </div>
         </div>
 
-        {/* Template Picker View — auto-switch: karyawan → templates, wirausaha → AI generate */}
+        {/* Template Picker View — auto-switch: karyawan → templates, wirausaha → AI/Formbox */}
         {view === 'templates' && (
-          <div className="flex-1 overflow-hidden flex bg-slate-50">
-            {/* WIRAUSAHA: AI Generate Panel (no template picker, no SK Kerja) */}
+          <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+            {/* WIRAUSAHA: Toggle AI vs Formbox */}
             {state.applicant.jobType === JobType.ENTREPRENEUR ? (
-              <WirausahaAiPanel state={state} customerId={customerId} onDocCreated={(doc) => {
-                setCreatedDoc(doc)
-                setView('editor')
-              }} />
+              <>
+              <div className="flex gap-1 p-2 bg-white border-b shrink-0">
+                <button onClick={() => setWirausahaMode('formbox')}
+                  className={cn('flex-1 px-3 py-1.5 rounded text-xs font-medium', wirausahaMode === 'formbox' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                  📝 Formbox Manual
+                </button>
+                <button onClick={() => setWirausahaMode('ai')}
+                  className={cn('flex-1 px-3 py-1.5 rounded text-xs font-medium', wirausahaMode === 'ai' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                  🤖 AI Generate
+                </button>
+              </div>
+              {wirausahaMode === 'formbox' ? (
+                <WirausahaFormboxPanel state={state} customerId={customerId} onDocCreated={(doc) => {
+                  setCreatedDoc(doc)
+                  setView('editor')
+                }} />
+              ) : (
+                <WirausahaAiPanel state={state} customerId={customerId} onDocCreated={(doc) => {
+                  setCreatedDoc(doc)
+                  setView('editor')
+                }} />
+              )}
+              </>
             ) : (
             <>
             {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker */}
@@ -950,4 +970,243 @@ function WirausahaAiPanel({ state, customerId, onDocCreated }: {
       </div>
     </div>
   )
+}
+
+// =========================================================
+// WirausahaFormboxPanel — alternatif formbox untuk wirausaha
+// Form manual (seperti slip gaji karyawan) + template picker
+// Structur: 7 bulan × (5 pendapatan + 5 pengeluaran) + auto-calc laba bersih
+// =========================================================
+const LAPORAN_TEMPLATES = [
+  { id: '01', name: 'Formal Standard', category: 'Umum', description: 'Font Times New Roman, header hijau/merah/biru', filePath: '/templates/laporan-keuangan/laporan-01.docx' },
+  { id: '02', name: 'Modern Clean', category: 'Umum', description: 'Font Arial, accent biru', filePath: '/templates/laporan-keuangan/laporan-02.docx' },
+  { id: '03', name: 'Minimal UMKM', category: 'UMKM', description: 'Font Calibri, accent hijau/oranye', filePath: '/templates/laporan-keuangan/laporan-03.docx' },
+  { id: '04', name: 'Klasik Elegant', category: 'UMKM', description: 'Font Georgia, accent coklat', filePath: '/templates/laporan-keuangan/laporan-04.docx' },
+  { id: '05', name: 'Simple Formal', category: 'Umum', description: 'Font Tahoma, minimal no color', filePath: '/templates/laporan-keuangan/laporan-05.docx' },
+]
+
+function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
+  state: BerkasState
+  customerId?: string
+  onDocCreated: (doc: CreatedDoc) => void
+}) {
+  const a = state.applicant as any
+  const now = new Date()
+  const bulanList: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - 6 + i, 15)
+    bulanList.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+  }
+
+  const [lapBulanan, setLapBulanan] = useState(() => {
+    const existing = a.lapBulanan
+    if (existing && Array.isArray(existing) && existing.length === 7) return existing
+    return bulanList.map(bulan => ({
+      bulan,
+      pendapatan: [{ label: '', amount: 0 }] as Array<{ label: string; amount: number }>,
+      pengeluaran: [{ label: '', amount: 0 }] as Array<{ label: string; amount: number }>,
+    }))
+  })
+  const [expandedBulan, setExpandedBulan] = useState(0)
+  const [creating, setCreating] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<LaporanTemplateInfo | null>(null)
+
+  const fmt = (n: number) => 'Rp. ' + (n || 0).toLocaleString('id-ID') + ',-'
+
+  const calcTotal = (lap: typeof lapBulanan[0]) => {
+    const totalPendapatan = lap.pendapatan.reduce((s, p) => s + (p.amount || 0), 0)
+    const totalPengeluaran = lap.pengeluaran.reduce((s, p) => s + (p.amount || 0), 0)
+    const labaBersih = totalPendapatan - totalPengeluaran
+    return { totalPendapatan, totalPengeluaran, labaBersih }
+  }
+
+  const updateItem = (idx: number, type: 'pendapatan' | 'pengeluaran', itemIdx: number, key: 'label' | 'amount', val: any) => {
+    setLapBulanan(prev => {
+      const updated = [...prev]
+      const items = [...updated[idx][type]]
+      items[itemIdx] = { ...items[itemIdx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
+      updated[idx] = { ...updated[idx], [type]: items }
+      return updated
+    })
+  }
+  const addItem = (idx: number, type: 'pendapatan' | 'pengeluaran') => {
+    setLapBulanan(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], [type]: [...updated[idx][type], { label: '', amount: 0 }] }
+      return updated
+    })
+  }
+  const removeItem = (idx: number, type: 'pendapatan' | 'pengeluaran', itemIdx: number) => {
+    setLapBulanan(prev => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], [type]: updated[idx][type].filter((_, i) => i !== itemIdx) }
+      return updated
+    })
+  }
+  const applyToAll = () => {
+    setLapBulanan(prev => {
+      const first = prev[0]
+      return prev.map(lap => ({ ...first, bulan: lap.bulan }))
+    })
+    toast.success('Data bulan pertama diterapkan ke semua bulan!')
+  }
+
+  // Sync ke state
+  useEffect(() => {
+    if (a !== undefined) {
+      a.lapBulanan = lapBulanan
+    }
+  }, [lapBulanan])
+
+  const handleCreateDoc = async (template: LaporanTemplateInfo) => {
+    setCreating(true)
+    setSelectedTemplate(template)
+    try {
+      // Build state dengan lapBulanan data
+      const stateWithLap = { ...state, applicant: { ...state.applicant, lapBulanan } }
+      const res = await fetch('/api/documents/google-docs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templatePath: template.filePath,
+          state: stateWithLap,
+          customerId,
+        }),
+      })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error || `HTTP ${res.status}`)
+      onDocCreated({
+        docId: d.docId,
+        fileName: d.fileName,
+        editUrl: d.editUrl,
+        embedUrl: d.embedUrl,
+        downloadUrl: d.downloadUrl,
+      })
+      toast.success(`Google Doc berhasil dibuat dari template "${template.name}"!`)
+    } catch (err) {
+      toast.error('Gagal buat Google Doc: ' + (err instanceof Error ? err.message : 'unknown'))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-hidden flex bg-slate-50">
+      {/* LEFT: Form per bulan */}
+      <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
+        <div className="p-3 border-b bg-violet-50 sticky top-0 z-10">
+          <h3 className="text-sm font-bold text-violet-800 flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Form Laporan Keuangan (7 Bulan)
+          </h3>
+          <p className="text-[10px] text-violet-700 mt-0.5">Isi pendapatan & pengeluaran per bulan. Auto-calc laba bersih.</p>
+        </div>
+        <div className="p-2 space-y-2">
+          {lapBulanan.map((lap, idx) => {
+            const total = calcTotal(lap)
+            const isExpanded = expandedBulan === idx
+            return (
+              <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden">
+                <button onClick={() => setExpandedBulan(isExpanded ? -1 : idx)}
+                  className={cn('w-full flex items-center justify-between p-2 text-left transition-colors',
+                    isExpanded ? 'bg-violet-100' : 'bg-slate-50 hover:bg-slate-100')}>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center',
+                      isExpanded ? 'bg-violet-600 text-white' : 'bg-slate-300 text-slate-600')}>{idx + 1}</span>
+                    <span className="text-xs font-medium text-slate-800">{lap.bulan}</span>
+                  </div>
+                  <span className={cn('text-[10px] font-bold', total.labaBersih >= 0 ? 'text-emerald-700' : 'text-red-700')}>{fmt(total.labaBersih)}</span>
+                </button>
+                {isExpanded && (
+                  <div className="p-2 space-y-2 bg-white">
+                    {idx === 0 && (
+                      <button onClick={applyToAll} className="w-full py-1.5 px-2 bg-blue-50 border border-blue-300 rounded text-[10px] font-medium text-blue-700 hover:bg-blue-100 flex items-center justify-center gap-1">
+                        <Plus className="w-3 h-3" /> Apply ke Semua Bulan
+                      </button>
+                    )}
+                    {/* Pendapatan */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[9px] font-bold text-emerald-700">PENDAPATAN</span>
+                        <button onClick={() => addItem(idx, 'pendapatan')} className="text-[9px] text-emerald-600">+ Tambah</button>
+                      </div>
+                      {lap.pendapatan.map((p, i) => (
+                        <div key={i} className="flex gap-1 mb-0.5">
+                          <input value={p.label} onChange={e => updateItem(idx, 'pendapatan', i, 'label', e.target.value)}
+                            placeholder="Sumber pendapatan" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <input type="number" value={p.amount || ''} onChange={e => updateItem(idx, 'pendapatan', i, 'amount', e.target.value)}
+                            placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <button onClick={() => removeItem(idx, 'pendapatan', i)} className="text-red-500 text-[10px]">✕</button>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-[9px] text-emerald-700 font-bold mt-0.5">
+                        <span>Total Pendapatan:</span><span>{fmt(total.totalPendapatan)}</span>
+                      </div>
+                    </div>
+                    {/* Pengeluaran */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[9px] font-bold text-red-700">PENGELUARAN</span>
+                        <button onClick={() => addItem(idx, 'pengeluaran')} className="text-[9px] text-red-600">+ Tambah</button>
+                      </div>
+                      {lap.pengeluaran.map((p, i) => (
+                        <div key={i} className="flex gap-1 mb-0.5">
+                          <input value={p.label} onChange={e => updateItem(idx, 'pengeluaran', i, 'label', e.target.value)}
+                            placeholder="Jenis pengeluaran" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-red-500" />
+                          <input type="number" value={p.amount || ''} onChange={e => updateItem(idx, 'pengeluaran', i, 'amount', e.target.value)}
+                            placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-red-500" />
+                          <button onClick={() => removeItem(idx, 'pengeluaran', i)} className="text-red-500 text-[10px]">✕</button>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-[9px] text-red-700 font-bold mt-0.5">
+                        <span>Total Pengeluaran:</span><span>{fmt(total.totalPengeluaran)}</span>
+                      </div>
+                    </div>
+                    {/* Laba Bersih */}
+                    <div className={cn('rounded p-1.5 flex justify-between text-[10px] font-bold',
+                      total.labaBersih >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800')}>
+                      <span>LABA BERSIH:</span><span>{fmt(total.labaBersih)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* RIGHT: Template Picker */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="p-4 border-b bg-white">
+          <h3 className="text-sm font-bold text-slate-800">Pilih Template Laporan Keuangan</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">{LAPORAN_TEMPLATES.length} template tersedia. Klik untuk buat Google Doc.</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {LAPORAN_TEMPLATES.map(template => (
+            <button key={template.id} onClick={() => handleCreateDoc(template)} disabled={creating}
+              className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-violet-400 hover:bg-violet-50 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-slate-800 group-hover:text-violet-600">{template.name}</h4>
+                  <p className="text-[10px] text-slate-500">{template.description}</p>
+                </div>
+                {creating && selectedTemplate?.id === template.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+                ) : (
+                  <FileText className="w-4 h-4 text-slate-400 group-hover:text-violet-500" />
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface LaporanTemplateInfo {
+  id: string
+  name: string
+  category: string
+  description: string
+  filePath: string
 }

@@ -15,36 +15,36 @@ const TEMPLATES_DIR = path.join(process.cwd(), 'public', 'templates', 'combined'
 
 // 30 template styles
 const STYLES = [
-  { id: '01', name: 'Standard Formal', category: 'Umum', accent: '000000', font: 'Times New Roman' },
-  { id: '02', name: 'Modern Minimalis', category: 'Umum', accent: '2563eb', font: 'Arial' },
-  { id: '03', name: 'Sederhana', category: 'Warung/UMKM', accent: '000000', font: 'Calibri' },
-  { id: '04', name: 'Kop Boxed', category: 'Warung/UMKM', accent: '000000', font: 'Tahoma' },
-  { id: '05', name: 'Accent Hijau', category: 'Kafe/Restoran', accent: '16a34a', font: 'Georgia' },
-  { id: '06', name: 'Accent Oranye', category: 'Jasa Service', accent: 'ea580c', font: 'Verdana' },
-  { id: '07', name: 'Formal Double Border', category: 'Perusahaan', accent: '000000', font: 'Cambria' },
-  { id: '08', name: 'Accent Ungu', category: 'Jasa Beauty', accent: '7c3aed', font: 'Arial' },
-  { id: '09', name: 'Simple Underline', category: 'Personal', accent: '000000', font: 'Times New Roman' },
+  { id: '01', name: 'Standard Formal', category: 'Umum', accent: '000000', font: 'Times New Roman', titleSize: 28, bodySize: 22, headerBg: 'E8E8E8' },
+  { id: '02', name: 'Modern Minimalis', category: 'Umum', accent: '2563eb', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'DBEAFE' },
+  { id: '03', name: 'Sederhana', category: 'Warung/UMKM', accent: '000000', font: 'Calibri', titleSize: 26, bodySize: 21, headerBg: 'F3F4F6' },
+  { id: '04', name: 'Kop Boxed', category: 'Warung/UMKM', accent: '000000', font: 'Tahoma', titleSize: 26, bodySize: 21, headerBg: 'F3F4F6' },
+  { id: '05', name: 'Accent Hijau', category: 'Kafe/Restoran', accent: '16a34a', font: 'Georgia', titleSize: 28, bodySize: 22, headerBg: 'DCFCE7' },
+  { id: '06', name: 'Accent Oranye', category: 'Jasa Service', accent: 'ea580c', font: 'Verdana', titleSize: 24, bodySize: 20, headerBg: 'FED7AA' },
+  { id: '07', name: 'Formal Double Border', category: 'Perusahaan', accent: '000000', font: 'Cambria', titleSize: 28, bodySize: 22, headerBg: 'E8E8E8' },
+  { id: '08', name: 'Accent Ungu', category: 'Jasa Beauty', accent: '7c3aed', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'E9D5FF' },
+  { id: '09', name: 'Simple Underline', category: 'Personal', accent: '000000', font: 'Times New Roman', titleSize: 28, bodySize: 22, headerBg: 'F3F4F6' },
   { id: '10', name: 'Accent Coklat', category: 'Toko Bangunan', accent: '92400e', font: 'Georgia' },
-  { id: '11', name: 'Gradient Oranye-Kuning', category: 'Warung Makan', accent: 'ea580c', font: 'Calibri' },
-  { id: '12', name: 'Klasik Italic', category: 'Hotel', accent: '92400e', font: 'Georgia' },
-  { id: '13', name: 'Accent Merah', category: 'Restoran', accent: 'dc2626', font: 'Arial' },
+  { id: '11', name: 'Gradient Oranye-Kuning', category: 'Warung Makan', accent: 'ea580c', font: 'Calibri', titleSize: 26, bodySize: 21, headerBg: 'FEF3C7' },
+  { id: '12', name: 'Klasik Italic', category: 'Hotel', accent: '92400e', font: 'Georgia', titleSize: 28, bodySize: 22, headerBg: 'F3F4F6' },
+  { id: '13', name: 'Accent Merah', category: 'Restoran', accent: 'dc2626', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'FEE2E2' },
   { id: '14', name: 'Minimal No Color', category: 'Jasa Service', accent: '000000', font: 'Tahoma' },
-  { id: '15', name: 'Accent Navy', category: 'Perbankan', accent: '1e3a8a', font: 'Calibri' },
+  { id: '15', name: 'Accent Navy', category: 'Perbankan', accent: '1e3a8a', font: 'Calibri', titleSize: 26, bodySize: 21, headerBg: 'DBEAFE' },
   { id: '16', name: 'Accent Cyan', category: 'Jasa Service', accent: '0891b2', font: 'Arial' },
   { id: '17', name: 'Accent Pink', category: 'Jasa Beauty', accent: 'db2777', font: 'Georgia' },
-  { id: '18', name: 'Accent Dark Gold', category: 'Konstruksi', accent: 'fbbf24', font: 'Cambria' },
+  { id: '18', name: 'Accent Dark Gold', category: 'Konstruksi', accent: 'fbbf24', font: 'Cambria', titleSize: 28, bodySize: 22, headerBg: 'FEF3C7' },
   { id: '19', name: 'Accent Forest Green', category: 'Pertanian', accent: '166534', font: 'Times New Roman' },
-  { id: '20', name: 'Accent Burgundy', category: 'Fashion', accent: '881337', font: 'Georgia' },
+  { id: '20', name: 'Accent Burgundy', category: 'Fashion', accent: '881337', font: 'Georgia', titleSize: 28, bodySize: 22, headerBg: 'FCE7F3' },
   { id: '21', name: 'Warung Sembako', category: 'Warung/UMKM', accent: '000000', font: 'Times New Roman' },
   { id: '22', name: 'Toko Kelontong', category: 'Warung/UMKM', accent: '92400e', font: 'Calibri' },
   { id: '23', name: 'Kafe Coffee Shop', category: 'Kafe/Restoran', accent: '16a34a', font: 'Georgia' },
-  { id: '24', name: 'Barbershop Salon', category: 'Jasa', accent: '1e293b', font: 'Arial' },
-  { id: '25', name: 'Laundry', category: 'Jasa', accent: '0ea5e9', font: 'Calibri' },
-  { id: '26', name: 'Online Shop', category: 'Online', accent: '8b5cf6', font: 'Arial' },
-  { id: '27', name: 'Pabrik Manufaktur', category: 'Perusahaan', accent: '374151', font: 'Tahoma' },
-  { id: '28', name: 'Minimarket Franchise', category: 'Retail', accent: 'dc2626', font: 'Arial' },
-  { id: '29', name: 'Startup Tech', category: 'Tech', accent: '8b5cf6', font: 'Segoe UI' },
-  { id: '30', name: 'CV Profesional', category: 'Perusahaan', accent: '1e3a8a', font: 'Cambria' },
+  { id: '24', name: 'Barbershop Salon', category: 'Jasa', accent: '1e293b', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'E2E8F0' },
+  { id: '25', name: 'Laundry', category: 'Jasa', accent: '0ea5e9', font: 'Calibri', titleSize: 26, bodySize: 21, headerBg: 'CFFAFE' },
+  { id: '26', name: 'Online Shop', category: 'Online', accent: '8b5cf6', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'E9D5FF' },
+  { id: '27', name: 'Pabrik Manufaktur', category: 'Perusahaan', accent: '374151', font: 'Tahoma', titleSize: 24, bodySize: 20, headerBg: 'E2E8F0' },
+  { id: '28', name: 'Minimarket Franchise', category: 'Retail', accent: 'dc2626', font: 'Arial', titleSize: 26, bodySize: 21, headerBg: 'FEE2E2' },
+  { id: '29', name: 'Startup Tech', category: 'Tech', accent: '8b5cf6', font: 'Segoe UI', titleSize: 26, bodySize: 21, headerBg: 'E9D5FF' },
+  { id: '30', name: 'CV Profesional', category: 'Perusahaan', accent: '1e3a8a', font: 'Cambria', titleSize: 28, bodySize: 22, headerBg: 'DBEAFE' },
 ]
 
 // Border style untuk borderless table
@@ -133,23 +133,23 @@ function slipRow(label: string, pendapatan: string, potongan: string, bold = fal
 }
 
 // Build SK Kerja section
-function buildSkKerja(): (Paragraph | Table)[] {
+function buildSkKerja(style: any): (Paragraph | Table)[] {
   return [
     // Title
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 600, after: 100 },
-      children: [new TextRun({ text: 'SURAT KETERANGAN KERJA', bold: true, size: 28, font: 'Times New Roman', underline: {} })],
+      children: [new TextRun({ text: 'SURAT KETERANGAN KERJA', bold: true, size: style.titleSize, font: style.font, underline: {} })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 600 },
-      children: [new TextRun({ text: 'No: .../SK/{bulan}/{tahun}', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'No: .../SK/{bulan}/{tahun}', size: style.bodySize, font: style.font })],
     }),
     // Intro
     new Paragraph({
       spacing: { after: 200 },
-      children: [new TextRun({ text: 'Yang bertanda tangan di bawah ini:', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Yang bertanda tangan di bawah ini:', size: style.bodySize, font: style.font })],
     }),
     // Identity table 1 (borderless) — width 9800 twips total
     new Table({
@@ -167,7 +167,7 @@ function buildSkKerja(): (Paragraph | Table)[] {
     // Intro 2
     new Paragraph({
       spacing: { after: 200 },
-      children: [new TextRun({ text: 'Dengan ini menerangkan bahwa:', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Dengan ini menerangkan bahwa:', size: style.bodySize, font: style.font })],
     }),
     // Identity table 2 (borderless) — width 9800 twips
     new Table({
@@ -188,25 +188,25 @@ function buildSkKerja(): (Paragraph | Table)[] {
     new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
       spacing: { after: 200 },
-      children: [new TextRun({ text: 'Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Benar bahwa yang bersangkutan adalah karyawan/pekerja tetap di perusahaan kami dan masih aktif bekerja sampai dengan surat ini diterbitkan. Surat keterangan ini dibuat untuk keperluan pengajuan Kredit Pemilikan Rumah (KPR).', size: style.bodySize, font: style.font })],
     }),
     new Paragraph({
       spacing: { after: 800 },
-      children: [new TextRun({ text: 'Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.', size: style.bodySize, font: style.font })],
     }),
     // Signature (right-aligned)
     new Paragraph({
       alignment: AlignmentType.RIGHT,
-      children: [new TextRun({ text: '{kota}, {tanggal}', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: '{kota}, {tanggal}', size: style.bodySize, font: style.font })],
     }),
     new Paragraph({
       alignment: AlignmentType.RIGHT,
       spacing: { after: 1200 },
-      children: [new TextRun({ text: 'Pimpinan {perusahaan},', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Pimpinan {perusahaan},', size: style.bodySize, font: style.font })],
     }),
     new Paragraph({
       alignment: AlignmentType.RIGHT,
-      children: [new TextRun({ text: '( ............................. )', bold: true, underline: {}, size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: '( ............................. )', bold: true, underline: {}, size: style.bodySize, font: style.font })],
     }),
   ]
 }
@@ -214,8 +214,8 @@ function buildSkKerja(): (Paragraph | Table)[] {
 // Build Slip Gaji section (1 bulan) — HARD-CODED, no loop markers
 // Template akan punya 7 hard-coded slip sections (bukan {#slips} loop)
 // template-filler akan replace placeholders per-section menggunakan index
-function buildSlipGaji(upahLabel: string = 'Gaji', slipIndex: number = 0): (Paragraph | Table)[] {
-  const headerBg = 'E8E8E8'
+function buildSlipGaji(style: any, upahLabel: string, slipIndex: number = 0): (Paragraph | Table)[] {
+  const headerBg = style.headerBg
   const totalBg = 'F5F5F5'
   const bersihBg = 'E6F3FF'
   // Prefix untuk slip index: {1_periode}, {2_periode}, dll
@@ -246,12 +246,12 @@ function buildSlipGaji(upahLabel: string = 'Gaji', slipIndex: number = 0): (Para
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 400, after: 100 },
-      children: [new TextRun({ text: `SLIP ${upahLabel.toUpperCase()}`, bold: true, size: 26, font: 'Times New Roman', underline: {} })],
+      children: [new TextRun({ text: `SLIP ${upahLabel.toUpperCase()}`, bold: true, size: style.titleSize, font: style.font, underline: {} })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
-      children: [new TextRun({ text: `Periode: ${periodeKey}`, size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: `Periode: ${periodeKey}`, size: style.bodySize, font: style.font })],
     }),
     // Identity (borderless table)
     new Table({
@@ -280,17 +280,17 @@ function buildSlipGaji(upahLabel: string = 'Gaji', slipIndex: number = 0): (Para
             new TableCell({
               width: { size: 5400, type: WidthType.DXA },
               shading: { fill: headerBg },
-              children: [new Paragraph({ children: [new TextRun({ text: 'Keterangan', bold: true, size: 22, font: 'Times New Roman' })] })],
+              children: [new Paragraph({ children: [new TextRun({ text: 'Keterangan', bold: true, size: style.bodySize, font: style.font })] })],
             }),
             new TableCell({
-              width: { size: 2200, type: WidthType.DXA },
+              width: { size: style.bodySize00, type: WidthType.DXA },
               shading: { fill: headerBg },
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Pendapatan', bold: true, size: 22, font: 'Times New Roman' })] })],
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Pendapatan', bold: true, size: style.bodySize, font: style.font })] })],
             }),
             new TableCell({
-              width: { size: 2200, type: WidthType.DXA },
+              width: { size: style.bodySize00, type: WidthType.DXA },
               shading: { fill: headerBg },
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Potongan', bold: true, size: 22, font: 'Times New Roman' })] })],
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Potongan', bold: true, size: style.bodySize, font: style.font })] })],
             }),
           ],
         }),
@@ -321,19 +321,19 @@ function buildSlipGaji(upahLabel: string = 'Gaji', slipIndex: number = 0): (Para
               width: { size: 4900, type: WidthType.DXA },
               borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
               children: [
-                new Paragraph({ children: [new TextRun({ text: 'Diterima oleh,', size: 22, font: 'Times New Roman' })] }),
+                new Paragraph({ children: [new TextRun({ text: 'Diterima oleh,', size: style.bodySize, font: style.font })] }),
                 new Paragraph({ spacing: { before: 1000 }, children: [] }),
-                new Paragraph({ children: [new TextRun({ text: '( {nama} )', bold: true, underline: {}, size: 22, font: 'Times New Roman' })] }),
+                new Paragraph({ children: [new TextRun({ text: '( {nama} )', bold: true, underline: {}, size: style.bodySize, font: style.font })] }),
               ],
             }),
             new TableCell({
               width: { size: 4900, type: WidthType.DXA },
               borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
               children: [
-                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `{kota}, ${tanggalTerimaKey}`, size: 22, font: 'Times New Roman' })] }),
-                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Bagian Keuangan,', size: 22, font: 'Times New Roman' })] }),
+                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `{kota}, ${tanggalTerimaKey}`, size: style.bodySize, font: style.font })] }),
+                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Bagian Keuangan,', size: style.bodySize, font: style.font })] }),
                 new Paragraph({ spacing: { before: 1000 }, children: [] }),
-                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '( ............................. )', bold: true, underline: {}, size: 22, font: 'Times New Roman' })] }),
+                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '( ............................. )', bold: true, underline: {}, size: style.bodySize, font: style.font })] }),
               ],
             }),
           ],
@@ -348,9 +348,9 @@ async function generateTemplate(style: typeof STYLES[0]): Promise<void> {
   const upahLabel = style.category.includes('Warung') || style.category.includes('UMKM') ? 'Upah' : 'Gaji'
 
   const sections = [
-    ...buildSkKerja(),
+    ...buildSkKerja(style),
     // 7 hard-coded slip sections dengan index suffix (1-7)
-    ...Array.from({ length: 7 }, (_, i) => buildSlipGaji(upahLabel, i)).flat(),
+    ...Array.from({ length: 7 }, (_, i) => buildSlipGaji(style, upahLabel, i)).flat(),
   ]
 
   const doc = new Document({

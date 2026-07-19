@@ -83,22 +83,22 @@ export function buildSlipGajiData(state: any): any[] {
       // Tunjangan items (up to 5, fill with "-" if empty)
       for (let n = 1; n <= 5; n++) {
         const item = (slip.tunjangan || [])[n - 1]
-        data[`tunjangan_${slipNum}_${n}_label`] = item?.label || '-'
-        data[`tunjangan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+        data[`tunjangan_${slipNum}_${n}_label`] = item?.label || ''
+        data[`tunjangan_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
       }
 
       // Bonus items (up to 5)
       for (let n = 1; n <= 5; n++) {
         const item = (slip.bonus || [])[n - 1]
-        data[`bonus_${slipNum}_${n}_label`] = item?.label || '-'
-        data[`bonus_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+        data[`bonus_${slipNum}_${n}_label`] = item?.label || ''
+        data[`bonus_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
       }
 
       // Potongan items (up to 5)
       for (let n = 1; n <= 5; n++) {
         const item = (slip.potongan || [])[n - 1]
-        data[`potongan_${slipNum}_${n}_label`] = item?.label || '-'
-        data[`potongan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+        data[`potongan_${slipNum}_${n}_label`] = item?.label || ''
+        data[`potongan_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
       }
 
       return data
@@ -133,20 +133,20 @@ export function buildSlipGajiData(state: any): any[] {
     // Tunjangan (up to 5)
     for (let n = 1; n <= 5; n++) {
       const item = tunjanganTetap[n - 1]
-      data[`tunjangan_${slipNum}_${n}_label`] = item?.label || '-'
-      data[`tunjangan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      data[`tunjangan_${slipNum}_${n}_label`] = item?.label || ''
+      data[`tunjangan_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
     }
     // Bonus (up to 5)
     for (let n = 1; n <= 5; n++) {
       const item = tunjanganVariabel[n - 1]
-      data[`bonus_${slipNum}_${n}_label`] = item?.label || '-'
-      data[`bonus_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      data[`bonus_${slipNum}_${n}_label`] = item?.label || ''
+      data[`bonus_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
     }
     // Potongan (up to 5)
     for (let n = 1; n <= 5; n++) {
       const item = potongan[n - 1]
-      data[`potongan_${slipNum}_${n}_label`] = item?.label || '-'
-      data[`potongan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      data[`potongan_${slipNum}_${n}_label`] = item?.label || ''
+      data[`potongan_${slipNum}_${n}_amount`] = (item?.amount || item?.amount === 0) ? formatRupiah(item.amount) : ''
     }
     slips.push(data)
   }
