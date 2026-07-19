@@ -188,10 +188,9 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
     return matchesSearch && matchesCategory
   })
 
-  if (!open) return null
-
   // === SLIP GAJI PER BULAN (7 set) ===
   // State: 7 bulan, masing-masing dengan gaji pokok, tunjangan, potongan, bonus
+  // IMPORTANT: Hooks harus dipanggil SEBELUM early return (React rules of hooks)
   const a = state.applicant as any
   const now = new Date()
   const bulanList: string[] = []
@@ -321,6 +320,9 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
       onUpdate('combinedDocId' as keyof ApplicantData, createdDoc.docId as any)
     }
   }
+
+  // Early return AFTER all hooks (React rules of hooks)
+  if (!open) return null
 
   // Show configuration warning if Google OAuth not set up yet
   if (googleStatus === 'oauth-not-configured') {
