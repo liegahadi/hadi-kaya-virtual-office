@@ -44,7 +44,8 @@ export function buildSkKerjaData(state: any): Record<string, string> {
 }
 
 // Build 7 slip gaji data (each slip is one period)
-// Gunakan slipBulanan data (per-bulan form) kalau ada, kalau ga ada pakai global
+// Generate INDEXED placeholders: {periode_1}, {periode_2}, ... {periode_7}
+// Template has 7 hard-coded slip sections with {periode_N} placeholders
 export function buildSlipGajiData(state: any): any[] {
   const a = state.applicant
   const now = new Date()
@@ -68,39 +69,43 @@ export function buildSlipGajiData(state: any): any[] {
         periodeDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), slip.tanggalTerima || 25)
       }
 
-      return {
-        periode: periodeDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
-        tanggal_terima: formatDateID(periodeDate),
-        gaji_pokok: formatRupiah(slip.gajiPokok || 0),
-        total_tunjangan_tetap: formatRupiah(totalTunjangan),
-        total_tunjangan_variabel: formatRupiah(totalBonus),
-        total_potongan: formatRupiah(totalPotongan),
-        gaji_kotor: formatRupiah(gajiKotor),
-        gaji_bersih: formatRupiah(gajiBersih),
-        // Items — kalau kosong, template-filler akan handle (skip atau "-")
-        tunjangan_tetap: (slip.tunjangan || []).map((t: any) => ({
-          label: t.label || '-',
-          amount: t.amount ? formatRupiah(t.amount) : '-',
-        })),
-        tunjangan_variabel: (slip.bonus || []).map((b: any) => ({
-          label: b.label || '-',
-          amount: b.amount ? formatRupiah(b.amount) : '-',
-        })),
-        potongan: (slip.potongan || []).map((p: any) => ({
-          label: p.label || '-',
-          amount: p.amount ? formatRupiah(p.amount) : '-',
-        })),
-        nama: a.fullName || '',
-        nik: a.ktpNumber || '',
-        jabatan: a.jobTitle || '',
-        perusahaan: a.companyName || '',
-        alamat_perusahaan: a.companyAddress || '',
-        kota: 'Pangkalpinang',
+      // Build indexed placeholders for this slip (idx+1)
+      const slipNum = idx + 1
+      const data: Record<string, string> = {
+        [`periode_${slipNum}`]: periodeDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+        [`gaji_pokok_${slipNum}`]: formatRupiah(slip.gajiPokok || 0),
+        [`gaji_kotor_${slipNum}`]: formatRupiah(gajiKotor),
+        [`total_potongan_${slipNum}`]: formatRupiah(totalPotongan),
+        [`gaji_bersih_${slipNum}`]: formatRupiah(gajiBersih),
+        [`tanggal_terima_${slipNum}`]: formatDateID(periodeDate),
       }
+
+      // Tunjangan items (up to 5, fill with "-" if empty)
+      for (let n = 1; n <= 5; n++) {
+        const item = (slip.tunjangan || [])[n - 1]
+        data[`tunjangan_${slipNum}_${n}_label`] = item?.label || '-'
+        data[`tunjangan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      }
+
+      // Bonus items (up to 5)
+      for (let n = 1; n <= 5; n++) {
+        const item = (slip.bonus || [])[n - 1]
+        data[`bonus_${slipNum}_${n}_label`] = item?.label || '-'
+        data[`bonus_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      }
+
+      // Potongan items (up to 5)
+      for (let n = 1; n <= 5; n++) {
+        const item = (slip.potongan || [])[n - 1]
+        data[`potongan_${slipNum}_${n}_label`] = item?.label || '-'
+        data[`potongan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+      }
+
+      return data
     })
   }
 
-  // Fallback: pakai data global (lama)
+  // Fallback: pakai data global (lama) — generate indexed placeholders
   const gajiPokok = a.gajiPokok || a.monthlyIncome || 0
   const tunjanganTetap: SlipItem[] = a.tunjanganTetap || []
   const tunjanganVariabel: SlipItem[] = a.tunjanganVariabel || []
@@ -116,25 +121,34 @@ export function buildSlipGajiData(state: any): any[] {
   const slips: any[] = []
   for (let i = 6; i >= 0; i--) {
     const slipDate = new Date(now.getFullYear(), now.getMonth() - 6 + i, tanggalTerima)
-    slips.push({
-      periode: slipDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
-      tanggal_terima: formatDateID(slipDate),
-      gaji_pokok: formatRupiah(gajiPokok),
-      total_tunjangan_tetap: formatRupiah(totalTunjanganTetap),
-      total_tunjangan_variabel: formatRupiah(totalTunjanganVariabel),
-      total_potongan: formatRupiah(totalPotongan),
-      gaji_kotor: formatRupiah(gajiKotor),
-      gaji_bersih: formatRupiah(gajiBersih),
-      tunjangan_tetap: tunjanganTetap.map(t => ({ label: t.label, amount: formatRupiah(t.amount) })),
-      tunjangan_variabel: tunjanganVariabel.map(t => ({ label: t.label, amount: formatRupiah(t.amount) })),
-      potongan: potongan.map(p => ({ label: p.label, amount: formatRupiah(p.amount) })),
-      nama: a.fullName || '',
-      nik: a.ktpNumber || '',
-      jabatan: a.jobTitle || '',
-      perusahaan: a.companyName || '',
-      alamat_perusahaan: a.companyAddress || '',
-      kota: 'Pangkalpinang',
-    })
+    const slipNum = 7 - i // 1 to 7
+    const data: Record<string, string> = {
+      [`periode_${slipNum}`]: slipDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+      [`gaji_pokok_${slipNum}`]: formatRupiah(gajiPokok),
+      [`gaji_kotor_${slipNum}`]: formatRupiah(gajiKotor),
+      [`total_potongan_${slipNum}`]: formatRupiah(totalPotongan),
+      [`gaji_bersih_${slipNum}`]: formatRupiah(gajiBersih),
+      [`tanggal_terima_${slipNum}`]: formatDateID(slipDate),
+    }
+    // Tunjangan (up to 5)
+    for (let n = 1; n <= 5; n++) {
+      const item = tunjanganTetap[n - 1]
+      data[`tunjangan_${slipNum}_${n}_label`] = item?.label || '-'
+      data[`tunjangan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+    }
+    // Bonus (up to 5)
+    for (let n = 1; n <= 5; n++) {
+      const item = tunjanganVariabel[n - 1]
+      data[`bonus_${slipNum}_${n}_label`] = item?.label || '-'
+      data[`bonus_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+    }
+    // Potongan (up to 5)
+    for (let n = 1; n <= 5; n++) {
+      const item = potongan[n - 1]
+      data[`potongan_${slipNum}_${n}_label`] = item?.label || '-'
+      data[`potongan_${slipNum}_${n}_amount`] = item?.amount ? formatRupiah(item.amount) : '-'
+    }
+    slips.push(data)
   }
   return slips
 }
@@ -185,44 +199,36 @@ export async function fillGoogleDocPlaceholders(docId: string, state: any): Prom
     }
   }
 
-  // Step 2: Find all simple {placeholders} (no loop syntax)
+  // Step 2: Find all {placeholders} and replace
   const skData = buildSkKerjaData(state)
   const slips = buildSlipGajiData(state)
 
-  // Build replacement requests for simple placeholders
+  // Build replacement requests — SK data + all slip data (indexed)
   const replacements: any[] = []
 
-  // Simple SK placeholders
-  // IMPORTANT: Google Docs API uses "replaceAllText" (not "replaceText")
+  // Simple SK placeholders (shared across all sections)
   for (const [key, value] of Object.entries(skData)) {
     replacements.push({
       replaceAllText: {
         replaceText: String(value),
-        containsText: {
-          text: `{${key}}`,
-          matchCase: false,
-        },
+        containsText: { text: `{${key}}`, matchCase: false },
       },
     })
   }
 
-  // For slip placeholders, we use the FIRST slip's data to replace all
-  // (since each slip has the same placeholders, and we've already generated
-  // 7 copies of the slip section in the template via docxtemplater loop)
-  // Wait — we uploaded the .docx template which has {#slips}...{/slips} markers
-  // We need to expand those first BEFORE replacing individual fields
-  // Strategy:
-  //   1. Find {#slips} and {/slips} markers
-  //   2. Extract the content between them
-  //   3. For each of 7 slips, duplicate the content (with slip-specific replacements)
-  //   4. Replace the {#slips}...{/slips} block with the duplicated content
-  //   5. Then replace all remaining {placeholders}
+  // Indexed slip placeholders: {periode_1}, {periode_2}, ... {tunjangan_1_1_label}, dll
+  for (const slip of slips) {
+    for (const [key, value] of Object.entries(slip)) {
+      replacements.push({
+        replaceAllText: {
+          replaceText: String(value),
+          containsText: { text: `{${key}}`, matchCase: false },
+        },
+      })
+    }
+  }
 
-  // First, expand the {#slips}...{/slips} loop
-  await expandSlipsLoop(docs, docId, allText, slips)
-
-  // Then replace all simple placeholders
-  // (Re-fetch the doc after loop expansion to get fresh indices)
+  // Execute all replacements
   await docs.documents.batchUpdate({
     documentId: docId,
     requestBody: { requests: replacements },

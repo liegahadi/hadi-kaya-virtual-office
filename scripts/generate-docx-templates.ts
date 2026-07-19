@@ -211,19 +211,37 @@ function buildSkKerja(): (Paragraph | Table)[] {
   ]
 }
 
-// Build Slip Gaji section (1 template, akan di-loop 7x oleh template-filler)
-// Pakai placeholder {#slips}...{/slips} untuk loop
-// Pakai {#tunjangan_tetap}...{label}...{amount}...{/tunjangan_tetap} untuk inline loop
-function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
+// Build Slip Gaji section (1 bulan) — HARD-CODED, no loop markers
+// Template akan punya 7 hard-coded slip sections (bukan {#slips} loop)
+// template-filler akan replace placeholders per-section menggunakan index
+function buildSlipGaji(upahLabel: string = 'Gaji', slipIndex: number = 0): (Paragraph | Table)[] {
   const headerBg = 'E8E8E8'
   const totalBg = 'F5F5F5'
   const bersihBg = 'E6F3FF'
+  // Prefix untuk slip index: {1_periode}, {2_periode}, dll
+  // Sebenarnya tidak perlu prefix karena template-filler pakai replaceAllText
+  // Tapi untuk membedakan per slip, kita pakai {periode_1}, {periode_2}, dll
+  // WAIT — replaceAllText replace SEMUA occurrence. Jadi kalau 7 slip punya {periode},
+  // semua akan ke-replace dengan value yang sama.
+  // Solusi: gunakan index suffix: {periode_1}, {periode_2}, ... {periode_7}
+
+  const idx = slipIndex + 1
+  const periodeKey = `{periode_${idx}}`
+  const gajiPokokKey = `{gaji_pokok_${idx}}`
+  const gajiKotorKey = `{gaji_kotor_${idx}}`
+  const totalPotonganKey = `{total_potongan_${idx}}`
+  const gajiBersihKey = `{gaji_bersih_${idx}}`
+  const tanggalTerimaKey = `{tanggal_terima_${idx}}`
+  // Tunjangan/bonus/potongan: pakai {tunjangan_N_label} format
+  // Tapi kita ga tau berapa items — solusi: hard-code 5 row per item type
+  // Kalau kosong, template-filler replace dengan "-"
+  const tunjanganRows = [1, 2, 3, 4, 5].map(n => slipRow(`{tunjangan_${idx}_${n}_label}`, `{tunjangan_${idx}_${n}_amount}`, ''))
+  const bonusRows = [1, 2, 3, 4, 5].map(n => slipRow(`{bonus_${idx}_${n}_label}`, `{bonus_${idx}_${n}_amount}`, ''))
+  const potonganRows = [1, 2, 3, 4, 5].map(n => slipRow(`{potongan_${idx}_${n}_label}`, '', `{potongan_${idx}_${n}_amount}`))
 
   return [
-    // Page break
-    new Paragraph({ children: [new PageBreak()] }),
-    // {#slips} marker — template-filler akan duplicate content 7x
-    new Paragraph({ children: [new TextRun({ text: '{#slips}', font: 'Times New Roman', size: 22 })] }),
+    // Page break (kecuali slip pertama, karena SK Kerja sudah ada page break sebelumnya)
+    ...(slipIndex > 0 ? [new Paragraph({ children: [new PageBreak()] })] : []),
     // Title
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -233,7 +251,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
-      children: [new TextRun({ text: 'Periode: {periode}', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: `Periode: ${periodeKey}`, size: 22, font: 'Times New Roman' })],
     }),
     // Identity (borderless table)
     new Table({
@@ -277,17 +295,17 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
           ],
         }),
         // Gaji Pokok
-        slipRow(`${upahLabel} Pokok`, '{gaji_pokok}', ''),
-        // Tunjangan loop: {#tunjangan_tetap}...{label}...{amount}...{/tunjangan_tetap}
-        slipRow('{#tunjangan_tetap}{label}{/tunjangan_tetap}', '{#tunjangan_tetap}{amount}{/tunjangan_tetap}', ''),
-        // Bonus loop
-        slipRow('{#tunjangan_variabel}{label}{/tunjangan_variabel}', '{#tunjangan_variabel}{amount}{/tunjangan_variabel}', ''),
-        // Potongan loop
-        slipRow('{#potongan}{label}{/potongan}', '', '{#potongan}{amount}{/potongan}'),
+        slipRow(`${upahLabel} Pokok`, gajiPokokKey, ''),
+        // Tunjangan (5 rows, kalau kosong = "-")
+        ...tunjanganRows,
+        // Bonus (5 rows)
+        ...bonusRows,
+        // Potongan (5 rows)
+        ...potonganRows,
         // Total
-        slipRow('Total', '{gaji_kotor}', '{total_potongan}', true, totalBg),
+        slipRow('Total', gajiKotorKey, totalPotonganKey, true, totalBg),
         // Gaji Bersih
-        slipRow(`${upahLabel} Diterima (Bersih)`, '', '{gaji_bersih}', true, bersihBg),
+        slipRow(`${upahLabel} Diterima (Bersih)`, '', gajiBersihKey, true, bersihBg),
       ],
     }),
     new Paragraph({ spacing: { after: 600 }, children: [] }),
@@ -312,7 +330,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
               width: { size: 4900, type: WidthType.DXA },
               borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
               children: [
-                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{kota}, {tanggal_terima}', size: 22, font: 'Times New Roman' })] }),
+                new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `{kota}, ${tanggalTerimaKey}`, size: 22, font: 'Times New Roman' })] }),
                 new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Bagian Keuangan,', size: 22, font: 'Times New Roman' })] }),
                 new Paragraph({ spacing: { before: 1000 }, children: [] }),
                 new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '( ............................. )', bold: true, underline: {}, size: 22, font: 'Times New Roman' })] }),
@@ -322,8 +340,6 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
         }),
       ],
     }),
-    // {/slips} marker — end of loop
-    new Paragraph({ children: [new TextRun({ text: '{/slips}', font: 'Times New Roman', size: 22 })] }),
   ]
 }
 
@@ -333,8 +349,8 @@ async function generateTemplate(style: typeof STYLES[0]): Promise<void> {
 
   const sections = [
     ...buildSkKerja(),
-    ...buildSlipGaji(upahLabel),
-    // template-filler akan expand {#slips}...{/slips} menjadi 7 slip sections
+    // 7 hard-coded slip sections dengan index suffix (1-7)
+    ...Array.from({ length: 7 }, (_, i) => buildSlipGaji(upahLabel, i)).flat(),
   ]
 
   const doc = new Document({
