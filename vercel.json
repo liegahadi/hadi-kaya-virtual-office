@@ -20,6 +20,9 @@
     },
     "src/app/api/document-templates/checklist/[id]/upload/route.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/documents/generate-laporan-keuangan/route.ts": {
+      "maxDuration": 120
     }
   }
 }

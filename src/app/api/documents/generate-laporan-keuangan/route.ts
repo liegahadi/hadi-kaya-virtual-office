@@ -282,9 +282,10 @@ INGAT:
       },
     })
   } catch (err: any) {
-    console.error('[generate-laporan-keuangan] error:', err)
+    console.error('[generate-laporan-keuangan] error:', err?.message || err)
+    console.error('[generate-laporan-keuangan] stack:', err?.stack)
     return NextResponse.json(
-      { error: err?.message || 'Failed to generate laporan keuangan' },
+      { error: err?.message || 'Failed to generate laporan keuangan', details: String(err?.cause || err) },
       { status: 500 }
     )
   }

@@ -232,7 +232,7 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
 
   // Helper: update slip per bulan
   const updateSlipBulan = (idx: number, field: string, val: any) => {
-    setSlipBulan(prev => {
+    setSlipBulanan(prev => {
       const updated = [...prev]
       updated[idx] = { ...updated[idx], [field]: val }
       return updated
@@ -241,14 +241,14 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
 
   // Helper: add/remove/update items per bulan
   const addSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus') => {
-    setSlipBulan(prev => {
+    setSlipBulanan(prev => {
       const updated = [...prev]
       updated[idx] = { ...updated[idx], [type]: [...updated[idx][type], { label: '', amount: 0 }] }
       return updated
     })
   }
   const updateSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number, key: 'label' | 'amount', val: any) => {
-    setSlipBulan(prev => {
+    setSlipBulanan(prev => {
       const updated = [...prev]
       const items = [...updated[idx][type]]
       items[itemIdx] = { ...items[itemIdx], [key]: key === 'amount' ? parseInt(val) || 0 : val }
@@ -257,11 +257,23 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
     })
   }
   const removeSlipItemBulan = (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number) => {
-    setSlipBulan(prev => {
+    setSlipBulanan(prev => {
       const updated = [...prev]
       updated[idx] = { ...updated[idx], [type]: updated[idx][type].filter((_, i) => i !== itemIdx) }
       return updated
     })
+  }
+
+  // Apply bulan pertama ke semua bulan (copy data)
+  const applyToAllBulan = () => {
+    setSlipBulanan(prev => {
+      const first = prev[0]
+      return prev.map(slip => ({
+        ...first,
+        bulan: slip.bulan, // keep original bulan name
+      }))
+    })
+    toast.success('Data bulan pertama diterapkan ke semua bulan!')
   }
 
   // Auto-calc per bulan
@@ -535,6 +547,15 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                       {/* Accordion Body */}
                       {isExpanded && (
                         <div className="p-2 space-y-2 bg-white">
+                          {/* Apply to All button — only on first bulan */}
+                          {idx === 0 && (
+                            <button
+                              onClick={applyToAllBulan}
+                              className="w-full py-1.5 px-2 bg-blue-50 border border-blue-300 rounded text-[10px] font-medium text-blue-700 hover:bg-blue-100 flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" /> Apply ke Semua Bulan
+                            </button>
+                          )}
                           {/* Tanggal Terima + Mode Periode */}
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
