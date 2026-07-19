@@ -78,6 +78,18 @@ const TEMPLATES: TemplateInfo[] = [
 
 const CATEGORIES = [...new Set(TEMPLATES.map(t => t.category))]
 
+// Helper: format number dengan titik ribuan (1000000 → "1.000.000")
+function formatRibuan(n: number | string): string {
+  const num = typeof n === "string" ? parseInt(n.replace(/\./g, "")) || 0 : n || 0
+  if (!num) return ""
+  return num.toLocaleString("de-DE")
+}
+
+// Helper: parse "1.000.000" → 1000000
+function parseRibuan(s: string): number {
+  return parseInt((s || "").replace(/\./g, "")) || 0
+}
+
 export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpdate }: CombinedDocEditorModalProps) {
   const [view, setView] = useState<'templates' | 'editor'>('templates')
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null)
@@ -598,8 +610,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                           {/* Gaji Pokok */}
                           <div>
                             <label className="text-[9px] font-medium text-slate-500">Gaji Pokok (Rp)</label>
-                            <input type="number" value={slip.gajiPokok || ''}
-                              onChange={e => updateSlipBulan(idx, 'gajiPokok', parseInt(e.target.value) || 0)}
+                            <input type="text" value={formatRibuan(slip.gajiPokok)}
+                              onChange={e => updateSlipBulan(idx, 'gajiPokok', parseRibuan(e.target.value))}
                               className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
                           </div>
 
@@ -613,8 +625,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                               <div key={i} className="flex gap-1 mb-0.5">
                                 <input value={t.label} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'label', e.target.value)}
                                   placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="number" value={t.amount || ''} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'amount', e.target.value)}
-                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="text" value={formatRibuan(t.amount)} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'amount', String(parseRibuan(e.target.value)))}
+                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
                                 <button onClick={() => removeSlipItemBulan(idx, 'tunjangan', i)} className="text-red-500 text-[10px]">✕</button>
                               </div>
                             ))}
@@ -630,8 +642,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                               <div key={i} className="flex gap-1 mb-0.5">
                                 <input value={b.label} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'label', e.target.value)}
                                   placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="number" value={b.amount || ''} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'amount', e.target.value)}
-                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="text" value={formatRibuan(b.amount)} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'amount', String(parseRibuan(e.target.value)))}
+                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
                                 <button onClick={() => removeSlipItemBulan(idx, 'bonus', i)} className="text-red-500 text-[10px]">✕</button>
                               </div>
                             ))}
@@ -647,8 +659,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                               <div key={i} className="flex gap-1 mb-0.5">
                                 <input value={p.label} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'label', e.target.value)}
                                   placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="number" value={p.amount || ''} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'amount', e.target.value)}
-                                  placeholder="Rp" className="w-16 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                                <input type="text" value={formatRibuan(p.amount)} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'amount', String(parseRibuan(e.target.value)))}
+                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
                                 <button onClick={() => removeSlipItemBulan(idx, 'potongan', i)} className="text-red-500 text-[10px]">✕</button>
                               </div>
                             ))}
@@ -1189,8 +1201,8 @@ function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
                               <input type="number" value={sub.qty || ''} onChange={e => updateSubItem(idx, 'pendapatan', pi, si, 'qty', e.target.value)}
                                 placeholder="Qty" className="w-10 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-emerald-400" />
                               <span className="text-[8px] text-slate-400">×</span>
-                              <input type="number" value={sub.price || ''} onChange={e => updateSubItem(idx, 'pendapatan', pi, si, 'price', e.target.value)}
-                                placeholder="Rp" className="w-16 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-emerald-400" />
+                              <input type="text" value={formatRibuan(sub.price)} onChange={e => updateSubItem(idx, "pendapatan", pi, si, "price", String(parseRibuan(e.target.value)))}
+                                placeholder="Rp" className="w-24 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-emerald-400" />
                               <span className="text-[8px] font-medium text-emerald-600 w-20 text-right">{fmt((sub.qty || 0) * (sub.price || 0))}</span>
                               <button onClick={() => removeSubItem(idx, 'pendapatan', pi, si)} className="text-red-400 text-[8px]">✕</button>
                             </div>
@@ -1224,8 +1236,8 @@ function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
                               <input type="number" value={sub.qty || ''} onChange={e => updateSubItem(idx, 'pengeluaran', pi, si, 'qty', e.target.value)}
                                 placeholder="Qty" className="w-10 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-red-400" />
                               <span className="text-[8px] text-slate-400">×</span>
-                              <input type="number" value={sub.price || ''} onChange={e => updateSubItem(idx, 'pengeluaran', pi, si, 'price', e.target.value)}
-                                placeholder="Rp" className="w-16 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-red-400" />
+                              <input type="text" value={formatRibuan(sub.price)} onChange={e => updateSubItem(idx, "pengeluaran", pi, si, "price", String(parseRibuan(e.target.value)))}
+                                placeholder="Rp" className="w-24 border border-slate-200 rounded px-1 py-0.5 text-[9px] focus:outline-none focus:border-red-400" />
                               <span className="text-[8px] font-medium text-red-600 w-20 text-right">{fmt((sub.qty || 0) * (sub.price || 0))}</span>
                               <button onClick={() => removeSubItem(idx, 'pengeluaran', pi, si)} className="text-red-400 text-[8px]">✕</button>
                             </div>

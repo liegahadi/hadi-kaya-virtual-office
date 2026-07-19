@@ -2223,3 +2223,369 @@ Untuk keep HF Space alive (kalau pakai HF):
 
 ---
 
+
+## 24. FINANCE & MATERIAL SYSTEM (RINA + MITRA)
+
+> **PURPOSE SECTION**: Bagian ini jadi "single source of truth" untuk konteks Finance & Material.
+> Setiap ada pertanyaan/diskusi tentang finance/material di sesi mendatang, **RECALL section ini dari PRD** sebelum jawab.
+> Backup reference: `upload/18072026 Backup.json` (snapshot 17 Juli 2026).
+
+### 24.1 Overview
+
+Sistem Finance & Material adalah modul tracking keuangan proyek konstruksi PT. Marlindo Bangun Persada. Tracking 3 arus uang keluar:
+1. **Purchase Orders (PO)** — pembelian material dari supplier (122 PO, Rp 307M+)
+2. **Wage Payments** — pembayaran upah tukang per item pekerjaan (58 pembayaran, Rp 89M+)
+3. **Other Expenses** — pengeluaran operasional/non-material (94 expense, Rp 196M+)
+
+Total arus kas tercatat per backup 17 Juli 2026: **Rp 593,880,469** (± 6 bulan operasional, Jan–Jul 2026).
+
+Material tracking terpisah:
+- **Materials** — 163 material master dengan default price
+- **Stock** — saldo gudang real-time per material
+- **Usages** — pemakaian material per unit/proyek (110 records)
+- **Categories** — 15 kategori material (Pondasi, Badan Rumah, Atap, Plafon, Plaster, Keramik, Kusen Jendela, Subsitank, Kamar Mandi, Carpot, Listrik, Pengecatan, Pintu, Pipa Air, Stok Gudang)
+- **Suppliers** — 20 supplier dengan data bank untuk transfer
+
+### 24.2 Database Schema (11 Entities)
+
+Source: `upload/18072026 Backup.json` (top-level keys). Di-app, ini disimpan di Aiven PostgreSQL via Prisma.
+
+#### 24.2.1 Project
+```
+{
+  id: string (e.g., 's6db33dgx')
+  name: string (e.g., 'Anjayo 16')
+  type: 'Subsidi' | 'Komersil'
+}
+```
+**Current state**: 8 projects (2 Subsidi, 6 Komersil)
+- Anjayo 16 (Subsidi) — project utama KPR
+- Permata Muntai (Subsidi)
+- Toko Kopi, Kantor Anjayo, Rumah Pasir Putih, Anjayo 1, Rumah Stadion, Rumah Pojok (Komersil)
+
+#### 24.2.2 Unit
+```
+{
+  id: string
+  projectId: string  // FK to Project
+  block: string      // e.g., 'E', 'D', 'Rumah', 'XinKofi'
+  unitNumber: string // e.g., '1', '22', 'Apho', '*'
+}
+```
+**Current state**: 21 units across 8 projects (Anjayo 16: 13 units E/D, sisanya 1-2 unit per project komersil)
+
+#### 24.2.3 Supplier
+```
+{
+  id: string
+  name: string         // e.g., 'Toko Acil'
+  owner: string        // e.g., 'Achmad Jani'
+  phone: string        // e.g., '085289989869'
+  bankName: string     // 'BCA' | 'BNI' | 'MANDIRI' | 'BRI' | ''
+  bankAccount: string  // account number
+}
+```
+**Current state**: 20 suppliers. Top: Toko Acil (BCA), Bintang Baru (BCA), Tanah Asiung (BCA), Ibtia Batako (BNI), Gatot Pasir (MANDIRI), Karmin Kuesen (BRI). Beberapa supplier data bank kosong (Toko Cash, Mulia Keramik, Syam Batako, dll — perlu dilengkapi).
+
+#### 24.2.4 Material
+```
+{
+  id: string
+  name: string         // e.g., 'Semen', 'Batako', 'Tanah Puru'
+  categoryId: string   // FK to Category
+  unit: string         // 'Pcs' | 'Keping' | 'Sak' | 'm³' (current: 162 Pcs, 1 Keping)
+  defaultPrice: number // in Rupiah
+}
+```
+**Current state**: 163 materials. Harga sample: Semen Rp 64.000/Pcs, Batako Rp 1.900/Keping, Tanah Puru Rp 250.000/Pcs, Pasir Rp 450.000/Pcs, Gypsum Rp 63.000/Pcs.
+
+#### 24.2.5 Category
+```
+{ id: string, name: string }
+```
+**Current state**: 15 kategori (Pondasi, Badan Rumah, Atap, Plafon, Plaster, Keramik, Kusen Jendela, Subsitank, Kamar Mandi, Carpot dan Meja Dapur, Listrik, Pengecatan, Pemasangan Pintu, Pipa Air, Stok gudang).
+
+#### 24.2.6 WageType (Upah per Pekerjaan)
+```
+{
+  id: string
+  projectId: string  // FK to Project (wage types project-specific)
+  name: string       // e.g., 'Pondasi', 'Pemasangan Bata', 'Plaster'
+  price: number      // full task budget in Rupiah
+}
+```
+**Current state**: 24 wage types. Anjayo 16 (12 types): Pondasi Rp 1.2M, Pemasangan Bata Rp 4.5M, Plaster Rp 4M, Pemasangan Atap Rp 1.5M, Pengecatan Rp 1M, Subsitank & Urukan Rp 800K, Instalasi 11 titik Listrik Rp 350K, Plafon Rp 1.1M, Pemasangan Keramik Rp 1.9M, Serah Terima Kunci Rp 2.1M, Retensi Rp 1.2M, Pemasangan Pintu Rp 350K, Carpot Rp 1M.
+Rumah Pojok (10 types — borongan rumah komersil): Nol Bata/Ringbalk/Tebeng Layar Rp 5M, Cor Dak Rp 5M, Atap Rp 7M, Plaster Keliling + Acian Rp 11M, Installasi Listrik Rp 5M, Pemasangan Plafon Rp 5.25M, Pasang Keramik Rp 10.9M, Finishing Rp 3.495M, Septiktank Rp 2M.
+Toko Kopi: Pembayaran pertama Rp 2M. Kantor Anjayo: Plafon Dapur Rp 1.3M.
+
+#### 24.2.7 PurchaseOrder (PO)
+```
+{
+  id: string
+  poNumber: string       // format: 'PO-YYYYMM-NNNN' (e.g., 'PO-202607-0122')
+  supplierId: string     // FK to Supplier
+  date: string           // ISO date (e.g., '2026-07-17')
+  status: 'UNPAID' | 'PAID'
+  notes: string
+  items: Array<{
+    id: string
+    materialId: string   // FK to Material
+    qty: number
+    price: number        // per-unit price (may differ from material.defaultPrice)
+    projectId: string    // item allocated to specific project
+    unitId: string       // item allocated to specific unit
+    block: string        // for display (denormalized)
+  }>
+}
+```
+**Current state**: 122 POs (83 PAID, 39 UNPAID). Date range: Jan 3 – Jul 17, 2026. Total value: **Rp 307,727,000**.
+Format PO number: `PO-YYYYMM-NNNN` (sequential per month).
+
+#### 24.2.8 WagePayment
+```
+{
+  id: string
+  date: string           // ISO date
+  projectId: string
+  unitId: string
+  wageTypeId: string     // FK to WageType
+  workerName: string     // e.g., 'Heri', 'Wasku'
+  amount: number         // actual paid amount (may differ from wageType.price for partial)
+  fullTaskBudget: number // total budget from WageType.price
+  status: 'PAID' | 'UNPAID'
+  workDescription: string
+  evidenceImage: string? // URL to photo of completed work
+}
+```
+**Current state**: 58 wage payments (45 PAID, 13 UNPAID). Date range: Jan 17 – Jul 17, 2026. Total value: **Rp 89,400,000**. Top worker: Heri (pondasi, retensi Anjayo 16 units D/E).
+
+#### 24.2.9 OtherExpense
+```
+{
+  id: string
+  description: string
+  category: string       // 12 categories (see below)
+  amount: number
+  date: string
+  status: 'PAID' | 'UNPAID'
+  paymentCycle: string   // 'Weekly' | 'Monthly' | 'One-time' | ''
+}
+```
+**Current state**: 94 expenses (70 PAID, 24 UNPAID). Total value: **Rp 196,753,469**.
+Categories distribution:
+- **Gaji** (22 items) — payroll karyawan
+- **Operasional Kantor** (19) — operasional (printer, mesin kopi, ATK)
+- **SLF** (8) — Sertifikat Laik Fungsi per unit
+- **Komisi** (11) — komisi marketing/notaris
+- **Biaya Notaris** (8) — fee notaris per unit
+- **Reimburse** (7) — pengembalian dana
+- **Listrik** (5) — biaya listrik
+- **PPH** (5) — pajak penghasilan
+- **Kasbon** (3) — kasbon karyawan/kerja
+- **Lainnya** (3)
+- **Hutang / Tunggakan** (2)
+- **PBB** (1) — pajak bumi bangunan
+
+#### 24.2.10 Memo (Pengajuan Dana)
+```
+{
+  id: string
+  memoNumber: string     // format: 'MBP-W-NNNNNN' (weekly) | 'MBP-D-NNNNNN' (daily)
+  date: string
+  type: 'MINGGUAN' | 'HARIAN'
+  poIds: string[]        // POs included in this memo
+  wageIds: string[]      // WagePayments included
+  expenseIds: string[]   // OtherExpenses included
+  totalAmount: number    // sum of all included items
+  status: 'PENDING' | 'COMPLETED'
+  notes: string
+}
+```
+**Current state**: 44 memos (33 MINGGUAN, 11 HARIAN; 39 COMPLETED, 5 PENDING).
+Memo number format:
+- Weekly: `MBP-W-NNNNNN` (e.g., MBP-W-865968)
+- Daily: `MBP-D-NNNNNN` (e.g., MBP-D-169313)
+Memo adalah grouping pembayaran — owner kumpulkan beberapa PO/wage/expense jadi 1 pengajuan untuk transfer sekali.
+
+#### 24.2.11 Stock
+```
+{ materialId: string, quantity: number }  // 1-to-1 with Material
+```
+**Current state**: 163 stock records (1 per material). Sample: Semen 268 Pcs, Batako 11.750 Keping, Tanah Puru 30 Pcs.
+
+#### 24.2.12 Usage (Pemakaian Material)
+```
+{
+  id: string
+  date: string
+  unitId: string         // which unit consumed
+  projectId: string
+  items: Array<{
+    materialId: string
+    qty: number
+    price: number        // price at time of usage (for cost tracking)
+  }>
+}
+```
+**Current state**: 110 usage records. Each usage deducts from Stock.
+
+### 24.3 Finance Flow (PO → Memo → Payment)
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ 1. Buat PO      │ →   │ 2. PO Status │ →   │ 3. Buat Memo │ →   │ 4. Transfer  │
+│ (UNPAID)        │     │    change?   │     │  (grouping)  │     │   + mark     │
+│                 │     │              │     │              │     │   PAID       │
+└─────────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                                                  ↓
+                                          Same flow for:
+                                          - WagePayment
+                                          - OtherExpense
+```
+
+**Detail flow:**
+1. Owner buat PO baru (status: UNPAID). Pilih supplier, material, qty, price, project/unit.
+2. Saat material diterima, owner bisa mark PO PAID (kalau langsung dibayar).
+3. Untuk pengajuan dana mingguan/harian, owner gabungkan beberapa PO + WagePayment + OtherExpense jadi 1 Memo.
+4. Owner transfer ke bank supplier (atau cash ke tukang), lalu mark semua items di Memo jadi PAID.
+5. Memo status: PENDING → COMPLETED setelah semua items PAID.
+
+### 24.4 Material Flow (Material → Stock → Usage)
+
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌──────────────────┐
+│ Material Master │ ↔   │ Stock (saldo gudang) │ ←   │ Usage (pemakaian)│
+│ (default price) │     │ quantity             │     │ per unit/project │
+└─────────────────┘     └──────────────────────┘     └──────────────────┘
+        ↓                            ↑                          ↓
+   PO adds stock             PO items increment           Usage items decrement
+                             (qty from PO items)          (qty from usage items)
+```
+
+**Detail flow:**
+1. Material master dibuat sekali (name, category, unit, defaultPrice).
+2. Setiap PO yang PAID menambah Stock (material yang diterima di gudang).
+3. Setiap Usage mengurangi Stock (material dipakai untuk unit tertentu).
+4. Cost per Usage = qty × price (price di-snapshot saat usage, bukan pakai defaultPrice).
+
+### 24.5 Files & API Endpoints
+
+#### Backend (Next.js API Routes)
+- `/api/finance/po` — CRUD PurchaseOrder
+- `/api/finance/po/[id]/compile-pdf` — compile PO items jadi PDF
+- `/api/finance/po/[id]/pdf` — download PO as PDF
+- `/api/finance/po/[id]/documents` — list PO documents
+- `/api/finance/suppliers` — CRUD Supplier
+- `/api/finance/suppliers/[id]/prices` — supplier-specific material prices
+- `/api/finance/daily-expense` — CRUD OtherExpense
+- `/api/finance/weekly-report` — generate weekly report
+
+#### Database Explorer (read-only)
+- `/api/database-explorer/finance` — browse finance tables (PO, Wage, Expense, Memo, Supplier, WageType)
+- `/api/database-explorer/material` — browse material tables (Material, Category, Stock, Usage)
+- `/api/database-explorer/marketing` — browse marketing tables
+- `/api/database-explorer/berkas` — browse berkas tables
+
+#### Backend Libraries
+- `src/lib/finance/po-generator.ts` — PO PDF generator
+- `src/lib/finance/pdf-generator.ts` — generic PDF generator
+
+#### Frontend (Dashboard)
+- `src/components/dashboard/database-tab.tsx` — database explorer UI
+
+#### Backup/Restore
+- `/api/admin/backup` — export all finance/material data to JSON (snapshot)
+- `/api/admin/restore` — import JSON backup
+- Scripts: `scripts/backup-db.ts`, `scripts/restore-db.ts`
+
+### 24.6 RINA — Finance AI Agent (Planned, Deferred)
+
+> Status: PLANNED — implementation deferred sampai Tab Berkas + DINA WA deploy (per Section 23.5)
+
+**Scope RINA (when activated):**
+1. **Chat-based inquiry**: Owner tanya "RINA, berapa total PO ke Toko Acil bulan ini?" → RINA query DB → jawab
+2. **Memo generation**: "RINA, buat memo mingguan untuk PO yang UNPAID + wage Heri minggu ini" → RINA draft Memo
+3. **Cash flow report**: "RINA, kas keluar bulan Juli" → RINA generate report (PDF/Excel)
+4. **Supplier reconciliation**: "RINA, supplier mana yang masih punya PO UNPAID?" → list + total
+5. **Project cost tracking**: "RINA, berapa biaya Anjayo 16 unit E/1 sampai sekarang?" → sum all PO/wage/expense for that unit
+6. **Budget vs Actual**: "RINA, bandingkan budget vs realisasi Rumah Pojok" → compare wageType.price totals vs actual wagePayment.amount
+
+**RINA tools (planned, function calling):**
+- `query_purchase_orders(filters)` — list PO with filter (supplier, project, status, date range)
+- `query_wage_payments(filters)` — list WagePayment
+- `query_other_expenses(filters)` — list OtherExpense
+- `query_memos(filters)` — list Memo
+- `create_memo(poIds, wageIds, expenseIds, type)` — draft new Memo
+- `mark_memo_paid(memoId)` — set Memo + all items to PAID
+- `get_project_cost(projectId, unitId?)` — sum all costs for project/unit
+- `get_supplier_outstanding(supplierId?)` — list unpaid PO per supplier
+- `generate_cashflow_report(startDate, endDate, format)` — PDF/Excel report
+
+**LLM provider for RINA:** sama dengan DINA (z-ai-web-dev-sdk direct, atau 9router kalau sudah deploy).
+
+### 24.7 MITRA — Material AI Agent (Planned, Deferred)
+
+> Status: PLANNED — implementation deferred sampai RINA jalan (per Section 23.5)
+
+**Scope MITRA (when activated):**
+1. **Stock alert**: "MITRA, material apa yang stocknya mau habis?" → check Stock < threshold → notify
+2. **Material recommendation**: "MITRA, untuk pondasi unit E/8 butuh material apa aja?" → suggest material list per category
+3. **Supplier price comparison**: "MITRA, harga semen di supplier mana yang paling murah?" → query supplier prices
+4. **Usage tracking**: "MITRA, catat pemakaian 10 sak semen untuk unit D/9 hari ini" → create Usage record
+5. **Stock card report**: "MITRA, kartu stok semen bulan Juli" → list all in (PO) + out (Usage) per material per period
+6. **Waste analysis**: "MITRA, material mana yang over-usage di Anjayo 16?" → compare budgeted vs actual usage
+
+**MITRA tools (planned):**
+- `query_materials(filters)` — list Material with filter (category, name search)
+- `query_stock(materialId?)` — get current stock level(s)
+- `query_usages(filters)` — list Usage records
+- `create_usage(unitId, projectId, items)` — record material usage (decrement stock)
+- `get_stock_card(materialId, startDate, endDate)` — kartu stok per material
+- `get_low_stock(threshold)` — materials below threshold
+- `compare_supplier_prices(materialId)` — prices across suppliers
+
+### 24.8 Pending Issues (Finance & Material)
+
+1. **Supplier data incomplete** — 11 dari 20 supplier tidak punya data bank (Toko Toko Cash, Mulia Keramik, Syam Batako, Lestari Jaya Aluminium, Jaya Indah, Mitra Agung, Bisma, Yanto Al mizan papan, Hendi Genteng Beton, Abot Batako, Roshid Kusen). Perlu dilengkapi untuk auto-generate transfer instruction di Memo PDF.
+
+2. **Material category incomplete** — Sample materials yang dicek punya `categoryId` yang tidak match dengan daftar 15 categories di backup. Perlu verify data integrity (mungkin kategori di-add/remove tanpa re-link materials).
+
+3. **PO number format** — Saat ini: `PO-YYYYMM-NNNN` (sequential per month). Perlu cek apakah ada collision risk kalau banyak PO per bulan. Current max: PO-202607-0122 (122nd PO di Juli 2026 — angka tinggi, mungkin perlu 5 digit: `PO-YYYYMM-NNNNN`).
+
+4. **Memo status workflow** — Hanya 2 status (PENDING/COMPLETED). Tidak ada "DRAFT" atau "REJECTED" untuk tracking pengajuan yang ditolak/ditunda.
+
+5. **Evidence image storage** — `evidenceImage` di WagePayment disimpan sebagai URL/string. Belum clear apakah di-upload ke Google Drive atau di-store locally. Perlu define storage strategy.
+
+6. **No RAB integration** — Backup punya field `materialRABs: []` dan `rabExplanations: []` (empty). RAB (Rencana Anggaran Biaya) belum terhubung dengan Material/PO/Wage. Idealnya: RAB → material plan → PO budget → actual PO → variance analysis.
+
+7. **No approval workflow** — Tidak ada approval chain. Owner buat PO → langsung UNPAID → langsung mark PAID. Tidak ada "request approval" step. Mungkin OK untuk operasi kecil, tapi kalau ada lebih dari 1 decision maker perlu ditambah.
+
+8. **No project cost budget** — Tidak ada field `budgetedCost` di Project. Jadi tidak bisa otomatis compare budget vs actual per project. Hanya bisa sum actual.
+
+### 24.9 Recall Triggers (Penting!)
+
+**RECALL section 24 ini kalau user bertanya tentang:**
+- "Finance", "Keuangan", "Arus kas", "Cash flow"
+- "RINA", "Finance AI"
+- "PO", "Purchase Order", "Pembelian material"
+- "Wage", "Upah tukang", "Pembayaran upah"
+- "Memo", "Pengajuan dana", "MBP"
+- "Supplier", "Vendor material"
+- "Material", "Stok", "Gudang", "Pemakaian material"
+- "MITRA", "Material AI"
+- "RAB", "Rencana Anggaran Biaya"
+- "Project cost", "Biaya proyek", "Cost tracking"
+- "Backup", "Restore", "18072026 Backup.json"
+- "Anjayo 16 cost", "Rumah Pojok cost", atau cost any project
+
+**RECALL caranya:** Baca section 24 ini dari PRD.md → gunakan data schema + current state numbers untuk jawab pertanyaan user dengan akurat.
+
+### 24.10 Backup File Reference
+
+- **Latest backup**: `upload/18072026 Backup.json` (snapshot 17 Juli 2026)
+- **Backup structure**: 12 top-level keys (projects, units, suppliers, materials, categories, wageTypes, purchaseOrders, wagePayments, otherExpenses, memos, stock, usages, cloudConfig, materialRABs, rabExplanations, backupDate)
+- **Backup endpoint**: `POST /api/admin/backup` (dipanggil manual dari dashboard)
+- **Restore endpoint**: `POST /api/admin/restore` (upload JSON → restore all tables)
+- **Auto-backup**: `cloudConfig.autoBackupEnabled = true` (tapi `isConnected = false` — belum connected ke cloud storage)
+
+---
