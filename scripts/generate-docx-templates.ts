@@ -69,22 +69,26 @@ const TAB_COLON = 1700
 const TAB_VALUE = 1850
 
 // Helper: baris identitas dengan Tab stops (borderless table row)
+// Width dalam DXA (twips): 1 inch = 1440 twips
+// Kolom 1: 2800 twips (~1.94 inch) untuk label
+// Kolom 2: 200 twips (~0.14 inch) untuk ':'
+// Kolom 3: 6800 twips (~4.72 inch) untuk value
+// Total: 9800 twips (~6.8 inch, muat di A4 dengan margin 0.5 inch)
 function idRow(label: string, value: string, bold = false): TableRow {
   return new TableRow({
     children: [
       new TableCell({
-        width: { size: 25, type: WidthType.PERCENTAGE },
+        width: { size: 2800, type: WidthType.DXA },
         borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
         children: [new Paragraph({
-          tabStops: [{ type: TabStopType.LEFT, position: TAB_COLON }],
           children: [
-            new TextRun({ text: label, bold, font: 'Times New Roman', size: 22 }),
-            new TextRun({ text: '\t:', font: 'Times New Roman', size: 22 }),
+            new TextRun({ text: `${label}\t:`, bold, font: 'Times New Roman', size: 22 }),
           ],
+          tabStops: [{ type: TabStopType.RIGHT, position: 2700 }],
         })],
       }),
       new TableCell({
-        width: { size: 75, type: WidthType.PERCENTAGE },
+        width: { size: 6800, type: WidthType.DXA },
         borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
         children: [new Paragraph({
           children: [new TextRun({ text: ` ${value}`, bold, font: 'Times New Roman', size: 22 })],
@@ -95,17 +99,21 @@ function idRow(label: string, value: string, bold = false): TableRow {
 }
 
 // Helper: baris slip gaji (dengan border)
+// Kolom 1: 5400 twips (~3.75 inch) untuk label
+// Kolom 2: 2200 twips (~1.53 inch) untuk pendapatan
+// Kolom 3: 2200 twips (~1.53 inch) untuk potongan
+// Total: 9800 twips
 function slipRow(label: string, pendapatan: string, potongan: string, bold = false, bg?: string): TableRow {
   const shading = bg ? { fill: bg.replace('#', '') } : undefined
   return new TableRow({
     children: [
       new TableCell({
-        width: { size: 55, type: WidthType.PERCENTAGE },
+        width: { size: 5400, type: WidthType.DXA },
         shading,
         children: [new Paragraph({ children: [new TextRun({ text: label, bold, font: 'Times New Roman', size: 22 })] })],
       }),
       new TableCell({
-        width: { size: 22.5, type: WidthType.PERCENTAGE },
+        width: { size: 2200, type: WidthType.DXA },
         shading,
         children: [new Paragraph({
           alignment: AlignmentType.RIGHT,
@@ -113,7 +121,7 @@ function slipRow(label: string, pendapatan: string, potongan: string, bold = fal
         })],
       }),
       new TableCell({
-        width: { size: 22.5, type: WidthType.PERCENTAGE },
+        width: { size: 2200, type: WidthType.DXA },
         shading,
         children: [new Paragraph({
           alignment: AlignmentType.RIGHT,
@@ -143,10 +151,11 @@ function buildSkKerja(): (Paragraph | Table)[] {
       spacing: { after: 200 },
       children: [new TextRun({ text: 'Yang bertanda tangan di bawah ini:', size: 22, font: 'Times New Roman' })],
     }),
-    // Identity table 1 (borderless)
+    // Identity table 1 (borderless) — width 9800 twips total
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
+      columnWidths: [2800, 6800],
       rows: [
         idRow('Nama', 'Pimpinan {perusahaan}'),
         idRow('Jabatan', 'Pimpinan / Direktur'),
@@ -160,10 +169,11 @@ function buildSkKerja(): (Paragraph | Table)[] {
       spacing: { after: 200 },
       children: [new TextRun({ text: 'Dengan ini menerangkan bahwa:', size: 22, font: 'Times New Roman' })],
     }),
-    // Identity table 2 (borderless)
+    // Identity table 2 (borderless) — width 9800 twips
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
+      columnWidths: [2800, 6800],
       rows: [
         idRow('Nama', '{nama}', true),
         idRow('NIK', '{nik}'),
@@ -223,8 +233,9 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     }),
     // Identity (borderless table)
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
+      columnWidths: [4900, 4900],
       rows: [
         idRow('Nama', '{nama}', true),
         idRow('NIK', '{nik}'),
@@ -234,7 +245,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     new Paragraph({ spacing: { after: 200 }, children: [] }),
     // Pendapatan/Potongan table (with borders)
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 9800, type: WidthType.DXA },
       borders: {
         top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK,
         insideHorizontal: BORDER_THIN, insideVertical: BORDER_THIN,
@@ -244,17 +255,17 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 55, type: WidthType.PERCENTAGE },
+              width: { size: 5400, type: WidthType.DXA },
               shading: { fill: headerBg },
               children: [new Paragraph({ children: [new TextRun({ text: 'Keterangan', bold: true, size: 22, font: 'Times New Roman' })] })],
             }),
             new TableCell({
-              width: { size: 22.5, type: WidthType.PERCENTAGE },
+              width: { size: 2200, type: WidthType.DXA },
               shading: { fill: headerBg },
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Pendapatan', bold: true, size: 22, font: 'Times New Roman' })] })],
             }),
             new TableCell({
-              width: { size: 22.5, type: WidthType.PERCENTAGE },
+              width: { size: 2200, type: WidthType.DXA },
               shading: { fill: headerBg },
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Potongan', bold: true, size: 22, font: 'Times New Roman' })] })],
             }),
@@ -276,13 +287,14 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     new Paragraph({ spacing: { after: 600 }, children: [] }),
     // Signature (2 columns: kiri=Diterima, kanan=Bagian Keuangan)
     new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
+      columnWidths: [4900, 4900],
       rows: [
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
+              width: { size: 4900, type: WidthType.DXA },
               borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
               children: [
                 new Paragraph({ children: [new TextRun({ text: 'Diterima oleh,', size: 22, font: 'Times New Roman' })] }),
@@ -291,7 +303,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
               ],
             }),
             new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
+              width: { size: 4900, type: WidthType.DXA },
               borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
               children: [
                 new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: '{kota}, {tanggal_terima}', size: 22, font: 'Times New Roman' })] }),
