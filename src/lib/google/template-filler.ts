@@ -44,8 +44,63 @@ export function buildSkKerjaData(state: any): Record<string, string> {
 }
 
 // Build 7 slip gaji data (each slip is one period)
+// Gunakan slipBulanan data (per-bulan form) kalau ada, kalau ga ada pakai global
 export function buildSlipGajiData(state: any): any[] {
   const a = state.applicant
+  const now = new Date()
+
+  // Cek apakah ada slipBulanan data (dari form per-bulan)
+  const slipBulanan = a.slipBulanan
+  if (slipBulanan && Array.isArray(slipBulanan) && slipBulanan.length === 7) {
+    return slipBulanan.map((slip: any, idx: number) => {
+      const totalTunjangan = (slip.tunjangan || []).reduce((s: number, t: any) => s + (t.amount || 0), 0)
+      const totalBonus = (slip.bonus || []).reduce((s: number, b: any) => s + (b.amount || 0), 0)
+      const totalPotongan = (slip.potongan || []).reduce((s: number, p: any) => s + (p.amount || 0), 0)
+      const gajiKotor = (slip.gajiPokok || 0) + totalTunjangan + totalBonus
+      const gajiBersih = gajiKotor - totalPotongan
+
+      // Calculate periode based on modePeriode
+      const baseDate = new Date(now.getFullYear(), now.getMonth() - 6 + idx, 15)
+      let periodeDate = baseDate
+      if (slip.modePeriode === 'plus-1-bulan') {
+        periodeDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, slip.tanggalTerima || 25)
+      } else {
+        periodeDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), slip.tanggalTerima || 25)
+      }
+
+      return {
+        periode: periodeDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+        tanggal_terima: formatDateID(periodeDate),
+        gaji_pokok: formatRupiah(slip.gajiPokok || 0),
+        total_tunjangan_tetap: formatRupiah(totalTunjangan),
+        total_tunjangan_variabel: formatRupiah(totalBonus),
+        total_potongan: formatRupiah(totalPotongan),
+        gaji_kotor: formatRupiah(gajiKotor),
+        gaji_bersih: formatRupiah(gajiBersih),
+        // Items — kalau kosong, template-filler akan handle (skip atau "-")
+        tunjangan_tetap: (slip.tunjangan || []).map((t: any) => ({
+          label: t.label || '-',
+          amount: t.amount ? formatRupiah(t.amount) : '-',
+        })),
+        tunjangan_variabel: (slip.bonus || []).map((b: any) => ({
+          label: b.label || '-',
+          amount: b.amount ? formatRupiah(b.amount) : '-',
+        })),
+        potongan: (slip.potongan || []).map((p: any) => ({
+          label: p.label || '-',
+          amount: p.amount ? formatRupiah(p.amount) : '-',
+        })),
+        nama: a.fullName || '',
+        nik: a.ktpNumber || '',
+        jabatan: a.jobTitle || '',
+        perusahaan: a.companyName || '',
+        alamat_perusahaan: a.companyAddress || '',
+        kota: 'Pangkalpinang',
+      }
+    })
+  }
+
+  // Fallback: pakai data global (lama)
   const gajiPokok = a.gajiPokok || a.monthlyIncome || 0
   const tunjanganTetap: SlipItem[] = a.tunjanganTetap || []
   const tunjanganVariabel: SlipItem[] = a.tunjanganVariabel || []
@@ -58,7 +113,6 @@ export function buildSlipGajiData(state: any): any[] {
   const gajiKotor = gajiPokok + totalTunjanganTetap + totalTunjanganVariabel
   const gajiBersih = gajiKotor - totalPotongan
 
-  const now = new Date()
   const slips: any[] = []
   for (let i = 6; i >= 0; i--) {
     const slipDate = new Date(now.getFullYear(), now.getMonth() - 6 + i, tanggalTerima)
@@ -71,18 +125,9 @@ export function buildSlipGajiData(state: any): any[] {
       total_potongan: formatRupiah(totalPotongan),
       gaji_kotor: formatRupiah(gajiKotor),
       gaji_bersih: formatRupiah(gajiBersih),
-      tunjangan_tetap: tunjanganTetap.map(t => ({
-        label: t.label,
-        amount: formatRupiah(t.amount),
-      })),
-      tunjangan_variabel: tunjanganVariabel.map(t => ({
-        label: t.label,
-        amount: formatRupiah(t.amount),
-      })),
-      potongan: potongan.map(p => ({
-        label: p.label,
-        amount: formatRupiah(p.amount),
-      })),
+      tunjangan_tetap: tunjanganTetap.map(t => ({ label: t.label, amount: formatRupiah(t.amount) })),
+      tunjangan_variabel: tunjanganVariabel.map(t => ({ label: t.label, amount: formatRupiah(t.amount) })),
+      potongan: potongan.map(p => ({ label: p.label, amount: formatRupiah(p.amount) })),
       nama: a.fullName || '',
       nik: a.ktpNumber || '',
       jabatan: a.jobTitle || '',

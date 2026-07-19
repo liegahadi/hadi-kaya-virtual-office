@@ -211,7 +211,9 @@ function buildSkKerja(): (Paragraph | Table)[] {
   ]
 }
 
-// Build Slip Gaji section (1 bulan)
+// Build Slip Gaji section (1 template, akan di-loop 7x oleh template-filler)
+// Pakai placeholder {#slips}...{/slips} untuk loop
+// Pakai {#tunjangan_tetap}...{label}...{amount}...{/tunjangan_tetap} untuk inline loop
 function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
   const headerBg = 'E8E8E8'
   const totalBg = 'F5F5F5'
@@ -220,6 +222,8 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
   return [
     // Page break
     new Paragraph({ children: [new PageBreak()] }),
+    // {#slips} marker — template-filler akan duplicate content 7x
+    new Paragraph({ children: [new TextRun({ text: '{#slips}', font: 'Times New Roman', size: 22 })] }),
     // Title
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -229,13 +233,13 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
-      children: [new TextRun({ text: 'Periode: [bulan periode]', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Periode: {periode}', size: 22, font: 'Times New Roman' })],
     }),
     // Identity (borderless table)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
-      columnWidths: [4900, 4900],
+      columnWidths: [2800, 6800],
       rows: [
         idRow('Nama', '{nama}', true),
         idRow('NIK', '{nik}'),
@@ -274,11 +278,12 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
         }),
         // Gaji Pokok
         slipRow(`${upahLabel} Pokok`, '{gaji_pokok}', ''),
-        // Tunjangan (placeholder loop — user edit di Google Docs)
-        slipRow('{tunjangan_1_label}', '{tunjangan_1_amount}', ''),
-        slipRow('{tunjangan_2_label}', '{tunjangan_2_amount}', ''),
-        // Potongan
-        slipRow('{potongan_1_label}', '', '{potongan_1_amount}'),
+        // Tunjangan loop: {#tunjangan_tetap}...{label}...{amount}...{/tunjangan_tetap}
+        slipRow('{#tunjangan_tetap}{label}{/tunjangan_tetap}', '{#tunjangan_tetap}{amount}{/tunjangan_tetap}', ''),
+        // Bonus loop
+        slipRow('{#tunjangan_variabel}{label}{/tunjangan_variabel}', '{#tunjangan_variabel}{amount}{/tunjangan_variabel}', ''),
+        // Potongan loop
+        slipRow('{#potongan}{label}{/potongan}', '', '{#potongan}{amount}{/potongan}'),
         // Total
         slipRow('Total', '{gaji_kotor}', '{total_potongan}', true, totalBg),
         // Gaji Bersih
@@ -286,7 +291,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
       ],
     }),
     new Paragraph({ spacing: { after: 600 }, children: [] }),
-    // Signature (2 columns: kiri=Diterima, kanan=Bagian Keuangan)
+    // Signature (2 columns)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
       borders: BORDER_NONE,
@@ -317,6 +322,8 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
         }),
       ],
     }),
+    // {/slips} marker — end of loop
+    new Paragraph({ children: [new TextRun({ text: '{/slips}', font: 'Times New Roman', size: 22 })] }),
   ]
 }
 
@@ -327,8 +334,7 @@ async function generateTemplate(style: typeof STYLES[0]): Promise<void> {
   const sections = [
     ...buildSkKerja(),
     ...buildSlipGaji(upahLabel),
-    // Repeat slip gaji 6 more times (7 total)
-    ...Array.from({ length: 6 }, () => buildSlipGaji(upahLabel)).flat(),
+    // template-filler akan expand {#slips}...{/slips} menjadi 7 slip sections
   ]
 
   const doc = new Document({
