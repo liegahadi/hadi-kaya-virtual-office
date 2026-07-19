@@ -153,6 +153,65 @@ export function buildSlipGajiData(state: any): any[] {
   return slips
 }
 
+// Build laporan keuangan data (wirausaha) — indexed placeholders
+// {nama_usaha}, {alamat_usaha}, {ig_usaha}, {jenis_usaha}, {nama}
+// {periode_1} ... {periode_7}
+// {pendapatan_1_1_label}, {pendapatan_1_1_amount}, ... (5 items per bulan)
+// {pengeluaran_1_1_label}, {pengeluaran_1_1_amount}, ...
+// {total_pendapatan_1}, {total_pengeluaran_1}, {laba_bersih_1}, ...
+// {tanggal}
+export function buildLaporanKeuanganData(state: any): Record<string, string> {
+  const a = state.applicant
+  const now = new Date()
+  const data: Record<string, string> = {
+    nama_usaha: a.companyName || '',
+    alamat_usaha: a.companyAddress || '',
+    ig_usaha: (a as any).ig || '',
+    jenis_usaha: a.jobTitle || '',
+    nama: a.fullName || '',
+    tanggal: formatDateID(state.dateOfDocument),
+  }
+
+  // Cek apakah ada lapBulanan data (dari form wirausaha)
+  const lapBulanan = (a as any).lapBulanan
+  if (lapBulanan && Array.isArray(lapBulanan) && lapBulanan.length === 7) {
+    lapBulanan.forEach((lap: any, idx: number) => {
+      const slipNum = idx + 1
+      const baseDate = new Date(now.getFullYear(), now.getMonth() - 6 + idx, 15)
+      data[`periode_${slipNum}`] = baseDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+
+      // Pendapatan (up to 5)
+      let totalPendapatan = 0
+      for (let n = 1; n <= 5; n++) {
+        const item = (lap.pendapatan || [])[n - 1]
+        const label = item?.label || ''
+        const amount = item?.amount || 0
+        totalPendapatan += amount
+        data[`pendapatan_${slipNum}_${n}_label`] = label
+        data[`pendapatan_${slipNum}_${n}_amount`] = amount ? formatRupiah(amount) : ''
+      }
+      data[`total_pendapatan_${slipNum}`] = formatRupiah(totalPendapatan)
+
+      // Pengeluaran (up to 5)
+      let totalPengeluaran = 0
+      for (let n = 1; n <= 5; n++) {
+        const item = (lap.pengeluaran || [])[n - 1]
+        const label = item?.label || ''
+        const amount = item?.amount || 0
+        totalPengeluaran += amount
+        data[`pengeluaran_${slipNum}_${n}_label`] = label
+        data[`pengeluaran_${slipNum}_${n}_amount`] = amount ? formatRupiah(amount) : ''
+      }
+      data[`total_pengeluaran_${slipNum}`] = formatRupiah(totalPengeluaran)
+
+      // Laba Bersih
+      data[`laba_bersih_${slipNum}`] = formatRupiah(totalPendapatan - totalPengeluaran)
+    })
+  }
+
+  return data
+}
+
 // Fill placeholders in a Google Doc using Docs API
 // Strategy:
 // 1. Get all text content from the doc
@@ -226,6 +285,17 @@ export async function fillGoogleDocPlaceholders(docId: string, state: any): Prom
         },
       })
     }
+  }
+
+  // Laporan Keuangan placeholders (wirausaha)
+  const lapData = buildLaporanKeuanganData(state)
+  for (const [key, value] of Object.entries(lapData)) {
+    replacements.push({
+      replaceAllText: {
+        replaceText: String(value),
+        containsText: { text: `{${key}}`, matchCase: false },
+      },
+    })
   }
 
   // Execute all replacements
