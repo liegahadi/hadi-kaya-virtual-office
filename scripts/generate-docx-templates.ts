@@ -229,7 +229,7 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
-      children: [new TextRun({ text: 'Periode: {periode}', size: 22, font: 'Times New Roman' })],
+      children: [new TextRun({ text: 'Periode: [bulan periode]', size: 22, font: 'Times New Roman' })],
     }),
     // Identity (borderless table)
     new Table({
@@ -243,9 +243,10 @@ function buildSlipGaji(upahLabel: string = 'Gaji'): (Paragraph | Table)[] {
       ],
     }),
     new Paragraph({ spacing: { after: 200 }, children: [] }),
-    // Pendapatan/Potongan table (with borders)
+    // Pendapatan/Potongan table (with borders) — explicit columnWidths
     new Table({
       width: { size: 9800, type: WidthType.DXA },
+      columnWidths: [5400, 2200, 2200],
       borders: {
         top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK,
         insideHorizontal: BORDER_THIN, insideVertical: BORDER_THIN,

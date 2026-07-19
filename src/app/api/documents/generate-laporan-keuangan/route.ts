@@ -136,123 +136,30 @@ export async function POST(req: NextRequest) {
     }
     const periodeDesc = bulanList.join(', ')
 
-    // Build AI prompt
-    const systemPrompt = `Anda adalah auditor keuangan profesional yang ahli membuat laporan laba rugi untuk usaha kecil menengah (UMKM) di Indonesia.
+    // Build AI prompt — SIMPLIFIED (short system prompt to avoid timeout)
+    const systemPrompt = `Anda adalah auditor keuangan UMKM Indonesia. Buat laporan laba rugi dalam format HTML.
 
-Tugas Anda: generate laporan keuangan HTML untuk usaha wirausaha, dengan struktur yang rapih dan profesional.
+Aturan:
+1. Buat ${periodeCount} halaman, 1 halaman per bulan: ${bulanList.join(', ')}
+2. Setiap halaman dipisah: <div style="page-break-after:always;min-height:90vh;padding:20px 0;">
+3. Setiap halaman punya: judul "LAPORAN LABA RUGI" + "Periode: [bulan]" + tabel pendapatan + tabel HPP + laba kotor + tabel biaya operasional + laba bersih + signature
+4. Pakai <table border="1"> dengan width 100%
+5. Currency: "Rp. 1.234.567"
+6. Nilai fluktuatif tiap bulan, laba bersih harus match target
+7. Output: HANYA HTML, tanpa penjelasan`
 
-ATURAN WAJIB:
-1. Generate ${periodeCount} halaman terpisah (1 halaman per bulan)
-2. Setiap halaman DIPISAH dengan <div style="page-break-after:always;break-after:page;min-height:90vh;padding:20px 0;"> ... </div>
-3. Setiap halaman HARUS ada kop surat di atas (nama usaha, alamat, IG)
-4. Setiap halaman HARUS ada signature block di bawah kanan: "{kota}, {tanggal}" lalu "Pemilik Usaha," lalu "( {nama_pemilik} )"
-5. Bahasa: Indonesia formal
-6. Currency format: "Rp. 1.234.567" (titik sebagai pemisah ribuan)
-7. Nilai fluktuatif tiap bulan (jangan sama persis), tapi total laba bersih harus match target
-
-STRUKTUR SETIAP HALAMAN (HTML):
-\`\`\`html
-<div style="font-family:'Times New Roman',serif;font-size:11pt;line-height:1.5;color:#000;width:100%;min-height:90vh;padding:20px 0;page-break-after:always;break-after:page;">
-
-<!-- KOP SURAT -->
-<div style="border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:15px;text-align:center;">
-<p style="font-size:14pt;font-weight:bold;margin:0;">{NAMA USAHA}</p>
-<p style="font-size:9pt;color:#666;margin:3px 0;">{ALAMAT USAHA}</p>
-<p style="font-size:9pt;color:#666;margin:0;">IG: @{ig}</p>
-</div>
-
-<!-- JUDUL -->
-<p style="text-align:center;font-size:13pt;font-weight:bold;text-decoration:underline;margin:20px 0 5px;">LAPORAN LABA RUGI</p>
-<p style="text-align:center;font-size:11pt;margin:5px 0 20px;">Bulan: {BULAN TAHUN}</p>
-
-<!-- TABEL PENDAPATAN -->
-<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
-<thead>
-<tr style="background:#16a34a;color:#fff;">
-<th style="padding:8px 10px;border:1px solid #000;text-align:left;">PENDAPATAN</th>
-<th style="padding:8px 10px;border:1px solid #000;text-align:right;">Jumlah (Rp)</th>
-</tr>
-</thead>
-<tbody>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Kategori Produk 1]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Kategori Produk 2]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr style="background:#f0fdf4;font-weight:bold;"><td style="padding:8px 10px;border:1.5px solid #000;">Total Pendapatan</td><td style="padding:8px 10px;border:1.5px solid #000;text-align:right;">Rp. xxx</td></tr>
-</tbody>
-</table>
-
-<!-- TABEL HPP -->
-<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
-<thead>
-<tr style="background:#f59e0b;color:#fff;">
-<th style="padding:8px 10px;border:1px solid #000;text-align:left;">HPP (Harga Pokok Penjualan)</th>
-<th style="padding:8px 10px;border:1px solid #000;text-align:right;">Jumlah (Rp)</th>
-</tr>
-</thead>
-<tbody>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Bahan Baku/Modal Barang]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr style="background:#fef3c7;font-weight:bold;"><td style="padding:8px 10px;border:1.5px solid #000;">Total HPP</td><td style="padding:8px 10px;border:1.5px solid #000;text-align:right;">Rp. xxx</td></tr>
-</tbody>
-</table>
-
-<!-- LABA KOTOR -->
-<p style="text-align:right;font-size:12pt;font-weight:bold;margin:10px 0;background:#fef9c3;padding:8px;border:1.5px solid #000;">LABA KOTOR: Rp. xxx</p>
-
-<!-- TABEL BIAYA OPERASIONAL -->
-<table style="width:100%;font-size:11pt;border-collapse:collapse;margin-bottom:15px;border:1.5px solid #000;">
-<thead>
-<tr style="background:#dc2626;color:#fff;">
-<th style="padding:8px 10px;border:1px solid #000;text-align:left;">BIAYA OPERASIONAL</th>
-<th style="padding:8px 10px;border:1px solid #000;text-align:right;">Jumlah (Rp)</th>
-</tr>
-</thead>
-<tbody>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Gaji Karyawan]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Listrik & Air]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Transportasi]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr><td style="padding:6px 10px;border:1px solid #999;">[Pemasaran]</td><td style="padding:6px 10px;border:1px solid #999;text-align:right;">Rp. xxx</td></tr>
-<tr style="background:#fef2f2;font-weight:bold;"><td style="padding:8px 10px;border:1.5px solid #000;">Total Biaya Operasional</td><td style="padding:8px 10px;border:1.5px solid #000;text-align:right;">Rp. xxx</td></tr>
-</tbody>
-</table>
-
-<!-- LABA BERSIH (highlight) -->
-<div style="border:2px solid #1e3a8a;background:#e6f3ff;padding:12px;margin:15px 0;text-align:center;">
-<p style="margin:0;font-size:14pt;font-weight:bold;color:#1e3a8a;">LABA BERSIH (NETT)</p>
-<p style="margin:5px 0 0 0;font-size:16pt;font-weight:bold;color:#1e3a8a;">Rp. xxx</p>
-</div>
-
-<!-- SIGNATURE -->
-<div style="margin-top:40px;text-align:right;">
-<p style="margin:0 0 6px 0;">Pangkalpinang, {TANGGAL}</p>
-<p style="margin:0 0 80px 0;">Pemilik Usaha,</p>
-<p style="margin:0;font-weight:bold;text-decoration:underline;display:inline-block;border-top:1px solid #000;padding-top:6px;min-width:200px;text-align:center;">( {NAMA PEMILIK} )</p>
-</div>
-
-</div>
-\`\`\`
-
-OUTPUT: HANYA HTML code, tanpa markdown code blocks (\`\`\`), tanpa penjelasan, tanpa teks tambahan. Langsung HTML mulai dari <div> pertama sampai </div> terakhir.`
-
-    const userPrompt = `Buatkan laporan keuangan untuk usaha berikut:
-
-JENIS USAHA: ${jenisUsaha}
-NAMA USAHA: ${kopSurat.namaUsaha}
-ALAMAT USAHA: ${kopSurat.alamat}
-IG: ${kopSurat.ig || '-'}
-NAMA PEMILIK: Pemilik
-PERIODE: ${periodeDesc} (${periodeCount} bulan)
+    const userPrompt = `Buat laporan keuangan ${periodeCount} bulan untuk:
+- Usaha: ${jenisUsaha}
+- Nama: ${kopSurat.namaUsaha}
+- Alamat: ${kopSurat.alamat}
+- IG: ${kopSurat.ig || '-'}
 
 ${targetLabaDesc}
 
 ${biayaDesc}
 
-INGAT:
-- Generate ${periodeCount} halaman terpisah, masing-masing untuk 1 bulan
-- Bulan: ${bulanList.join(' → ')}
-- Setiap halaman punya kop surat + judul + tabel pendapatan + tabel HPP + laba kotor + tabel biaya operasional + laba bersih + signature
-- Pisah antar halaman dengan <div style="page-break-after:always;...">
-- Nilai fluktuatif tiap bulan (natural)
-- LABA BERSIH harus match target (range atau per bulan)
-- Output: HANYA HTML, tanpa penjelasan, tanpa markdown`
+Bulan: ${bulanList.join(' → ')}
+Output: HANYA HTML mulai dari <div> pertama.`
 
     // Call z-ai API directly (hardcoded config, no filesystem dependency)
     const aiResponse = await callZaiChat(systemPrompt, userPrompt)
