@@ -183,9 +183,29 @@ export async function getAuthenticatedOAuth2Client(): Promise<any | null> {
           scope: credentials.scope || token.scope,
         },
       })
-    } catch (err) {
-      console.error('Failed to refresh Google token:', err)
-      // Continue with old token — might still work or fail gracefully
+    } catch (err: any) {
+      console.error('Failed to refresh Google token:', err?.message)
+      // Detect invalid_grant — refresh token expired/revoked
+      // Common causes: 6-month idle, password changed, user revoked, suspended account
+      const errMsg = (err?.message || '').toLowerCase()
+      const isInvalidGrant =
+        errMsg.includes('invalid_grant') ||
+        errMsg.includes('invalid token') ||
+        errMsg.includes('token has been expired or revoked') ||
+        err?.code === 400 && errMsg.includes('refresh')
+
+      if (isInvalidGrant) {
+        // CRITICAL: Hapus token lama supaya user harus login ulang
+        // Kalau ga dihapus, sistem akan terus pakai token invalid → error 500 tiap request
+        try {
+          await db.googleToken.delete({ where: { id: 'owner' } })
+          console.error('Google token deleted (invalid_grant). Owner must re-login.')
+        } catch (delErr) {
+          console.error('Failed to delete invalid token:', delErr)
+        }
+        throw new Error('GOOGLE_TOKEN_EXPIRED: Refresh token invalid/revoked. Owner must re-login Google. Klik "Connect Google Drive" di modal.')
+      }
+      // For other errors, continue with old token (might still work or fail gracefully)
     }
   }
 

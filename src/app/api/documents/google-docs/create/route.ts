@@ -30,8 +30,21 @@ export async function POST(req: NextRequest) {
           message: 'Owner belum login Google. Klik tombol "Connect Google Drive" untuk login.',
         }, { status: 401 })
       }
-      drive = await getDriveClientOAuth()
-      usingOAuth = true
+      try {
+        drive = await getDriveClientOAuth()
+        usingOAuth = true
+      } catch (authErr: any) {
+        const errMsg = authErr?.message || ''
+        // Detect invalid_grant / token expired
+        if (errMsg.includes('GOOGLE_TOKEN_EXPIRED') || errMsg.includes('invalid_grant')) {
+          return NextResponse.json({
+            success: false,
+            error: 'GOOGLE_TOKEN_EXPIRED',
+            message: 'Sesi Google sudah expired. Klik tombol "Connect Google Drive" untuk login ulang (re-auth). Token lama sudah dihapus otomatis.',
+          }, { status: 401 })
+        }
+        throw authErr
+      }
     } else if (isGoogleConfigured()) {
       drive = getDriveClient() // Service Account (legacy)
     } else {

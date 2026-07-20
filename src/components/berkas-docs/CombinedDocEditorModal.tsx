@@ -139,7 +139,15 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
         }),
       })
       const d = await res.json()
-      if (!d.success) throw new Error(d.error || `HTTP ${res.status}`)
+      if (!d.success) {
+        // Handle specific errors with user-friendly message + reconnect prompt
+        if (d.error === 'GOOGLE_TOKEN_EXPIRED' || d.error === 'GOOGLE_NOT_CONNECTED') {
+          setGoogleStatus('oauth-not-connected') // Trigger "Connect Google Drive" UI
+          toast.error(d.message || 'Sesi Google expired. Silakan login ulang.')
+          return
+        }
+        throw new Error(d.error || d.message || `HTTP ${res.status}`)
+      }
 
       setCreatedDoc({
         docId: d.docId,
@@ -151,7 +159,14 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
       setView('editor')
       toast.success(`Google Doc berhasil dibuat dari template "${template.name}"!`)
     } catch (err) {
-      toast.error('Gagal buat Google Doc: ' + (err instanceof Error ? err.message : 'unknown'))
+      const errMsg = err instanceof Error ? err.message : 'unknown'
+      // Detect invalid_grant in raw error message
+      if (errMsg.includes('invalid_grant')) {
+        setGoogleStatus('oauth-not-connected')
+        toast.error('Sesi Google sudah expired. Klik "Connect Google Drive" untuk login ulang.')
+      } else {
+        toast.error('Gagal buat Google Doc: ' + errMsg)
+      }
     } finally {
       setCreating(false)
     }
@@ -546,204 +561,28 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
               )}
               </>
             ) : (
-            <>
-            {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker (side-by-side) */}
-            <div className="flex flex-1 overflow-hidden min-h-0">
-            <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
-              <div className="p-3 border-b bg-emerald-50 sticky top-0 z-10">
-                <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> Form Slip Gaji (7 Bulan)
-                </h3>
-                <p className="text-[10px] text-emerald-700 mt-0.5">Isi per bulan. Total auto-calc. Pilih template di kanan → generate.</p>
-              </div>
-
-              <div className="p-2 space-y-2">
-                {slipBulanan.map((slip, idx) => {
-                  const total = calcTotal(slip)
-                  const isExpanded = expandedBulan === idx
-                  return (
-                    <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden">
-                      {/* Accordion Header */}
-                      <button
-                        onClick={() => setExpandedBulan(isExpanded ? -1 : idx)}
-                        className={cn('w-full flex items-center justify-between p-2 text-left transition-colors',
-                          isExpanded ? 'bg-emerald-100' : 'bg-slate-50 hover:bg-slate-100')}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={cn('text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center',
-                            isExpanded ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}>{idx + 1}</span>
-                          <span className="text-xs font-medium text-slate-800">{slip.bulan}</span>
-                        </div>
-                        <span className="text-[10px] font-bold text-emerald-700">{fmt(total.gajiBersih)}</span>
-                      </button>
-
-                      {/* Accordion Body */}
-                      {isExpanded && (
-                        <div className="p-2 space-y-2 bg-white">
-                          {/* Apply to All button — only on first bulan */}
-                          {idx === 0 && (
-                            <button
-                              onClick={applyToAllBulan}
-                              className="w-full py-1.5 px-2 bg-blue-50 border border-blue-300 rounded text-[10px] font-medium text-blue-700 hover:bg-blue-100 flex items-center justify-center gap-1"
-                            >
-                              <Plus className="w-3 h-3" /> Apply ke Semua Bulan
-                            </button>
-                          )}
-                          {/* Tanggal Terima + Mode Periode */}
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <div>
-                              <label className="text-[9px] font-medium text-slate-500">Tgl Terima (1-31)</label>
-                              <input type="number" min="1" max="31" value={slip.tanggalTerima}
-                                onChange={e => updateSlipBulan(idx, 'tanggalTerima', parseInt(e.target.value) || 25)}
-                                className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
-                            </div>
-                            <div>
-                              <label className="text-[9px] font-medium text-slate-500">Mode Periode</label>
-                              <select value={slip.modePeriode}
-                                onChange={e => updateSlipBulan(idx, 'modePeriode', e.target.value)}
-                                className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500">
-                                <option value="bulan-periode">Bulan Periode</option>
-                                <option value="plus-1-bulan">+1 Bulan Periode</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          {/* Gaji Pokok */}
-                          <div>
-                            <label className="text-[9px] font-medium text-slate-500">Gaji Pokok (Rp)</label>
-                            <input type="text" value={formatRibuan(slip.gajiPokok)}
-                              onChange={e => updateSlipBulan(idx, 'gajiPokok', parseRibuan(e.target.value))}
-                              className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
-                          </div>
-
-                          {/* Tunjangan */}
-                          <div>
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span className="text-[9px] font-bold text-slate-600">Tunjangan</span>
-                              <button onClick={() => addSlipItemBulan(idx, 'tunjangan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
-                            </div>
-                            {slip.tunjangan.map((t, i) => (
-                              <div key={i} className="flex gap-1 mb-0.5">
-                                <input value={t.label} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'label', e.target.value)}
-                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="text" value={formatRibuan(t.amount)} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'amount', String(parseRibuan(e.target.value)))}
-                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <button onClick={() => removeSlipItemBulan(idx, 'tunjangan', i)} className="text-red-500 text-[10px]">✕</button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Bonus */}
-                          <div>
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span className="text-[9px] font-bold text-slate-600">Bonus</span>
-                              <button onClick={() => addSlipItemBulan(idx, 'bonus')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
-                            </div>
-                            {slip.bonus.map((b, i) => (
-                              <div key={i} className="flex gap-1 mb-0.5">
-                                <input value={b.label} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'label', e.target.value)}
-                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="text" value={formatRibuan(b.amount)} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'amount', String(parseRibuan(e.target.value)))}
-                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <button onClick={() => removeSlipItemBulan(idx, 'bonus', i)} className="text-red-500 text-[10px]">✕</button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Potongan */}
-                          <div>
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span className="text-[9px] font-bold text-slate-600">Potongan</span>
-                              <button onClick={() => addSlipItemBulan(idx, 'potongan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
-                            </div>
-                            {slip.potongan.map((p, i) => (
-                              <div key={i} className="flex gap-1 mb-0.5">
-                                <input value={p.label} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'label', e.target.value)}
-                                  placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <input type="text" value={formatRibuan(p.amount)} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'amount', String(parseRibuan(e.target.value)))}
-                                  placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
-                                <button onClick={() => removeSlipItemBulan(idx, 'potongan', i)} className="text-red-500 text-[10px]">✕</button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Auto-Calc Summary */}
-                          <div className="bg-emerald-50 border border-emerald-200 rounded p-1.5 space-y-0.5">
-                            <div className="flex justify-between text-[9px] text-slate-600"><span>Gaji Pokok:</span><span>{fmt(slip.gajiPokok)}</span></div>
-                            <div className="flex justify-between text-[9px] text-slate-600"><span>+ Tunjangan:</span><span>{fmt(total.totalTunjangan)}</span></div>
-                            <div className="flex justify-between text-[9px] text-slate-600"><span>+ Bonus:</span><span>{fmt(total.totalBonus)}</span></div>
-                            <div className="flex justify-between text-[9px] text-slate-600"><span>- Potongan:</span><span>{fmt(total.totalPotongan)}</span></div>
-                            <div className="border-t border-emerald-300 my-0.5"></div>
-                            <div className="flex justify-between text-[10px] font-bold text-emerald-800"><span>Gaji Bersih:</span><span>{fmt(total.gajiBersih)}</span></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* RIGHT: Template Picker */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-white">
-                <div className="flex gap-3 items-center mb-3">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Cari template..."
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-cyan-500 text-slate-900"
-                    />
-                  </div>
-                  <div className="text-sm text-slate-600">{filteredTemplates.length} dari {TEMPLATES.length} template</div>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {filteredTemplates.map(template => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleCreateDoc(template)}
-                      disabled={creating}
-                      className="group bg-white border border-slate-200 rounded-lg p-4 text-left hover:border-cyan-500 hover:shadow-md transition-all disabled:opacity-50"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-800 group-hover:text-cyan-600">{template.name}</h3>
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">{template.category}</span>
-                        </div>
-                        {creating && selectedTemplate?.id === template.id ? (
-                          <Loader2 className="w-4 h-4 text-cyan-500 animate-spin" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-slate-300 group-hover:text-cyan-500" />
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">{template.description}</p>
-                      <div className="mt-3 text-[10px] text-cyan-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                        {creating && selectedTemplate?.id === template.id ? 'Membuat Google Doc...' : 'Klik untuk buat & edit di Google Docs →'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                {filteredTemplates.length === 0 && (
-                  <div className="text-center py-12 text-slate-500">
-                    <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-                    <p className="text-sm">Tidak ada template yang cocok.</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 border-t bg-white text-[11px] text-slate-600 space-y-1">
-                <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
-                <p>🎨 Klik template → buka Google Doc baru (auto-isi data form di kiri) → edit langsung di Google Docs → download .docx</p>
-              </div>
-            </div>
-            </div>
-            </>
+              <KaryawanSlipGajiPanel
+                state={state}
+                customerId={customerId}
+                slipBulanan={slipBulanan}
+                expandedBulan={expandedBulan}
+                setExpandedBulan={(n: number) => setExpandedBulan(n)}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                filteredTemplates={filteredTemplates}
+                creating={creating}
+                selectedTemplate={selectedTemplate}
+                onTemplateSelect={handleCreateDoc}
+                calcTotal={calcTotal}
+                fmt={fmt}
+                formatRibuan={formatRibuan}
+                parseRibuan={parseRibuan}
+                applyToAllBulan={applyToAllBulan}
+                updateSlipBulan={updateSlipBulan}
+                addSlipItemBulan={addSlipItemBulan}
+                updateSlipItemBulan={updateSlipItemBulan}
+                removeSlipItemBulan={removeSlipItemBulan}
+              />
             )}
           </div>
         )}
@@ -1010,6 +849,249 @@ const LAPORAN_TEMPLATES = [
 // Total per parent = sum(subItem.qty * subItem.price)
 // Total Pendapatan = sum(parent.total)
 
+// =========================================================
+// KaryawanSlipGajiPanel — Komponen terpisah untuk Karyawan case
+// EXACT SAME LAYOUT as WirausahaFormboxPanel (mirip line 1146-...)
+// Tujuan: hindari bug flexbox di nested JSX fragment
+// =========================================================
+function KaryawanSlipGajiPanel({
+  state, customerId, slipBulanan, expandedBulan, setExpandedBulan, searchQuery, setSearchQuery,
+  filteredTemplates, creating, selectedTemplate, onTemplateSelect,
+  calcTotal, fmt, formatRibuan, parseRibuan,
+  applyToAllBulan, updateSlipBulan, addSlipItemBulan, updateSlipItemBulan, removeSlipItemBulan,
+}: {
+  state: BerkasState
+  customerId?: string
+  slipBulanan: Array<{
+    bulan: string; tanggalTerima: number; modePeriode: 'bulan-periode' | 'plus-1-bulan'
+    gajiPokok: number
+    tunjangan: Array<{ label: string; amount: number }>
+    potongan: Array<{ label: string; amount: number }>
+    bonus: Array<{ label: string; amount: number }>
+  }>
+  expandedBulan: number
+  setExpandedBulan: (n: number) => void
+  searchQuery: string
+  setSearchQuery: (s: string) => void
+  filteredTemplates: TemplateInfo[]
+  creating: boolean
+  selectedTemplate: TemplateInfo | null
+  onTemplateSelect: (t: TemplateInfo) => void
+  calcTotal: (s: any) => any
+  fmt: (n: number) => string
+  formatRibuan: (n: number | string) => string
+  parseRibuan: (s: string) => number
+  applyToAllBulan: () => void
+  updateSlipBulan: (idx: number, field: string, val: any) => void
+  addSlipItemBulan: (idx: number, type: 'tunjangan' | 'potongan' | 'bonus') => void
+  updateSlipItemBulan: (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number, key: 'label' | 'amount', val: any) => void
+  removeSlipItemBulan: (idx: number, type: 'tunjangan' | 'potongan' | 'bonus', itemIdx: number) => void
+}) {
+  // Helper that calls parent setExpandedBulan (avoid name collision with prop)
+  const setExpandedBulan2 = setExpandedBulan
+  return (
+    <div className="flex-1 overflow-hidden flex bg-slate-50">
+      {/* LEFT: Form Slip Gaji (400px fixed width, same structure as WirausahaFormboxPanel LEFT) */}
+      <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
+        <div className="p-3 border-b bg-emerald-50 sticky top-0 z-10">
+          <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Form Slip Gaji (7 Bulan)
+          </h3>
+          <p className="text-[10px] text-emerald-700 mt-0.5">Isi per bulan. Total auto-calc. Pilih template di kanan → generate.</p>
+        </div>
+
+        <div className="p-2 space-y-2">
+          {slipBulanan.map((slip, idx) => {
+            const total = calcTotal(slip)
+            const isExpanded = expandedBulan === idx
+            return (
+              <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden">
+                {/* Accordion Header */}
+                <button
+                  onClick={() => setExpandedBulan2(isExpanded ? -1 : idx)}
+                  className={cn('w-full flex items-center justify-between p-2 text-left transition-colors',
+                    isExpanded ? 'bg-emerald-100' : 'bg-slate-50 hover:bg-slate-100')}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={cn('text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center',
+                      isExpanded ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600')}>{idx + 1}</span>
+                    <span className="text-xs font-medium text-slate-800">{slip.bulan}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700">{fmt(total.gajiBersih)}</span>
+                </button>
+
+                {/* Accordion Body */}
+                {isExpanded && (
+                  <div className="p-2 space-y-2 bg-white">
+                    {/* Apply to All button — only on first bulan */}
+                    {idx === 0 && (
+                      <button
+                        onClick={applyToAllBulan}
+                        className="w-full py-1.5 px-2 bg-blue-50 border border-blue-300 rounded text-[10px] font-medium text-blue-700 hover:bg-blue-100 flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Apply ke Semua Bulan
+                      </button>
+                    )}
+                    {/* Tanggal Terima + Mode Periode */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500">Tgl Terima (1-31)</label>
+                        <input type="number" min="1" max="31" value={slip.tanggalTerima}
+                          onChange={e => updateSlipBulan(idx, 'tanggalTerima', parseInt(e.target.value) || 25)}
+                          className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500">Mode Periode</label>
+                        <select value={slip.modePeriode}
+                          onChange={e => updateSlipBulan(idx, 'modePeriode', e.target.value)}
+                          className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500">
+                          <option value="bulan-periode">Bulan Periode</option>
+                          <option value="plus-1-bulan">+1 Bulan Periode</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Gaji Pokok */}
+                    <div>
+                      <label className="text-[9px] font-medium text-slate-500">Gaji Pokok (Rp)</label>
+                      <input type="text" value={formatRibuan(slip.gajiPokok)}
+                        onChange={e => updateSlipBulan(idx, 'gajiPokok', parseRibuan(e.target.value))}
+                        className="w-full border border-slate-300 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-emerald-500" />
+                    </div>
+
+                    {/* Tunjangan */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[9px] font-bold text-slate-600">Tunjangan</span>
+                        <button onClick={() => addSlipItemBulan(idx, 'tunjangan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                      </div>
+                      {slip.tunjangan.map((t, i) => (
+                        <div key={i} className="flex gap-1 mb-0.5">
+                          <input value={t.label} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'label', e.target.value)}
+                            placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <input type="text" value={formatRibuan(t.amount)} onChange={e => updateSlipItemBulan(idx, 'tunjangan', i, 'amount', String(parseRibuan(e.target.value)))}
+                            placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <button onClick={() => removeSlipItemBulan(idx, 'tunjangan', i)} className="text-red-500 text-[10px]">✕</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Bonus */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[9px] font-bold text-slate-600">Bonus</span>
+                        <button onClick={() => addSlipItemBulan(idx, 'bonus')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                      </div>
+                      {slip.bonus.map((b, i) => (
+                        <div key={i} className="flex gap-1 mb-0.5">
+                          <input value={b.label} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'label', e.target.value)}
+                            placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <input type="text" value={formatRibuan(b.amount)} onChange={e => updateSlipItemBulan(idx, 'bonus', i, 'amount', String(parseRibuan(e.target.value)))}
+                            placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <button onClick={() => removeSlipItemBulan(idx, 'bonus', i)} className="text-red-500 text-[10px]">✕</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Potongan */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[9px] font-bold text-slate-600">Potongan</span>
+                        <button onClick={() => addSlipItemBulan(idx, 'potongan')} className="text-[9px] text-emerald-600 hover:text-emerald-700">+ Tambah</button>
+                      </div>
+                      {slip.potongan.map((p, i) => (
+                        <div key={i} className="flex gap-1 mb-0.5">
+                          <input value={p.label} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'label', e.target.value)}
+                            placeholder="Nama" className="flex-1 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <input type="text" value={formatRibuan(p.amount)} onChange={e => updateSlipItemBulan(idx, 'potongan', i, 'amount', String(parseRibuan(e.target.value)))}
+                            placeholder="Rp" className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-emerald-500" />
+                          <button onClick={() => removeSlipItemBulan(idx, 'potongan', i)} className="text-red-500 text-[10px]">✕</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Auto-Calc Summary */}
+                    <div className="bg-emerald-50 border border-emerald-200 rounded p-1.5 space-y-0.5">
+                      <div className="flex justify-between text-[9px] text-slate-600"><span>Gaji Pokok:</span><span>{fmt(slip.gajiPokok)}</span></div>
+                      <div className="flex justify-between text-[9px] text-slate-600"><span>+ Tunjangan:</span><span>{fmt(total.totalTunjangan)}</span></div>
+                      <div className="flex justify-between text-[9px] text-slate-600"><span>+ Bonus:</span><span>{fmt(total.totalBonus)}</span></div>
+                      <div className="flex justify-between text-[9px] text-slate-600"><span>- Potongan:</span><span>{fmt(total.totalPotongan)}</span></div>
+                      <div className="border-t border-emerald-300 my-0.5"></div>
+                      <div className="flex justify-between text-[10px] font-bold text-emerald-800"><span>Gaji Bersih:</span><span>{fmt(total.gajiBersih)}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* RIGHT: Template Picker — EXACTLY mirip WirausahaFormboxPanel RIGHT structure */}
+      <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+        <div className="p-3 border-b bg-white">
+          <h3 className="text-sm font-bold text-emerald-800 mb-1 flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Pilih Template
+          </h3>
+          <div className="flex gap-2 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Cari template..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:border-emerald-500 text-slate-900"
+              />
+            </div>
+            <span className="text-[10px] text-slate-600 shrink-0">{filteredTemplates.length} dari {TEMPLATES.length} template</span>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-2 gap-2">
+            {filteredTemplates.map(template => (
+              <button
+                key={template.id}
+                onClick={() => onTemplateSelect(template)}
+                disabled={creating}
+                className="group bg-white border border-slate-200 rounded-lg p-3 text-left hover:border-emerald-500 hover:shadow-md transition-all disabled:opacity-50"
+              >
+                <div className="flex items-start justify-between mb-1">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-800 group-hover:text-emerald-600">{template.name}</h3>
+                    <span className="text-[9px] text-slate-500 uppercase tracking-wider">{template.category}</span>
+                  </div>
+                  {creating && selectedTemplate?.id === template.id ? (
+                    <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500" />
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-600 leading-relaxed line-clamp-3">{template.description}</p>
+                <div className="mt-2 text-[9px] text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                  {creating && selectedTemplate?.id === template.id ? 'Membuat Google Doc...' : 'Klik untuk buat & edit di Google Docs →'}
+                </div>
+              </button>
+            ))}
+          </div>
+          {filteredTemplates.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+              <p className="text-sm">Tidak ada template yang cocok.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-2 border-t bg-white text-[10px] text-slate-600 space-y-0.5">
+          <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
+          <p>🎨 Klik template → buka Google Doc baru (auto-isi data form di kiri) → edit langsung di Google Docs → download .docx</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
   state: BerkasState
   customerId?: string
@@ -1133,11 +1215,22 @@ function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
         body: JSON.stringify({ templatePath: template.filePath, state: stateWithLap, customerId }),
       })
       const d = await res.json()
-      if (!d.success) throw new Error(d.error || `HTTP ${res.status}`)
+      if (!d.success) {
+        if (d.error === 'GOOGLE_TOKEN_EXPIRED' || d.error === 'GOOGLE_NOT_CONNECTED') {
+          toast.error(d.message || 'Sesi Google expired. Silakan login ulang lewat modal SK Kerja + Slip Gaji (karyawan case).')
+          return
+        }
+        throw new Error(d.error || d.message || `HTTP ${res.status}`)
+      }
       onDocCreated({ docId: d.docId, fileName: d.fileName, editUrl: d.editUrl, embedUrl: d.embedUrl, downloadUrl: d.downloadUrl })
       toast.success(`Google Doc berhasil dibuat dari template "${template.name}"!`)
     } catch (err) {
-      toast.error('Gagal buat Google Doc: ' + (err instanceof Error ? err.message : 'unknown'))
+      const errMsg = err instanceof Error ? err.message : 'unknown'
+      if (errMsg.includes('invalid_grant')) {
+        toast.error('Sesi Google sudah expired. Buka modal SK Kerja + Slip Gaji (karyawan case), lalu klik "Connect Google Drive" untuk login ulang.')
+      } else {
+        toast.error('Gagal buat Google Doc: ' + errMsg)
+      }
     } finally {
       setCreating(false)
     }
