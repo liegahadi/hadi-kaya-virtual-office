@@ -547,7 +547,8 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
               </>
             ) : (
             <>
-            {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker */}
+            {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker (side-by-side) */}
+            <div className="flex flex-1 overflow-hidden">
             <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
               <div className="p-3 border-b bg-emerald-50 sticky top-0 z-10">
                 <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
@@ -740,6 +741,7 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                 <p>📄 <strong>1 file = SK Kerja + 7 Slip Gaji</strong> (kop surat sama, langsung rapi)</p>
                 <p>🎨 Klik template → buka Google Doc baru (auto-isi data form di kiri) → edit langsung di Google Docs → download .docx</p>
               </div>
+            </div>
             </div>
             </>
             )}
