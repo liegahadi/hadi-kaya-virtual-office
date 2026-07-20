@@ -295,8 +295,8 @@ function buildSlipGaji(style: any, upahLabel: string, slipIndex: number = 0): (P
   const letters = ['a', 'b', 'c', 'd', 'e']
 
   return [
-    // Page break (kecuali slip pertama, karena SK Kerja sudah ada page break sebelumnya)
-    ...(slipIndex > 0 ? [new Paragraph({ children: [new PageBreak()] })] : []),
+    // Page break SEBELUM setiap slip gaji (termasuk slip pertama, untuk pisah dari SK Kerja)
+    new Paragraph({ children: [new PageBreak()] }),
     // Title
     new Paragraph({
       alignment: AlignmentType.CENTER,

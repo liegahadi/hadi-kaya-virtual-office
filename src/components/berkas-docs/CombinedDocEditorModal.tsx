@@ -495,6 +495,30 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
                   📧 {accountInfo.email}
                 </span>
               )}
+              {googleStatus === 'oauth-connected' && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Disconnect Google? Token akan dihapus. Kamu perlu login ulang untuk generate dokumen.')) return
+                    try {
+                      const res = await fetch('/api/auth/google/disconnect', { method: 'POST' })
+                      const d = await res.json()
+                      if (d.success) {
+                        toast.success('Google disconnected. Silakan login ulang.')
+                        setAccountInfo(null)
+                        setGoogleStatus('oauth-not-connected')
+                      } else {
+                        toast.error('Gagal disconnect: ' + (d.message || 'unknown'))
+                      }
+                    } catch (err) {
+                      toast.error('Gagal disconnect: ' + (err instanceof Error ? err.message : 'unknown'))
+                    }
+                  }}
+                  className="ml-1 px-2 py-1 text-[10px] bg-red-50 border border-red-300 text-red-700 rounded hover:bg-red-100 font-medium"
+                  title="Hapus token Google dari database (pakai kalau error invalid_grant / token expired)"
+                >
+                  Disconnect Google
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
