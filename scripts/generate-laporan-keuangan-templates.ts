@@ -1,8 +1,13 @@
-// Generate .docx templates for Laporan Keuangan Wirausaha (5 styles)
-// Structure per halaman: Kop + Judul + Periode + Pendapatan table + Pengeluaran table + Laba Bersih + Signature
-// 7 hard-coded sections dengan indexed placeholders
+// Generate .docx templates for Laporan Keuangan Wirausaha (10 styles)
+// OPSI A: Parent+Child structure (match formbox UI)
+//   - Parent header (bold + background) per group
+//   - Child rows: indent, qty × price = total (3 columns)
+//   - Subtotal per parent (after child rows)
+//   - Grand total per type (pendapatan/pengeluaran)
+//   - Laba Bersih highlight
+// 7 hard-coded sections per template (1 per bulan, indexed placeholders)
 
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, PageBreak, TabStopType, TabStopPosition } from 'docx'
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, PageBreak, TabStopType } from 'docx'
 import fs from 'fs'
 import path from 'path'
 
@@ -13,13 +18,19 @@ const BORDER_NONE = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right:
 const BORDER_THIN = { style: BorderStyle.SINGLE, size: 1, color: '999999' }
 const BORDER_THICK = { style: BorderStyle.SINGLE, size: 2, color: '000000' }
 
-// 5 styles dengan visual differences
+// 10 styles (dari 5 → 10, user request "Tambah juga ya templatenya")
 const STYLES = [
-  { id: '01', name: 'Formal Standard', font: 'Times New Roman', titleSize: 26, bodySize: 22, accentColor: '000000', headerBgPendapatan: '16A34A', headerBgPengeluaran: 'DC2626', headerBgLaba: '1E3A8A' },
-  { id: '02', name: 'Modern Clean', font: 'Arial', titleSize: 24, bodySize: 21, accentColor: '2563EB', headerBgPendapatan: '2563EB', headerBgPengeluaran: 'DC2626', headerBgLaba: '1E3A8A' },
-  { id: '03', name: 'Minimal UMKM', font: 'Calibri', titleSize: 24, bodySize: 21, accentColor: '16A34A', headerBgPendapatan: '16A34A', headerBgPengeluaran: 'EA580C', headerBgLaba: '166534' },
-  { id: '04', name: 'Klasik Elegant', font: 'Georgia', titleSize: 26, bodySize: 22, accentColor: '92400E', headerBgPendapatan: '166534', headerBgPengeluaran: '991B1B', headerBgLaba: '78350F' },
-  { id: '05', name: 'Simple Formal', font: 'Tahoma', titleSize: 24, bodySize: 21, accentColor: '000000', headerBgPendapatan: 'E8E8E8', headerBgPengeluaran: 'E8E8E8', headerBgLaba: 'E6F3FF' },
+  { id: '01', name: 'Formal Standard', font: 'Times New Roman', titleSize: 26, bodySize: 22, accentColor: '000000', headerBgPendapatan: '16A34A', headerBgPengeluaran: 'DC2626', headerBgLaba: '1E3A8A', parentBg: 'F0FDF4', parentBgExp: 'FEF2F2' },
+  { id: '02', name: 'Modern Clean', font: 'Arial', titleSize: 24, bodySize: 21, accentColor: '2563EB', headerBgPendapatan: '2563EB', headerBgPengeluaran: 'DC2626', headerBgLaba: '1E3A8A', parentBg: 'EFF6FF', parentBgExp: 'FEF2F2' },
+  { id: '03', name: 'Minimal UMKM', font: 'Calibri', titleSize: 24, bodySize: 21, accentColor: '16A34A', headerBgPendapatan: '16A34A', headerBgPengeluaran: 'EA580C', headerBgLaba: '166534', parentBg: 'F0FDF4', parentBgExp: 'FFF7ED' },
+  { id: '04', name: 'Klasik Elegant', font: 'Georgia', titleSize: 26, bodySize: 22, accentColor: '92400E', headerBgPendapatan: '166534', headerBgPengeluaran: '991B1B', headerBgLaba: '78350F', parentBg: 'F0FDF4', parentBgExp: 'FEF2F2' },
+  { id: '05', name: 'Simple Formal', font: 'Tahoma', titleSize: 24, bodySize: 21, accentColor: '000000', headerBgPendapatan: '4B5563', headerBgPengeluaran: '7C2D12', headerBgLaba: '1E3A8A', parentBg: 'F9FAFB', parentBgExp: 'F9FAFB' },
+  // NEW 5 styles
+  { id: '06', name: 'Accent Hijau UMKM', font: 'Calibri', titleSize: 24, bodySize: 21, accentColor: '16A34A', headerBgPendapatan: '16A34A', headerBgPengeluaran: 'DC2626', headerBgLaba: '15803D', parentBg: 'DCFCE7', parentBgExp: 'FEE2E2' },
+  { id: '07', name: 'Accent Coklat Toko', font: 'Georgia', titleSize: 26, bodySize: 22, accentColor: '92400E', headerBgPendapatan: '92400E', headerBgPengeluaran: '7C2D12', headerBgLaba: '78350F', parentBg: 'FEF3C7', parentBgExp: 'FED7AA' },
+  { id: '08', name: 'Modern Tech Startup', font: 'Segoe UI', titleSize: 24, bodySize: 21, accentColor: '8B5CF6', headerBgPendapatan: '7C3AED', headerBgPengeluaran: 'DC2626', headerBgLaba: '1E3A8A', parentBg: 'F5F3FF', parentBgExp: 'FEF2F2' },
+  { id: '09', name: 'Klasik Hotel Premium', font: 'Georgia', titleSize: 28, bodySize: 22, accentColor: '1E293B', headerBgPendapatan: '166534', headerBgPengeluaran: '881337', headerBgLaba: '1E3A8A', parentBg: 'F0FDF4', parentBgExp: 'FCE7F3' },
+  { id: '10', name: 'Minimal Tanpa Warna', font: 'Calibri', titleSize: 24, bodySize: 21, accentColor: '000000', headerBgPendapatan: 'E5E7EB', headerBgPengeluaran: 'E5E7EB', headerBgLaba: 'E5E7EB', parentBg: 'F9FAFB', parentBgExp: 'F9FAFB' },
 ]
 
 // Helper: baris identitas (borderless table)
@@ -40,29 +51,149 @@ function idRow(label: string, value: string, font: string, bodySize: number, bol
   })
 }
 
-// Helper: baris pendapatan/pengeluaran (dengan border)
-function lapRow(label: string, amount: string, font: string, bodySize: number, bold = false, bg?: string): TableRow {
-  const shading = bg ? { fill: bg.replace('#', '') } : undefined
+// Parent header row (full-width, bold, with background)
+function parentHeaderRow(labelKey: string, bg: string, font: string, bodySize: number, isPendapatan: boolean): TableRow {
   return new TableRow({
     children: [
       new TableCell({
-        width: { size: 7000, type: WidthType.DXA },
-        shading,
-        children: [new Paragraph({ children: [new TextRun({ text: label, bold, font, size: bodySize })] })],
-      }),
-      new TableCell({
-        width: { size: 2800, type: WidthType.DXA },
-        shading,
-        children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: amount, bold, font, size: bodySize })] })],
+        width: { size: 9800, type: WidthType.DXA },
+        columnSpan: 4,
+        shading: { fill: bg },
+        borders: { top: BORDER_THIN, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          children: [new TextRun({ text: labelKey, bold: true, size: bodySize, font, color: isPendapatan ? '166534' : '991B1B' })],
+        })],
       }),
     ],
   })
 }
 
-// Build 1 halaman laporan keuangan
+// Child row: indent label, qty × price, total
+function childRow(labelKey: string, qtyKey: string, priceKey: string, totalKey: string, font: string, bodySize: number): TableRow {
+  return new TableRow({
+    children: [
+      // Label (indented)
+      new TableCell({
+        width: { size: 4600, type: WidthType.DXA },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          indent: { left: 720 },
+          children: [new TextRun({ text: labelKey, size: bodySize - 1, font })],
+        })],
+      }),
+      // Qty × Price
+      new TableCell({
+        width: { size: 2400, type: WidthType.DXA },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: `${qtyKey} × ${priceKey}`, size: bodySize - 1, font, color: '666666' })],
+        })],
+      }),
+      // Total
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: totalKey, size: bodySize - 1, font })],
+        })],
+      }),
+    ],
+  })
+}
+
+// Subtotal row (parent total)
+function subtotalRow(label: string, subtotalKey: string, bg: string, font: string, bodySize: number): TableRow {
+  return new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 7000, type: WidthType.DXA },
+        columnSpan: 2,
+        shading: { fill: bg },
+        borders: { top: NO_BORDER, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          indent: { left: 360 },
+          children: [new TextRun({ text: label, italics: true, bold: true, size: bodySize - 1, font })],
+        })],
+      }),
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        shading: { fill: bg },
+        borders: { top: NO_BORDER, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: subtotalKey, italics: true, bold: true, size: bodySize - 1, font })],
+        })],
+      }),
+    ],
+  })
+}
+
+// Grand total row
+function grandTotalRow(label: string, totalKey: string, bg: string, font: string, bodySize: number): TableRow {
+  return new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 7000, type: WidthType.DXA },
+        columnSpan: 2,
+        shading: { fill: bg },
+        borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          children: [new TextRun({ text: label, bold: true, size: bodySize, font })],
+        })],
+      }),
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        shading: { fill: bg },
+        borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: totalKey, bold: true, size: bodySize, font })],
+        })],
+      }),
+    ],
+  })
+}
+
+// Build 1 halaman laporan keuangan (OPSI A: parent + child + subtotal)
 function buildLaporanBulanan(style: typeof STYLES[0], slipIndex: number): (Paragraph | Table)[] {
-  const { font, titleSize, bodySize, headerBgPendapatan, headerBgPengeluaran, headerBgLaba } = style
+  const { font, titleSize, bodySize, headerBgPendapatan, headerBgPengeluaran, headerBgLaba, parentBg, parentBgExp } = style
   const idx = slipIndex + 1
+
+  // Build rows for pendapatan (5 parents × 3 children = 15 items max)
+  const pendapatanRows: TableRow[] = []
+  for (let p = 1; p <= 5; p++) {
+    pendapatanRows.push(parentHeaderRow(`{pendapatan_parent_${idx}_${p}_label}`, parentBg, font, bodySize, true))
+    for (let c = 1; c <= 3; c++) {
+      pendapatanRows.push(childRow(
+        `{pendapatan_child_${idx}_${p}_${c}_label}`,
+        `{pendapatan_child_${idx}_${p}_${c}_qty}`,
+        `{pendapatan_child_${idx}_${p}_${c}_price}`,
+        `{pendapatan_child_${idx}_${p}_${c}_total}`,
+        font, bodySize,
+      ))
+    }
+    pendapatanRows.push(subtotalRow(`Subtotal {pendapatan_parent_${idx}_${p}_label}`, `{pendapatan_parent_${idx}_${p}_subtotal}`, parentBg, font, bodySize))
+  }
+  pendapatanRows.push(grandTotalRow('TOTAL PENDAPATAN', `{total_pendapatan_${idx}}`, headerBgPendapatan, font, bodySize))
+
+  // Build rows for pengeluaran (5 parents × 3 children = 15 items max)
+  const pengeluaranRows: TableRow[] = []
+  for (let p = 1; p <= 5; p++) {
+    pengeluaranRows.push(parentHeaderRow(`{pengeluaran_parent_${idx}_${p}_label}`, parentBgExp, font, bodySize, false))
+    for (let c = 1; c <= 3; c++) {
+      pengeluaranRows.push(childRow(
+        `{pengeluaran_child_${idx}_${p}_${c}_label}`,
+        `{pengeluaran_child_${idx}_${p}_${c}_qty}`,
+        `{pengeluaran_child_${idx}_${p}_${c}_price}`,
+        `{pengeluaran_child_${idx}_${p}_${c}_total}`,
+        font, bodySize,
+      ))
+    }
+    pengeluaranRows.push(subtotalRow(`Subtotal {pengeluaran_parent_${idx}_${p}_label}`, `{pengeluaran_parent_${idx}_${p}_subtotal}`, parentBgExp, font, bodySize))
+  }
+  pengeluaranRows.push(grandTotalRow('TOTAL PENGELUARAN', `{total_pengeluaran_${idx}}`, headerBgPengeluaran, font, bodySize))
 
   return [
     // Page break (kecuali halaman pertama)
@@ -110,16 +241,18 @@ function buildLaporanBulanan(style: typeof STYLES[0], slipIndex: number): (Parag
     }),
     new Paragraph({ spacing: { after: 200 }, children: [] }),
 
-    // Tabel Pendapatan
+    // Tabel Pendapatan (parent + child + subtotal + grand total)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
-      columnWidths: [7000, 2800],
-      borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK, insideHorizontal: BORDER_THIN, insideVertical: BORDER_THIN },
+      columnWidths: [4600, 2400, 2800],
+      borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
       rows: [
+        // Section header: PENDAPATAN
         new TableRow({
           children: [
             new TableCell({
               width: { size: 7000, type: WidthType.DXA },
+              columnSpan: 2,
               shading: { fill: headerBgPendapatan },
               children: [new Paragraph({ children: [new TextRun({ text: 'PENDAPATAN', bold: true, size: bodySize, font, color: 'FFFFFF' })] })],
             }),
@@ -130,24 +263,22 @@ function buildLaporanBulanan(style: typeof STYLES[0], slipIndex: number): (Parag
             }),
           ],
         }),
-        // 5 pendapatan rows (indexed)
-        ...[1, 2, 3, 4, 5].map(n => lapRow(`{pendapatan_${idx}_${n}_label}`, `{pendapatan_${idx}_${n}_amount}`, font, bodySize)),
-        // Total Pendapatan
-        lapRow('Total Pendapatan', `{total_pendapatan_${idx}}`, font, bodySize, true, 'F0FDF4'),
+        ...pendapatanRows,
       ],
     }),
     new Paragraph({ spacing: { after: 200 }, children: [] }),
 
-    // Tabel Pengeluaran
+    // Tabel Pengeluaran (parent + child + subtotal + grand total)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
-      columnWidths: [7000, 2800],
-      borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK, insideHorizontal: BORDER_THIN, insideVertical: BORDER_THIN },
+      columnWidths: [4600, 2400, 2800],
+      borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
       rows: [
         new TableRow({
           children: [
             new TableCell({
               width: { size: 7000, type: WidthType.DXA },
+              columnSpan: 2,
               shading: { fill: headerBgPengeluaran },
               children: [new Paragraph({ children: [new TextRun({ text: 'PENGELUARAN', bold: true, size: bodySize, font, color: 'FFFFFF' })] })],
             }),
@@ -158,10 +289,7 @@ function buildLaporanBulanan(style: typeof STYLES[0], slipIndex: number): (Parag
             }),
           ],
         }),
-        // 5 pengeluaran rows (indexed)
-        ...[1, 2, 3, 4, 5].map(n => lapRow(`{pengeluaran_${idx}_${n}_label}`, `{pengeluaran_${idx}_${n}_amount}`, font, bodySize)),
-        // Total Pengeluaran
-        lapRow('Total Pengeluaran', `{total_pengeluaran_${idx}}`, font, bodySize, true, 'FEF2F2'),
+        ...pengeluaranRows,
       ],
     }),
     new Paragraph({ spacing: { after: 200 }, children: [] }),
@@ -197,23 +325,28 @@ function buildLaporanBulanan(style: typeof STYLES[0], slipIndex: number): (Parag
     }),
     new Paragraph({
       alignment: AlignmentType.RIGHT,
-      spacing: { after: 1000 },
+      spacing: { after: 100 },
       children: [new TextRun({ text: 'Pemilik Usaha,', size: bodySize, font })],
     }),
     new Paragraph({
       alignment: AlignmentType.RIGHT,
+      spacing: { before: 800 },
       children: [new TextRun({ text: '( {nama} )', bold: true, underline: {}, size: bodySize, font })],
     }),
   ]
 }
 
-// Generate 1 template
+// Generate 1 template .docx
 async function generateTemplate(style: typeof STYLES[0]): Promise<void> {
   const sections = Array.from({ length: 7 }, (_, i) => buildLaporanBulanan(style, i)).flat()
 
   const doc = new Document({
     sections: [{
-      properties: { page: { margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+      properties: {
+        page: {
+          margin: { top: 720, right: 720, bottom: 720, left: 720 },
+        },
+      },
       children: sections,
     }],
   })
@@ -224,13 +357,29 @@ async function generateTemplate(style: typeof STYLES[0]): Promise<void> {
   console.log(`✅ Generated laporan-${style.id}.docx (${style.name})`)
 }
 
+// Main
 async function main() {
-  console.log('=== Generate 5 Laporan Keuangan templates ===')
-  if (!fs.existsSync(TEMPLATES_DIR)) fs.mkdirSync(TEMPLATES_DIR, { recursive: true })
-  for (const style of STYLES) {
-    try { await generateTemplate(style) } catch (err) { console.error(`❌ ${style.id}:`, err) }
+  console.log('=== Generate 10 laporan keuangan templates (OPSI A: parent+child) ===')
+  console.log(`Output: ${TEMPLATES_DIR}`)
+  console.log('')
+
+  if (!fs.existsSync(TEMPLATES_DIR)) {
+    fs.mkdirSync(TEMPLATES_DIR, { recursive: true })
   }
+
+  for (const style of STYLES) {
+    try {
+      await generateTemplate(style)
+    } catch (err) {
+      console.error(`❌ Failed laporan-${style.id}:`, err)
+    }
+  }
+
+  console.log('')
   console.log('=== Done! ===')
+  console.log(`Total templates: ${STYLES.length}`)
+  console.log(`Location: ${TEMPLATES_DIR}`)
+  console.log(`Structure per page: Parent header → Child rows (qty × price = total) → Subtotal per parent → Grand total per type → Laba Bersih`)
 }
 
 main().catch(console.error)

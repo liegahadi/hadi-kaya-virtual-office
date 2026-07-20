@@ -548,7 +548,7 @@ export function CombinedDocEditorModal({ open, onClose, state, customerId, onUpd
             ) : (
             <>
             {/* KARYAWAN: Slip Gaji Per Bulan Form + Template Picker (side-by-side) */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden min-h-0">
             <div className="w-[400px] border-r border-slate-200 bg-white overflow-y-auto shrink-0">
               <div className="p-3 border-b bg-emerald-50 sticky top-0 z-10">
                 <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
@@ -997,6 +997,11 @@ const LAPORAN_TEMPLATES = [
   { id: '03', name: 'Minimal UMKM', category: 'UMKM', description: 'Font Calibri, accent hijau/oranye', filePath: '/templates/laporan-keuangan/laporan-03.docx' },
   { id: '04', name: 'Klasik Elegant', category: 'UMKM', description: 'Font Georgia, accent coklat', filePath: '/templates/laporan-keuangan/laporan-04.docx' },
   { id: '05', name: 'Simple Formal', category: 'Umum', description: 'Font Tahoma, minimal no color', filePath: '/templates/laporan-keuangan/laporan-05.docx' },
+  { id: '06', name: 'Accent Hijau UMKM', category: 'UMKM', description: 'Font Calibri, accent hijau segar untuk warung/UMKM', filePath: '/templates/laporan-keuangan/laporan-06.docx' },
+  { id: '07', name: 'Accent Coklat Toko', category: 'UMKM', description: 'Font Georgia, accent coklat tanah untuk toko bangunan', filePath: '/templates/laporan-keuangan/laporan-07.docx' },
+  { id: '08', name: 'Modern Tech Startup', category: 'Modern', description: 'Font Segoe UI, accent ungu untuk startup/online', filePath: '/templates/laporan-keuangan/laporan-08.docx' },
+  { id: '09', name: 'Klasik Hotel Premium', category: 'Premium', description: 'Font Georgia, accent dark elegant untuk hotel/jasa premium', filePath: '/templates/laporan-keuangan/laporan-09.docx' },
+  { id: '10', name: 'Minimal Tanpa Warna', category: 'Umum', description: 'Font Calibri, monochrome untuk dokumen netral', filePath: '/templates/laporan-keuangan/laporan-10.docx' },
 ]
 
 // Nested sub-item structure:
@@ -1118,19 +1123,10 @@ function WirausahaFormboxPanel({ state, customerId, onDocCreated }: {
     setCreating(true)
     setSelectedTemplate(template)
     try {
-      // Flatten lapBulanan to simple {label, amount} format for template-filler
-      const flatLap = lapBulanan.map(lap => ({
-        bulan: lap.bulan,
-        pendapatan: lap.pendapatan.flatMap(p =>
-          p.subItems.map(sub => ({ label: sub.label, amount: (sub.qty || 0) * (sub.price || 0) }))
-            .filter(item => item.label)
-        ).slice(0, 5),
-        pengeluaran: lap.pengeluaran.flatMap(p =>
-          p.subItems.map(sub => ({ label: sub.label, amount: (sub.qty || 0) * (sub.price || 0) }))
-            .filter(item => item.label)
-        ).slice(0, 5),
-      }))
-      const stateWithLap = { ...state, applicant: { ...state.applicant, lapBulanan: flatLap } }
+      // KIRIM MENTAH: parent+child structure (NO flatten) — biar template-filler bisa pakai
+      // placeholders {pendapatan_parent_N_P_label}, {pendapatan_child_N_P_C_qty}, dll
+      // yang match dengan struktur template Opsi A (parent header + child indent + subtotal)
+      const stateWithLap = { ...state, applicant: { ...state.applicant, lapBulanan } }
       const res = await fetch('/api/documents/google-docs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

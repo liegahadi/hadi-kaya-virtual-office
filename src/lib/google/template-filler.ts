@@ -74,9 +74,12 @@ export function buildSlipGajiData(state: any): any[] {
       const data: Record<string, string> = {
         [`periode_${slipNum}`]: periodeDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
         [`gaji_pokok_${slipNum}`]: formatRupiah(slip.gajiPokok || 0),
+        [`tunjangan_total_${slipNum}`]: formatRupiah(totalTunjangan),
+        [`bonus_total_${slipNum}`]: formatRupiah(totalBonus),
         [`gaji_kotor_${slipNum}`]: formatRupiah(gajiKotor),
         [`total_potongan_${slipNum}`]: formatRupiah(totalPotongan),
         [`gaji_bersih_${slipNum}`]: formatRupiah(gajiBersih),
+        [`total_gaji_${slipNum}`]: formatRupiah(gajiBersih), // alias for "Total Gaji Diterima"
         [`tanggal_terima_${slipNum}`]: formatDateID(periodeDate),
       }
 
@@ -125,9 +128,12 @@ export function buildSlipGajiData(state: any): any[] {
     const data: Record<string, string> = {
       [`periode_${slipNum}`]: slipDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
       [`gaji_pokok_${slipNum}`]: formatRupiah(gajiPokok),
+      [`tunjangan_total_${slipNum}`]: formatRupiah(totalTunjanganTetap),
+      [`bonus_total_${slipNum}`]: formatRupiah(totalTunjanganVariabel),
       [`gaji_kotor_${slipNum}`]: formatRupiah(gajiKotor),
       [`total_potongan_${slipNum}`]: formatRupiah(totalPotongan),
       [`gaji_bersih_${slipNum}`]: formatRupiah(gajiBersih),
+      [`total_gaji_${slipNum}`]: formatRupiah(gajiBersih),
       [`tanggal_terima_${slipNum}`]: formatDateID(slipDate),
     }
     // Tunjangan (up to 5)
@@ -153,13 +159,16 @@ export function buildSlipGajiData(state: any): any[] {
   return slips
 }
 
-// Build laporan keuangan data (wirausaha) — indexed placeholders
-// {nama_usaha}, {alamat_usaha}, {ig_usaha}, {jenis_usaha}, {nama}
-// {periode_1} ... {periode_7}
-// {pendapatan_1_1_label}, {pendapatan_1_1_amount}, ... (5 items per bulan)
-// {pengeluaran_1_1_label}, {pengeluaran_1_1_amount}, ...
-// {total_pendapatan_1}, {total_pengeluaran_1}, {laba_bersih_1}, ...
-// {tanggal}
+// Build laporan keuangan data (wirausaha) — OPSI A: parent+child structure
+// Placeholders:
+//   {nama_usaha}, {alamat_usaha}, {ig_usaha}, {jenis_usaha}, {nama}, {tanggal}
+//   Per periode (N = 1..7):
+//     {periode_N}, {total_pendapatan_N}, {total_pengeluaran_N}, {laba_bersih_N}
+//     For P = 1..5 parents, C = 1..3 children:
+//       {pendapatan_parent_N_P_label}, {pendapatan_parent_N_P_subtotal}
+//       {pendapatan_child_N_P_C_label}, {pendapatan_child_N_P_C_qty},
+//       {pendapatan_child_N_P_C_price}, {pendapatan_child_N_P_C_total}
+//     Same pattern for pengeluaran
 export function buildLaporanKeuanganData(state: any): Record<string, string> {
   const a = state.applicant
   const now = new Date()
@@ -180,27 +189,55 @@ export function buildLaporanKeuanganData(state: any): Record<string, string> {
       const baseDate = new Date(now.getFullYear(), now.getMonth() - 6 + idx, 15)
       data[`periode_${slipNum}`] = baseDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 
-      // Pendapatan (up to 5)
+      // Process PENDAPATAN (5 parents × 3 children = 15 items max)
       let totalPendapatan = 0
-      for (let n = 1; n <= 5; n++) {
-        const item = (lap.pendapatan || [])[n - 1]
-        const label = item?.label || ''
-        const amount = item?.amount || 0
-        totalPendapatan += amount
-        data[`pendapatan_${slipNum}_${n}_label`] = label
-        data[`pendapatan_${slipNum}_${n}_amount`] = amount ? formatRupiah(amount) : ''
+      const pendapatanParents = lap.pendapatan || []
+      for (let p = 1; p <= 5; p++) {
+        const parent = pendapatanParents[p - 1]
+        const parentLabel = parent?.label || ''
+        data[`pendapatan_parent_${slipNum}_${p}_label`] = parentLabel
+
+        let parentSubtotal = 0
+        const subItems = parent?.subItems || []
+        for (let c = 1; c <= 3; c++) {
+          const sub = subItems[c - 1]
+          const qty = sub?.qty || 0
+          const price = sub?.price || 0
+          const subTotal = qty * price
+          parentSubtotal += subTotal
+          data[`pendapatan_child_${slipNum}_${p}_${c}_label`] = sub?.label || ''
+          data[`pendapatan_child_${slipNum}_${p}_${c}_qty`] = qty ? String(qty) : ''
+          data[`pendapatan_child_${slipNum}_${p}_${c}_price`] = price ? formatRupiah(price) : ''
+          data[`pendapatan_child_${slipNum}_${p}_${c}_total`] = subTotal ? formatRupiah(subTotal) : ''
+        }
+        data[`pendapatan_parent_${slipNum}_${p}_subtotal`] = parentSubtotal ? formatRupiah(parentSubtotal) : ''
+        totalPendapatan += parentSubtotal
       }
       data[`total_pendapatan_${slipNum}`] = formatRupiah(totalPendapatan)
 
-      // Pengeluaran (up to 5)
+      // Process PENGELUARAN (5 parents × 3 children = 15 items max)
       let totalPengeluaran = 0
-      for (let n = 1; n <= 5; n++) {
-        const item = (lap.pengeluaran || [])[n - 1]
-        const label = item?.label || ''
-        const amount = item?.amount || 0
-        totalPengeluaran += amount
-        data[`pengeluaran_${slipNum}_${n}_label`] = label
-        data[`pengeluaran_${slipNum}_${n}_amount`] = amount ? formatRupiah(amount) : ''
+      const pengeluaranParents = lap.pengeluaran || []
+      for (let p = 1; p <= 5; p++) {
+        const parent = pengeluaranParents[p - 1]
+        const parentLabel = parent?.label || ''
+        data[`pengeluaran_parent_${slipNum}_${p}_label`] = parentLabel
+
+        let parentSubtotal = 0
+        const subItems = parent?.subItems || []
+        for (let c = 1; c <= 3; c++) {
+          const sub = subItems[c - 1]
+          const qty = sub?.qty || 0
+          const price = sub?.price || 0
+          const subTotal = qty * price
+          parentSubtotal += subTotal
+          data[`pengeluaran_child_${slipNum}_${p}_${c}_label`] = sub?.label || ''
+          data[`pengeluaran_child_${slipNum}_${p}_${c}_qty`] = qty ? String(qty) : ''
+          data[`pengeluaran_child_${slipNum}_${p}_${c}_price`] = price ? formatRupiah(price) : ''
+          data[`pengeluaran_child_${slipNum}_${p}_${c}_total`] = subTotal ? formatRupiah(subTotal) : ''
+        }
+        data[`pengeluaran_parent_${slipNum}_${p}_subtotal`] = parentSubtotal ? formatRupiah(parentSubtotal) : ''
+        totalPengeluaran += parentSubtotal
       }
       data[`total_pengeluaran_${slipNum}`] = formatRupiah(totalPengeluaran)
 

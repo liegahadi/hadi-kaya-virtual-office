@@ -211,33 +211,88 @@ function buildSkKerja(style: any): (Paragraph | Table)[] {
   ]
 }
 
-// Build Slip Gaji section (1 bulan) — HARD-CODED, no loop markers
-// Template akan punya 7 hard-coded slip sections (bukan {#slips} loop)
-// template-filler akan replace placeholders per-section menggunakan index
+// Build Slip Gaji section (1 bulan) — FORMAT BARU (section-based, sub-items a./b./c.)
+// Struktur:
+//   Gaji Pokok | {gaji_pokok_N}
+//   ───────────
+//   Tunjangan | {tunjangan_total_N}
+//     a. {tunjangan_N_1_label} | {tunjangan_N_1_amount}
+//     b. {tunjangan_N_2_label} | {tunjangan_N_2_amount}
+//     ... (5 rows)
+//   ───────────
+//   Bonus | {bonus_total_N}
+//     a. {bonus_N_1_label} | {bonus_N_1_amount}
+//     ... (5 rows)
+//   ───────────
+//   Potongan | {potongan_total_N}
+//     a. {potongan_N_1_label} | {potongan_N_1_amount}
+//     ... (5 rows)
+//   ───────────
+//   TOTAL GAJI | {gaji_bersih_N}  (= Gaji Pokok + Tunjangan + Bonus - Potongan)
 function buildSlipGaji(style: any, upahLabel: string, slipIndex: number = 0): (Paragraph | Table)[] {
   const headerBg = style.headerBg
   const totalBg = 'F5F5F5'
   const bersihBg = 'E6F3FF'
-  // Prefix untuk slip index: {1_periode}, {2_periode}, dll
-  // Sebenarnya tidak perlu prefix karena template-filler pakai replaceAllText
-  // Tapi untuk membedakan per slip, kita pakai {periode_1}, {periode_2}, dll
-  // WAIT — replaceAllText replace SEMUA occurrence. Jadi kalau 7 slip punya {periode},
-  // semua akan ke-replace dengan value yang sama.
-  // Solusi: gunakan index suffix: {periode_1}, {periode_2}, ... {periode_7}
 
   const idx = slipIndex + 1
   const periodeKey = `{periode_${idx}}`
   const gajiPokokKey = `{gaji_pokok_${idx}}`
-  const gajiKotorKey = `{gaji_kotor_${idx}}`
-  const totalPotonganKey = `{total_potongan_${idx}}`
+  const tunjanganTotalKey = `{tunjangan_total_${idx}}`
+  const bonusTotalKey = `{bonus_total_${idx}}`
+  const potonganTotalKey = `{total_potongan_${idx}}`
   const gajiBersihKey = `{gaji_bersih_${idx}}`
   const tanggalTerimaKey = `{tanggal_terima_${idx}}`
-  // Tunjangan/bonus/potongan: pakai {tunjangan_N_label} format
-  // Tapi kita ga tau berapa items — solusi: hard-code 5 row per item type
-  // Kalau kosong, template-filler replace dengan "-"
-  const tunjanganRows = [1, 2, 3, 4, 5].map(n => slipRow(`{tunjangan_${idx}_${n}_label}`, `{tunjangan_${idx}_${n}_amount}`, ''))
-  const bonusRows = [1, 2, 3, 4, 5].map(n => slipRow(`{bonus_${idx}_${n}_label}`, `{bonus_${idx}_${n}_amount}`, ''))
-  const potonganRows = [1, 2, 3, 4, 5].map(n => slipRow(`{potongan_${idx}_${n}_label}`, '', `{potongan_${idx}_${n}_amount}`))
+
+  // Helper: section header row (label | total amount) — bold + border-bottom + light bg
+  const sectionHeader = (label: string, amountKey: string): TableRow => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 7000, type: WidthType.DXA },
+        shading: { fill: totalBg },
+        borders: { top: BORDER_THIN, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: style.bodySize, font: style.font })] })],
+      }),
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        shading: { fill: totalBg },
+        borders: { top: BORDER_THIN, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: amountKey, bold: true, size: style.bodySize, font: style.font })] })],
+      }),
+    ],
+  })
+
+  // Helper: sub-item row (a./b./c. + label | amount) — indent label
+  const subItemRow = (letter: string, labelKey: string, amountKey: string): TableRow => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 7000, type: WidthType.DXA },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({
+          indent: { left: 720 }, // 0.5 inch indent
+          children: [new TextRun({ text: `${letter}. ${labelKey}`, size: style.bodySize, font: style.font })],
+        })],
+      }),
+      new TableCell({
+        width: { size: 2800, type: WidthType.DXA },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: amountKey, size: style.bodySize, font: style.font })] })],
+      }),
+    ],
+  })
+
+  // Helper: separator row (full-width border-bottom only)
+  const separatorRow = (): TableRow => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 9800, type: WidthType.DXA },
+        columnSpan: 2,
+        borders: { top: NO_BORDER, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER },
+        children: [new Paragraph({ children: [] })],
+      }),
+    ],
+  })
+
+  const letters = ['a', 'b', 'c', 'd', 'e']
 
   return [
     // Page break (kecuali slip pertama, karena SK Kerja sudah ada page break sebelumnya)
@@ -265,50 +320,55 @@ function buildSlipGaji(style: any, upahLabel: string, slipIndex: number = 0): (P
       ],
     }),
     new Paragraph({ spacing: { after: 200 }, children: [] }),
-    // Pendapatan/Potongan table (with borders) — explicit columnWidths
+    // Slip Gaji section-based layout (2-column borderless with separators)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
-      columnWidths: [5400, 2200, 2200],
+      columnWidths: [7000, 2800],
       borders: {
-        top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK,
-        insideHorizontal: BORDER_THIN, insideVertical: BORDER_THIN,
+        top: BORDER_THIN, bottom: BORDER_THIN, left: NO_BORDER, right: NO_BORDER,
+        insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
       },
       rows: [
-        // Header
+        // Section: Gaji Pokok
+        sectionHeader(`${upahLabel} Pokok`, gajiPokokKey),
+        separatorRow(),
+        // Section: Tunjangan
+        sectionHeader('Tunjangan', tunjanganTotalKey),
+        ...letters.map((l, i) => subItemRow(l, `{tunjangan_${idx}_${i + 1}_label}`, `{tunjangan_${idx}_${i + 1}_amount}`)),
+        separatorRow(),
+        // Section: Bonus
+        sectionHeader('Bonus', bonusTotalKey),
+        ...letters.map((l, i) => subItemRow(l, `{bonus_${idx}_${i + 1}_label}`, `{bonus_${idx}_${i + 1}_amount}`)),
+        separatorRow(),
+        // Section: Potongan
+        sectionHeader('Potongan', potonganTotalKey),
+        ...letters.map((l, i) => subItemRow(l, `{potongan_${idx}_${i + 1}_label}`, `{potongan_${idx}_${i + 1}_amount}`)),
+        separatorRow(),
+        // Total Gaji (Gaji Pokok + Tunjangan + Bonus - Potongan)
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 5400, type: WidthType.DXA },
-              shading: { fill: headerBg },
-              children: [new Paragraph({ children: [new TextRun({ text: 'Keterangan', bold: true, size: style.bodySize, font: style.font })] })],
+              width: { size: 7000, type: WidthType.DXA },
+              shading: { fill: bersihBg },
+              borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER },
+              children: [new Paragraph({ children: [new TextRun({ text: `TOTAL ${upahLabel.toUpperCase()} DITERIMA`, bold: true, size: style.bodySize, font: style.font })] })],
             }),
             new TableCell({
-              width: { size: style.bodySize00, type: WidthType.DXA },
-              shading: { fill: headerBg },
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Pendapatan', bold: true, size: style.bodySize, font: style.font })] })],
-            }),
-            new TableCell({
-              width: { size: style.bodySize00, type: WidthType.DXA },
-              shading: { fill: headerBg },
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Potongan', bold: true, size: style.bodySize, font: style.font })] })],
+              width: { size: 2800, type: WidthType.DXA },
+              shading: { fill: bersihBg },
+              borders: { top: BORDER_THICK, bottom: BORDER_THICK, left: NO_BORDER, right: NO_BORDER },
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: gajiBersihKey, bold: true, size: style.bodySize, font: style.font })] })],
             }),
           ],
         }),
-        // Gaji Pokok
-        slipRow(`${upahLabel} Pokok`, gajiPokokKey, ''),
-        // Tunjangan (5 rows, kalau kosong = "-")
-        ...tunjanganRows,
-        // Bonus (5 rows)
-        ...bonusRows,
-        // Potongan (5 rows)
-        ...potonganRows,
-        // Total
-        slipRow('Total', gajiKotorKey, totalPotonganKey, true, totalBg),
-        // Gaji Bersih
-        slipRow(`${upahLabel} Diterima (Bersih)`, '', gajiBersihKey, true, bersihBg),
       ],
     }),
-    new Paragraph({ spacing: { after: 600 }, children: [] }),
+    // Note line: formula explanation
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { before: 100, after: 400 },
+      children: [new TextRun({ text: `(${upahLabel} Pokok + Tunjangan + Bonus - Potongan)`, italics: true, size: 18, font: style.font, color: '666666' })],
+    }),
     // Signature (2 columns)
     new Table({
       width: { size: 9800, type: WidthType.DXA },
