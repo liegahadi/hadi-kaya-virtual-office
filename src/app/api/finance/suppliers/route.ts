@@ -1,61 +1,53 @@
+// GET /api/finance/suppliers — list suppliers
+// POST /api/finance/suppliers — create supplier
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-// ============================================================
-// GET /api/finance/suppliers - List all suppliers with their item prices
-// ============================================================
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url)
+    const q = searchParams.get('q')
+
+    const where: any = {}
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { contactPerson: { contains: q, mode: 'insensitive' } },
+      ]
+    }
+
     const suppliers = await db.supplier.findMany({
-      orderBy: { name: 'asc' },
+      where,
       include: {
-        _count: {
-          select: { pos: true, itemPrices: true },
-        },
+        _count: { select: { purchaseOrders: true } },
       },
+      orderBy: { name: 'asc' },
     })
 
-    return NextResponse.json({
-      success: true,
-      data: suppliers.map(s => ({
-        ...s,
-        poCount: s._count.pos,
-        priceCount: s._count.itemPrices,
-        _count: undefined,
-      })),
-    })
-  } catch (error) {
-    console.error('GET /api/finance/suppliers error:', error)
-    return NextResponse.json({ success: false, error: 'Failed' }, { status: 500 })
+    return NextResponse.json({ success: true, data: suppliers })
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }
-
-// ============================================================
-// POST /api/finance/suppliers - Create new supplier
-// ============================================================
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, contactPerson, whatsappNumber, phone, address } = body
-
-    if (!name) {
-      return NextResponse.json(
-        { success: false, error: 'Name required' },
-        { status: 400 }
-      )
-    }
-
     const supplier = await db.supplier.create({
-      data: { name, contactPerson, whatsappNumber, phone, address },
+      data: {
+        name: body.name,
+        phone: body.phone || null,
+        address: body.address || null,
+        contactPerson: body.contactPerson || null,
+        bankName: body.bankName || null,
+        bankAccount: body.bankAccount || null,
+        bankHolder: body.bankHolder || null,
+      },
     })
-
     return NextResponse.json({ success: true, data: supplier })
-  } catch (error) {
-    console.error('POST /api/finance/suppliers error:', error)
-    return NextResponse.json({ success: false, error: 'Failed' }, { status: 500 })
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }

@@ -1,67 +1,101 @@
+// GET /api/finance/po — list POs (with filter)
+// POST /api/finance/po — create new PO (auto-generate poNumber)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { createPO, listPOs, type CreatePOInput } from '@/lib/finance/po-generator'
+import { generatePoNumber } from '@/lib/finance/po-number'
 
 export const dynamic = 'force-dynamic'
 
-// ============================================================
-// GET /api/finance/po - List POs
-// Query: projectId, supplierId, status, limit
-// ============================================================
-
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url)
-    const filters = {
-      projectId: url.searchParams.get('projectId') || undefined,
-      supplierId: url.searchParams.get('supplierId') || undefined,
-      status: url.searchParams.get('status') || undefined,
-      limit: parseInt(url.searchParams.get('limit') || '50'),
-    }
+    const { searchParams } = new URL(req.url)
+    const status = searchParams.get('status')
+    const projectId = searchParams.get('projectId')
+    const supplierId = searchParams.get('supplierId')
 
-    const pos = await listPOs(filters)
-    return NextResponse.json({ success: true, data: pos })
-  } catch (error) {
-    console.error('GET /api/finance/po error:', error)
-    return NextResponse.json({ success: false, error: 'Failed' }, { status: 500 })
+    const where: any = {}
+    if (status) where.status = status
+    if (projectId) where.projectId = projectId
+    if (supplierId) where.supplierId = supplierId
+
+    const pos = await db.purchaseOrder.findMany({
+      where,
+      include: {
+        supplier: true,
+        project: { select: { id: true, name: true, code: true } },
+        unit: { select: { id: true, blockNumber: true } },
+        items: { include: { material: true } },
+        payments: { where: { voided: false }, select: { amount: true } },
+        _count: { select: { notas: true } },
+      },
+      orderBy: { poDate: 'desc' },
+      take: 100,
+    })
+
+    // Add computed: totalPaid, remaining
+    const posWithComputed = pos.map(po => {
+      const totalPaid = po.payments.reduce((s, p) => s + p.amount, 0)
+      const target = po.actualTotal > 0 ? po.actualTotal : po.plannedTotal
+      return {
+        ...po,
+        totalPaid,
+        remaining: Math.max(0, target - totalPaid),
+        displayPoNumber: po.poNumber.replace(/-/g, '/'),
+      }
+    })
+
+    return NextResponse.json({ success: true, data: posWithComputed })
+  } catch (err: any) {
+    console.error('PO list error:', err)
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }
 
-// ============================================================
-// POST /api/finance/po - Create new PO
-// ============================================================
-
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as CreatePOInput
+    const body = await req.json()
+    const { supplierId, projectId, unitId, poDate, notes, items } = body
 
-    // Validate
-    if (!body.projectId || !body.supplierId || !body.agentId || !body.lines?.length) {
-      return NextResponse.json(
-        { success: false, error: 'projectId, supplierId, agentId, lines are required' },
-        { status: 400 }
-      )
+    if (!supplierId || !projectId || !items?.length) {
+      return NextResponse.json({ success: false, error: 'supplierId, projectId, items required' }, { status: 400 })
     }
 
-    const result = await createPO(body)
+    // Generate PO number
+    const poDateObj = poDate ? new Date(poDate) : new Date()
+    const poNumber = await generatePoNumber(projectId, unitId || null, poDateObj)
 
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
-      )
-    }
+    // Compute plannedTotal
+    const plannedTotal = items.reduce((s: number, it: any) => s + (it.qty || 0) * (it.price || 0), 0)
 
-    return NextResponse.json({
-      success: true,
-      data: result.po,
-      meta: { pricesUpdated: result.pricesUpdated },
+    const po = await db.purchaseOrder.create({
+      data: {
+        poNumber,
+        supplierId,
+        projectId,
+        unitId: unitId || null,
+        status: 'DRAFT',
+        plannedTotal,
+        actualTotal: plannedTotal, // initial: actual = planned
+        poDate: poDateObj,
+        notes: notes || null,
+        items: {
+          create: items.map((it: any) => ({
+            materialId: it.materialId,
+            qty: it.qty || 0,
+            price: it.price || 0,
+            totalPrice: (it.qty || 0) * (it.price || 0),
+            block: it.block || null,
+            directUse: it.directUse || false,
+            note: it.note || null,
+          })),
+        },
+      },
+      include: { items: true },
     })
-  } catch (error) {
-    console.error('POST /api/finance/po error:', error)
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    )
+
+    return NextResponse.json({ success: true, data: po })
+  } catch (err: any) {
+    console.error('PO create error:', err)
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }

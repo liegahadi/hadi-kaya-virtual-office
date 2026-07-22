@@ -36,7 +36,7 @@ export async function queryAgent(req: AgentQueryRequest): Promise<AgentQueryResp
   try {
     const fromAgent = await db.agent.findUnique({
       where: { id: req.fromAgentId },
-      select: { name: true, role: true },
+      select: { id: true, name: true, role: true },
     })
 
     if (!fromAgent) {
@@ -143,19 +143,19 @@ async function fetchFinanceData(fetchType: string) {
   if (!project) return { error: 'No project found' }
 
   if (fetchType === 'po' || fetchType === 'all') {
-    const pos = await db.pO.findMany({
+    const pos = await db.purchaseOrder.findMany({
       take: 10,
       orderBy: { createdAt: 'desc' },
       include: {
         supplier: { select: { name: true } },
-        _count: { select: { lines: true } },
+        _count: { select: { items: true } },
       },
     })
     const suppliers = await db.supplier.findMany({
       select: {
         name: true,
         totalDebt: true,
-        _count: { select: { pos: true } },
+        _count: { select: { purchaseOrders: true } },
       },
     })
     return {
@@ -163,18 +163,18 @@ async function fetchFinanceData(fetchType: string) {
         poNumber: po.poNumber,
         supplier: po.supplier.name,
         status: po.status,
-        total: po.totalAmount,
-        itemCount: po._count.lines,
+        total: po.actualTotal || po.plannedTotal,
+        itemCount: po._count.items,
         createdAt: po.createdAt,
       })),
       suppliers: suppliers.map(s => ({
         name: s.name,
         totalDebt: s.totalDebt,
-        poCount: s._count.pos,
+        poCount: s._count.purchaseOrders,
       })),
       summary: {
         totalPOs: pos.length,
-        pendingApproval: pos.filter(p => p.status === 'PENDING_APPROVAL').length,
+        pendingApproval: pos.filter(p => p.status === 'DRAFT').length,
         totalDebt: suppliers.reduce((sum, s) => sum + s.totalDebt, 0),
       },
     }
@@ -188,13 +188,15 @@ async function fetchMaterialData(fetchType: string) {
   if (!project) return { error: 'No project found' }
 
   if (fetchType === 'stock' || fetchType === 'all') {
-    const stocks = await db.materialStock.findMany({
-      where: { projectId: project.id },
-      select: {
-        materialName: true,
-        quantity: true,
-        unitMeasure: true,
-        minimumStock: true,
+    const stocks = await db.stock.findMany({
+      include: {
+        material: {
+          select: {
+            name: true,
+            unitMeasure: true,
+            minStock: true,
+          },
+        },
       },
     })
 
@@ -209,18 +211,18 @@ async function fetchMaterialData(fetchType: string) {
 
     return {
       stocks: stocks.map(s => ({
-        material: s.materialName,
+        material: s.material.name,
         quantity: s.quantity,
-        unit: s.unitMeasure,
-        minimum: s.minimumStock,
-        isLow: s.quantity < s.minimumStock,
+        unit: s.material.unitMeasure,
+        minimum: s.material.minStock,
+        isLow: s.quantity < s.material.minStock,
       })),
       lowStockAlerts: stocks
-        .filter(s => s.quantity < s.minimumStock)
+        .filter(s => s.quantity < s.material.minStock)
         .map(s => ({
-          material: s.materialName,
+          material: s.material.name,
           current: s.quantity,
-          minimum: s.minimumStock,
+          minimum: s.material.minStock,
         })),
       unitsInProgress: unitsInProgress.map(u => ({
         unit: u.blockNumber,
@@ -312,7 +314,7 @@ async function fetchCAOData(fetchType: string) {
     const [agentCount, customerCount, poCount, approvalCount, conversationCount] = await Promise.all([
       db.agent.count({ where: { isActive: true } }),
       db.customer.count(),
-      db.pO.count(),
+      db.purchaseOrder.count(),
       db.approval.count({ where: { status: 'PENDING' } }),
       db.conversation.count(),
     ])

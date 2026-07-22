@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 // GET /api/database-explorer/material?q=search
-// Returns material stock + suppliers
+// Returns materials + stock + suppliers
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.trim() || ''
 
-    // Fetch MaterialStock
+    // Fetch Materials (new schema, with stock + category)
     let materials: any[] = []
     try {
-      const where = q ? { materialName: { contains: q } } : {}
-      materials = await db.materialStock.findMany({
+      const where: any = q ? { name: { contains: q, mode: 'insensitive' } } : {}
+      materials = await db.material.findMany({
         where,
-        orderBy: { updatedAt: 'desc' },
+        include: { stock: true, category: true },
+        orderBy: { name: 'asc' },
         take: 200,
       })
     } catch {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     // Fetch suppliers
     let suppliers: any[] = []
     try {
-      const where = q ? { name: { contains: q } } : {}
+      const where: any = q ? { name: { contains: q, mode: 'insensitive' } } : {}
       suppliers = await db.supplier.findMany({
         where,
         orderBy: { name: 'asc' },
@@ -37,10 +38,12 @@ export async function GET(req: NextRequest) {
     const data = [
       ...materials.map((m) => ({
         id: m.id,
-        name: m.materialName,
+        name: m.name,
         unit: m.unitMeasure || null,
-        stock: m.quantity ?? null,
-        price: m.unitPrice ?? null,
+        stock: m.stock?.quantity ?? null,
+        avgPrice: m.stock?.avgPrice ?? null,
+        minStock: m.minStock ?? null,
+        category: m.category?.name || null,
         supplierName: null,
       })),
       ...suppliers.map((s) => ({
@@ -48,14 +51,16 @@ export async function GET(req: NextRequest) {
         name: s.name,
         unit: null,
         stock: null,
-        price: null,
-        supplierName: s.contactPerson || s.phone || null,
+        avgPrice: null,
+        minStock: null,
+        category: null,
+        supplierName: s.name,
       })),
     ]
 
     return NextResponse.json({ success: true, data, meta: { total: data.length } })
   } catch (err: any) {
-    console.error('[database-explorer/material] error:', err)
-    return NextResponse.json({ success: false, error: err?.message || 'Unknown error' }, { status: 500 })
+    console.error('Database explorer material error:', err)
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }

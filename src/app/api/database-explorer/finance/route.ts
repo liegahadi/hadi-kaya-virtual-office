@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 // GET /api/database-explorer/finance?q=search
-// Returns POs, fund requests, supplier payments
+// Returns POs, wage payments, other expenses, memos, payments
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -10,10 +10,16 @@ export async function GET(req: NextRequest) {
 
     const data: any[] = []
 
-    // Fetch POs
+    // Fetch Purchase Orders (new schema)
     try {
-      const pos = await db.pO.findMany({
-        where: q ? { OR: [{ poNumber: { contains: q } }, { workItem: { contains: q } }, { notes: { contains: q } }] } : {},
+      const pos = await db.purchaseOrder.findMany({
+        where: q ? {
+          OR: [
+            { poNumber: { contains: q, mode: 'insensitive' } },
+            { notes: { contains: q, mode: 'insensitive' } },
+          ]
+        } : {},
+        include: { supplier: true, project: true },
         orderBy: { createdAt: 'desc' },
         take: 50,
       })
@@ -21,52 +27,108 @@ export async function GET(req: NextRequest) {
         data.push({
           id: po.id,
           type: 'Purchase Order',
-          amount: po.totalAmount || 0,
+          amount: po.actualTotal || po.plannedTotal || 0,
           status: po.status || 'UNKNOWN',
-          description: po.workItem || po.poNumber || po.notes || '',
+          description: `${po.poNumber} - ${po.supplier?.name || ''} (${po.project?.name || ''})`,
           createdAt: po.createdAt,
-        })
-      }
-    } catch (e) {
-      // PO table might not exist
-    }
-
-    // Fetch Fund Requests
-    try {
-      const frs = await db.fundRequest.findMany({
-        where: q ? { notes: { contains: q } } : {},
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      })
-      for (const fr of frs) {
-        data.push({
-          id: fr.id,
-          type: 'Fund Request',
-          amount: fr.amount || 0,
-          status: fr.status || 'UNKNOWN',
-          description: fr.notes || '',
-          createdAt: fr.createdAt,
         })
       }
     } catch (e) {
       // table might not exist
     }
 
-    // Fetch Supplier Payments
+    // Fetch Wage Payments
     try {
-      const sps = await db.supplierPayment.findMany({
-        where: q ? { notes: { contains: q } } : {},
+      const wages = await db.wagePayment.findMany({
+        where: q ? {
+          OR: [
+            { workDescription: { contains: q, mode: 'insensitive' } },
+            { worker: { name: { contains: q, mode: 'insensitive' } } },
+          ]
+        } : {},
+        include: { worker: true, project: true },
         orderBy: { createdAt: 'desc' },
         take: 50,
       })
-      for (const sp of sps) {
+      for (const w of wages) {
         data.push({
-          id: sp.id,
-          type: 'Supplier Payment',
-          amount: sp.amount || 0,
-          status: sp.method || 'TRANSFER',
-          description: sp.notes || '',
-          createdAt: sp.createdAt,
+          id: w.id,
+          type: 'Wage Payment',
+          amount: w.amount || 0,
+          status: w.status || 'UNKNOWN',
+          description: `${w.worker?.name || ''} - ${w.workDescription || ''} (${w.project?.name || ''})`,
+          createdAt: w.createdAt,
+        })
+      }
+    } catch (e) {
+      // table might not exist
+    }
+
+    // Fetch Other Expenses
+    try {
+      const expenses = await db.otherExpense.findMany({
+        where: q ? {
+          OR: [
+            { description: { contains: q, mode: 'insensitive' } },
+            { recipientName: { contains: q, mode: 'insensitive' } },
+            { category: { contains: q, mode: 'insensitive' } },
+          ]
+        } : {},
+        include: { project: true },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+      for (const e of expenses) {
+        data.push({
+          id: e.id,
+          type: 'Other Expense',
+          amount: e.amount || 0,
+          status: e.status || 'UNKNOWN',
+          description: `${e.category} - ${e.recipientName} (${e.description})`,
+          createdAt: e.createdAt,
+        })
+      }
+    } catch (e) {
+      // table might not exist
+    }
+
+    // Fetch Memos
+    try {
+      const memos = await db.memo.findMany({
+        where: q ? { memoNumber: { contains: q, mode: 'insensitive' } } : {},
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+      for (const m of memos) {
+        data.push({
+          id: m.id,
+          type: 'Memo',
+          amount: 0, // total computed on frontend
+          status: m.status || 'UNKNOWN',
+          description: m.memoNumber,
+          createdAt: m.createdAt,
+        })
+      }
+    } catch (e) {
+      // table might not exist
+    }
+
+    // Fetch Payments
+    try {
+      const payments = await db.payment.findMany({
+        where: q ? { notes: { contains: q, mode: 'insensitive' } } : {},
+        include: { supplier: true, worker: true },
+        orderBy: { paidAt: 'desc' },
+        take: 50,
+      })
+      for (const p of payments) {
+        data.push({
+          id: p.id,
+          type: 'Payment',
+          amount: p.amount || 0,
+          status: p.voided ? 'VOIDED' : (p.method || 'TRANSFER'),
+          description: `${p.supplier?.name || p.worker?.name || 'Unknown'} - ${p.notes || ''}`,
+          createdAt: p.paidAt,
         })
       }
     } catch (e) {
@@ -78,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data, meta: { total: data.length } })
   } catch (err: any) {
-    console.error('[database-explorer/finance] error:', err)
-    return NextResponse.json({ success: false, error: err?.message || 'Unknown error' }, { status: 500 })
+    console.error('Database explorer finance error:', err)
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
   }
 }
