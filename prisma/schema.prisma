@@ -22,59 +22,58 @@ datasource db {
 // ============================================================
 
 model AppUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   name         String
   passwordHash String
-  role         String   @default("OWNER") // OWNER | ADMIN | VIEWER
+  role         String    @default("OWNER") // OWNER | ADMIN | VIEWER
   phone        String?
   avatar       String?
-  isActive     Boolean  @default(true)
+  isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  approvals      Approval[]
-  fundRequests   FundRequest[]
-  documents      Document[]
-  auditLogs      AuditLog[]
-  settings       UserSetting[]
+  approvals Approval[]
+  documents Document[]
+  auditLogs AuditLog[]
+  settings  UserSetting[]
 }
 
 // Google OAuth tokens - untuk akses Google Drive & Docs API sebagai user (bukan Service Account)
 // Owner login sekali → refresh_token disimpan → sistem bisa akses Drive kapan saja
 // Untuk MVP: 1 token global (single owner, app belum ada login system)
 model GoogleToken {
-  id              String   @id @default("owner") // hardcoded "owner" for MVP single-user
-  accessToken     String
-  refreshToken    String
-  expiryDate      DateTime? // when access token expires
-  tokenType       String   @default("Bearer")
-  scope           String
-  email           String?  // email Google account yang login
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String    @id @default("owner") // hardcoded "owner" for MVP single-user
+  accessToken  String
+  refreshToken String
+  expiryDate   DateTime? // when access token expires
+  tokenType    String    @default("Bearer")
+  scope        String
+  email        String? // email Google account yang login
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // Track Google Docs created per customer
 // Setiap doc yang dibuat via sistem disimpan di sini + di Google Drive folder customer
 model GoogleDoc {
-  id          String   @id @default(cuid())
-  docId       String   @unique // Google Doc ID (from Drive)
-  customerId  String?  // link to Customer
-  fileName    String
-  folderId    String?  // Google Drive folder ID (customer folder)
-  docType     String   @default("sk-slip-gaji") // sk-slip-gaji | spr | flpp | etc
-  editUrl     String
-  templateId  String?  // which template was used
+  id         String   @id @default(cuid())
+  docId      String   @unique // Google Doc ID (from Drive)
+  customerId String? // link to Customer
+  fileName   String
+  folderId   String? // Google Drive folder ID (customer folder)
+  docType    String   @default("sk-slip-gaji") // sk-slip-gaji | spr | flpp | etc
+  editUrl    String
+  templateId String? // which template was used
   // DINA v2: anti-duplicate + versioning
-  fileHash    String?  // SHA-256 hash for duplicate detection
-  fileSize    Int?     // file size in bytes
-  version     Int      @default(1) // versioning: v1, v2, v3...
-  isRaw       Boolean  @default(true) // true = RAW (belum signed), false = SIGNED
-  createdAt   DateTime @default(now())
+  fileHash   String? // SHA-256 hash for duplicate detection
+  fileSize   Int? // file size in bytes
+  version    Int      @default(1) // versioning: v1, v2, v3...
+  isRaw      Boolean  @default(true) // true = RAW (belum signed), false = SIGNED
+  createdAt  DateTime @default(now())
 
-  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([customerId, fileHash])
   @@index([customerId, docType, version])
@@ -99,48 +98,55 @@ model UserSetting {
 
 model Project {
   id          String   @id @default(cuid())
-  name        String   // e.g. "Anjayo 16"
-  brandName   String   // e.g. "Anjayo"
-  code        String?  // e.g. "A16"
-  location    String   // e.g. "Jerambah Gantung, Pangkalpinang"
+  name        String // e.g. "Anjayo 16"
+  brandName   String // e.g. "Anjayo"
+  code        String?  @unique // e.g. "A16" — nullable-safe vs existing prod rows + seed.ts; import backfill + dashboard set. UNIQUE to prevent duplicate project codes for PO prefix.
+  location    String // e.g. "Jerambah Gantung, Pangkalpinang"
   address     String?
   totalUnits  Int      @default(0)
-  sitePlanUrl String?  // image URL (jpg/png/pdf)
+  sitePlanUrl String? // image URL (jpg/png/pdf)
   status      String   @default("ACTIVE") // ACTIVE | COMPLETED | PAUSED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  units        Unit[]
-  rabs         RAB[]
-  rabLines     RABLine[]
-  materialStock MaterialStock[]
-  agentTeams   AgentTeam[]
-  customers    Customer[]
+  units          Unit[]
+  rabs           RAB[]
+  rabLines       RABLine[]
+  agentTeams     AgentTeam[]
+  customers      Customer[]
+  purchaseOrders PurchaseOrder[]
+  wageTypes      WageType[]
+  wagePayments   WagePayment[]
+  otherExpenses  OtherExpense[]
+  materialUsages MaterialUsage[]
 
   @@unique([name])
 }
 
 model Unit {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   projectId    String
-  blockNumber  String   // e.g. "A1", "B12"
-  unitType     String   @default("36") // type 36, etc
-  landSize     Float    // e.g. 84, 105, 127
-  buildingSize Float    @default(36)
-  price        Float    @default(173000000) // harga jual ke bank
-  dpAmount     Float    @default(5000000) // DP per luas tanah
-  status       String   @default("AVAILABLE") // AVAILABLE | BOOKED | SOLD | RESERVED
+  blockNumber  String // e.g. "A1", "B12"
+  unitType     String    @default("36") // type 36, etc
+  landSize     Float // e.g. 84, 105, 127
+  buildingSize Float     @default(36)
+  price        Float     @default(173000000) // harga jual ke bank
+  dpAmount     Float     @default(5000000) // DP per luas tanah
+  status       String    @default("AVAILABLE") // AVAILABLE | BOOKED | SOLD | RESERVED
   customerId   String?
   soldAt       DateTime?
   bookedAt     DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  customer      Customer?     @relation(fields: [customerId], references: [id])
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  customer       Customer?            @relation(fields: [customerId], references: [id])
   materialUsages MaterialUsage[]
   progressPhotos ProgressPhoto[]
   budgetTracking UnitBudgetTracking[]
+  purchaseOrders PurchaseOrder[]
+  wagePayments   WagePayment[]
+  otherExpenses  OtherExpense[]
 
   @@unique([projectId, blockNumber])
 }
@@ -150,46 +156,44 @@ model Unit {
 // ============================================================
 
 model Agent {
-  id            String   @id @default(cuid())
-  name          String   // e.g. "RINA", "Ayu", "RATNA"
-  role          String   // FINANCE | MATERIAL | DOCUMENT | MARKETING | CONTENT | CTO | CAO
-  description   String?
-  personality   String?  // personality description
-  systemPrompt  String?  // custom system prompt (long)
-  gender        String?  // MALE | FEMALE
-  avatarUrl     String?
-  whatsappNumber String? // unique WA number per agent
-  llmModel      String   @default("glm-4.6") // HEAVY task model: complex analysis, decisions, content creation
-  llmProvider   String   @default("openrouter") // openrouter | zai | openai | anthropic
-  lightLlmModel String?  // LIGHT task model: FAQ, status, simple replies, casual chat (cheap: gemini-flash, gpt-4o-mini)
+  id               String   @id @default(cuid())
+  name             String // e.g. "RINA", "Ayu", "RATNA"
+  role             String // FINANCE | MATERIAL | DOCUMENT | MARKETING | CONTENT | CTO | CAO
+  description      String?
+  personality      String? // personality description
+  systemPrompt     String? // custom system prompt (long)
+  gender           String? // MALE | FEMALE
+  avatarUrl        String?
+  whatsappNumber   String? // unique WA number per agent
+  llmModel         String   @default("glm-4.6") // HEAVY task model: complex analysis, decisions, content creation
+  llmProvider      String   @default("openrouter") // openrouter | zai | openai | anthropic
+  lightLlmModel    String? // LIGHT task model: FAQ, status, simple replies, casual chat (cheap: gemini-flash, gpt-4o-mini)
   lightLlmProvider String? // provider for light model
-  llmApiKeyRef  String?  // reference to encrypted key in env/config
-  temperature   Float    @default(0.7)
-  maxTokens     Int      @default(2000)
-  isActive      Boolean  @default(true)
-  isDevilsAdvocate Boolean @default(false) // push back mode
-  skills        String?  // JSON string of skills list
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  llmApiKeyRef     String? // reference to encrypted key in env/config
+  temperature      Float    @default(0.7)
+  maxTokens        Int      @default(2000)
+  isActive         Boolean  @default(true)
+  isDevilsAdvocate Boolean  @default(false) // push back mode
+  skills           String? // JSON string of skills list
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  conversations      Conversation[]
-  memories           Memory[]
-  skillRecords       Skill[]
-  knowledgeItems     KnowledgeItem[]
-  agentTeams         AgentTeamMember[]
-  pos                PO[]
-  fundRequests       FundRequest[]
-  documents          Document[]
-  surveySchedules    SurveySchedule[]
-  approvals          Approval[]
-  assignedCustomers  Customer[]
+  conversations     Conversation[]
+  memories          Memory[]
+  skillRecords      Skill[]
+  knowledgeItems    KnowledgeItem[]
+  agentTeams        AgentTeamMember[]
+  documents         Document[]
+  surveySchedules   SurveySchedule[]
+  approvals         Approval[]
+  assignedCustomers Customer[]
 
   @@unique([name, role])
 }
 
 model AgentTeam {
   id        String   @id @default(cuid())
-  name      String   // e.g. "Tim Anjayo 16", "Tim Proyek B"
+  name      String // e.g. "Tim Anjayo 16", "Tim Proyek B"
   projectId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -199,10 +203,10 @@ model AgentTeam {
 }
 
 model AgentTeamMember {
-  id        String   @id @default(cuid())
-  teamId    String
-  agentId   String
-  joinedAt  DateTime @default(now())
+  id       String   @id @default(cuid())
+  teamId   String
+  agentId  String
+  joinedAt DateTime @default(now())
 
   team  AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
   agent Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -215,99 +219,99 @@ model AgentTeamMember {
 // ============================================================
 
 model Customer {
-  id           String   @id @default(cuid())
-  projectId    String
-  name         String
-  whatsappNumber String?
-  phone        String?
-  email        String?
-  occupation   String?  // KARYAWAN | WIRAUSAHA | LAINNYA
-  maritalStatus String? // SINGLE | MENIKAH | JANDA | DUDA
-  monthlyIncome Float?
-  hasExistingLoan Boolean @default(false)
-  hasExistingHouse Boolean @default(false)
-  sourceLead   String?  // FB | IG | TIKTOK | WALK_IN | REFERRAL
-  assignedAgentId String? // locked to 1 marketing AI per customer
+  id                    String    @id @default(cuid())
+  projectId             String
+  name                  String
+  whatsappNumber        String?
+  phone                 String?
+  email                 String?
+  occupation            String? // KARYAWAN | WIRAUSAHA | LAINNYA
+  maritalStatus         String? // SINGLE | MENIKAH | JANDA | DUDA
+  monthlyIncome         Float?
+  hasExistingLoan       Boolean   @default(false)
+  hasExistingHouse      Boolean   @default(false)
+  sourceLead            String? // FB | IG | TIKTOK | WALK_IN | REFERRAL
+  assignedAgentId       String? // locked to 1 marketing AI per customer
   personalityPreference String? // cheerful | informatif | manipulatif (for matching)
-  stage        String   @default("DM") // DM | SURVEY | CLOSING | BOOKING | SLIK | PEMBERKASAN | SP3K | AKAD | SERAH_TERIMA | LOST
-  stageUpdatedAt DateTime?
-  notes        String?
-  isExistingMigration Boolean @default(false) // konsumen existing yang dimigrasi
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  stage                 String    @default("DM") // DM | SURVEY | CLOSING | BOOKING | SLIK | PEMBERKASAN | SP3K | AKAD | SERAH_TERIMA | LOST
+  stageUpdatedAt        DateTime?
+  notes                 String?
+  isExistingMigration   Boolean   @default(false) // konsumen existing yang dimigrasi
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Detailed data for auto-fill (added for BerkasView v2)
-  nik          String?
-  birthPlace   String?
-  birthDate    String?
-  gender       String?
-  ktpAddress   String?
-  rtRw         String?
-  kelurahan    String?
-  kecamatan    String?
-  city         String?
-  postalCode   String?
-  religion     String?
-  companyName  String?
-  companyAddress String?
-  companyPhone String?
-  workDuration String?
-  workPosition String?
-  bankName     String?
-  bankAccount  String?
-  npwpNumber   String?
-  btnAccountNumber String?
-  blockLetter  String?
-  houseNumber  String?
-  houseAddress String?  // Alamat rumah/properti (e.g. "SUMUR BOR BESAR")
-  landSize     Int?
-  houseSize    Int?
-  shmNumber    String?
-  nibNumber    String?
-  spouseName   String?
-  spouseNik    String?
-  spouseBirthPlace String?
-  spouseBirthDate  String?
-  spouseOccupation String?
-  spouseAddress String?
-  spouseIncome Float?
-  motherMaidenName String?
-  emergencyContact String?
-  dependents   Int?
-  dateOfDocument String?
+  nik                     String?
+  birthPlace              String?
+  birthDate               String?
+  gender                  String?
+  ktpAddress              String?
+  rtRw                    String?
+  kelurahan               String?
+  kecamatan               String?
+  city                    String?
+  postalCode              String?
+  religion                String?
+  companyName             String?
+  companyAddress          String?
+  companyPhone            String?
+  workDuration            String?
+  workPosition            String?
+  bankName                String?
+  bankAccount             String?
+  npwpNumber              String?
+  btnAccountNumber        String?
+  blockLetter             String?
+  houseNumber             String?
+  houseAddress            String? // Alamat rumah/properti (e.g. "SUMUR BOR BESAR")
+  landSize                Int?
+  houseSize               Int?
+  shmNumber               String?
+  nibNumber               String?
+  spouseName              String?
+  spouseNik               String?
+  spouseBirthPlace        String?
+  spouseBirthDate         String?
+  spouseOccupation        String?
+  spouseAddress           String?
+  spouseIncome            Float?
+  motherMaidenName        String?
+  emergencyContact        String?
+  dependents              Int?
+  dateOfDocument          String?
   // Date tracking
-  closingDate    DateTime?
-  berkasLengkapDate DateTime?
-  berkasMasukBankDate DateTime?
-  sp3kDate       DateTime?
-  akadDate       DateTime?
-  akadNumber     String?
-  lpaDate        DateTime?
-  lpaNumber      String?
-  berkasLengkap  Boolean  @default(false)
-  atasanName     String?
-  atasanNip      String?
-  workplaceFrontPhoto String?
-  workplaceInsidePhoto String?
-  workplaceMapsLink String?
-  workplaceMapsShortLink String?  // short link maps.app.goo.gl/... (untuk bank)
+  closingDate             DateTime?
+  berkasLengkapDate       DateTime?
+  berkasMasukBankDate     DateTime?
+  sp3kDate                DateTime?
+  akadDate                DateTime?
+  akadNumber              String?
+  lpaDate                 DateTime?
+  lpaNumber               String?
+  berkasLengkap           Boolean   @default(false)
+  atasanName              String?
+  atasanNip               String?
+  workplaceFrontPhoto     String?
+  workplaceInsidePhoto    String?
+  workplaceMapsLink       String?
+  workplaceMapsShortLink  String? // short link maps.app.goo.gl/... (untuk bank)
   workplaceJamOperasional String?
-  workplaceWaktuHubungi String?
-  gajiPokok      Int?
-  slipGajiData   String?  // JSON: tunjangan, potongan, tanggalTerima, periode
-  uploadedDocs   String?  // JSON string of { docId: dataUrl } for file persistence
-  customFieldValues String? // JSON: { customFieldId: value } — bank-specific custom field values
+  workplaceWaktuHubungi   String?
+  gajiPokok               Int?
+  slipGajiData            String? // JSON: tunjangan, potongan, tanggalTerima, periode
+  uploadedDocs            String? // JSON string of { docId: dataUrl } for file persistence
+  customFieldValues       String? // JSON: { customFieldId: value } — bank-specific custom field values
 
-  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedAgent  Agent?        @relation(fields: [assignedAgentId], references: [id])
-  units          Unit[]
-  conversations  Conversation[]
-  stageHistory   CustomerStageHistory[]
-  historyLogs    CustomerHistoryLog[]
-  documents      Document[]
-  googleDocs     GoogleDoc[]
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedAgent   Agent?                 @relation(fields: [assignedAgentId], references: [id])
+  units           Unit[]
+  conversations   Conversation[]
+  stageHistory    CustomerStageHistory[]
+  historyLogs     CustomerHistoryLog[]
+  documents       Document[]
+  googleDocs      GoogleDoc[]
   surveySchedules SurveySchedule[]
-  bankPipelines  BankPipeline[]
+  bankPipelines   BankPipeline[]
 
   @@index([projectId, stage])
   @@index([assignedAgentId])
@@ -316,14 +320,14 @@ model Customer {
 model CustomerHistoryLog {
   id          String   @id @default(cuid())
   customerId  String
-  eventType   String   // FIELD_UPDATE | STAGE_CHANGE | DOC_UPLOADED | DOC_GENERATED |
-                       // BANK_CHANGE | NOTE_ADDED | STATUS_CHANGE | INTERACTION
-  title       String   // Short summary: "Gaji naik ke 5jt"
-  description String   // Detail: "Diubah dari 4.5jt ke 5jt pada Mar 2026"
+  eventType   String // FIELD_UPDATE | STAGE_CHANGE | DOC_UPLOADED | DOC_GENERATED |
+  // BANK_CHANGE | NOTE_ADDED | STATUS_CHANGE | INTERACTION
+  title       String // Short summary: "Gaji naik ke 5jt"
+  description String // Detail: "Diubah dari 4.5jt ke 5jt pada Mar 2026"
   oldValue    String?
   newValue    String?
-  metadata    String?  // JSON: {field, source, agentId, ...}
-  createdBy   String?  // userId atau agentId
+  metadata    String? // JSON: {field, source, agentId, ...}
+  createdBy   String? // userId atau agentId
   source      String   @default("MANUAL") // MANUAL | DINA | SYSTEM | WA
   createdAt   DateTime @default(now())
 
@@ -334,13 +338,13 @@ model CustomerHistoryLog {
 }
 
 model CustomerStageHistory {
-  id          String   @id @default(cuid())
-  customerId  String
-  fromStage   String?
-  toStage     String
-  changedBy   String?  // agentId | userId
-  reason      String?
-  changedAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  customerId String
+  fromStage  String?
+  toStage    String
+  changedBy  String? // agentId | userId
+  reason     String?
+  changedAt  DateTime @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 }
@@ -350,16 +354,16 @@ model CustomerStageHistory {
 // ============================================================
 
 model Conversation {
-  id          String   @id @default(cuid())
-  customerId  String?
-  agentId     String?
-  channel     String   @default("WHATSAPP") // WHATSAPP | DASHBOARD | INSTAGRAM | FACEBOOK | TIKTOK
-  senderNumber String? // DINA v2: scope WA conversation by sender (H1 fix)
-  status      String   @default("ACTIVE") // ACTIVE | ARCHIVED | CLOSED
-  summary     String?  // AI-generated summary
+  id            String    @id @default(cuid())
+  customerId    String?
+  agentId       String?
+  channel       String    @default("WHATSAPP") // WHATSAPP | DASHBOARD | INSTAGRAM | FACEBOOK | TIKTOK
+  senderNumber  String? // DINA v2: scope WA conversation by sender (H1 fix)
+  status        String    @default("ACTIVE") // ACTIVE | ARCHIVED | CLOSED
+  summary       String? // AI-generated summary
   lastMessageAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   agent    Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -373,14 +377,14 @@ model Conversation {
 model Message {
   id             String   @id @default(cuid())
   conversationId String
-  role           String   // CUSTOMER | AGENT | SYSTEM | OWNER
+  role           String // CUSTOMER | AGENT | SYSTEM | OWNER
   content        String
   contentType    String   @default("TEXT") // TEXT | IMAGE | AUDIO | DOCUMENT | LOCATION | STICKER
   mediaUrl       String?
-  metadata       String?  // JSON string
+  metadata       String? // JSON string
   isRead         Boolean  @default(false)
   needsApproval  Boolean  @default(false) // for actions requiring owner sign-off
-  approvalStatus String?  // PENDING | APPROVED | REJECTED
+  approvalStatus String? // PENDING | APPROVED | REJECTED
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -393,25 +397,25 @@ model Message {
 // ============================================================
 
 model Memory {
-  id              String   @id @default(cuid())
-  agentId         String?  // null = entity memory / umum
-  customerId      String?  // customer-specific memory
-  category        String   // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING | KONSUMEN | DECISION
-  memoryType      String   @default("long_term") // short_term | long_term | entity | umum
-  entityType      String?  // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER
-  entityId        String?  // ID of the entity
-  title           String?  // Judul memory (like book title)
-  content         String   // Deskripsi: what happened / what's the rule
-  resolution      String?  // Action items: what to do about it
-  importance      Float    @default(0.5)
-  source          String?
-  attachmentUrl   String?
-  version         Int      @default(1)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  agentId       String? // null = entity memory / umum
+  customerId    String? // customer-specific memory
+  category      String // UTAMA | BERKAS | FINANCE | MATERIAL | MARKETING | KONSUMEN | DECISION
+  memoryType    String   @default("long_term") // short_term | long_term | entity | umum
+  entityType    String? // CUSTOMER | BANK | OWNER | PROJECT | SUPPLIER
+  entityId      String? // ID of the entity
+  title         String? // Judul memory (like book title)
+  content       String // Deskripsi: what happened / what's the rule
+  resolution    String? // Action items: what to do about it
+  importance    Float    @default(0.5)
+  source        String?
+  attachmentUrl String?
+  version       Int      @default(1)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent    Agent?          @relation(fields: [agentId], references: [id], onDelete: Cascade)
   versions MemoryVersion[]
 
   @@index([agentId, category])
@@ -422,13 +426,13 @@ model Memory {
 
 // Memory versioning — track every change (v1, v2, v3...)
 model MemoryVersion {
-  id          String   @id @default(cuid())
-  memoryId    String
-  version     Int
-  content     String   // snapshot of content at this version
-  changedBy   String?  // owner | ratna | agent_name
-  changeNote  String?  // why was it changed?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  memoryId   String
+  version    Int
+  content    String // snapshot of content at this version
+  changedBy  String? // owner | ratna | agent_name
+  changeNote String? // why was it changed?
+  createdAt  DateTime @default(now())
 
   memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
 
@@ -437,20 +441,20 @@ model MemoryVersion {
 
 // Skill — kemampuan agent (prompt-based, like Claude Skills)
 model Skill {
-  id              String   @id @default(cuid())
-  name            String   // e.g. "generate-laporan-keuangan"
-  displayName     String   // e.g. "Generate Laporan Keuangan"
-  description     String?  // what this skill does
-  prompt          String   // the actual prompt/instruction
-  category        String   @default("UMUM") // UMUM | DINA | RINA | MITRA | RATNA | RANGGA | MARKETING
-  agentId         String?  // null = umum (all agents), specific = that agent only
-  source          String?  // MANUAL | CAVINHUANG | PROMPT_ENGINEER | RATNA_CREATED
-  isActive        Boolean  @default(true)
-  version         Int      @default(1)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String // e.g. "generate-laporan-keuangan"
+  displayName String // e.g. "Generate Laporan Keuangan"
+  description String? // what this skill does
+  prompt      String // the actual prompt/instruction
+  category    String   @default("UMUM") // UMUM | DINA | RINA | MITRA | RATNA | RANGGA | MARKETING
+  agentId     String? // null = umum (all agents), specific = that agent only
+  source      String? // MANUAL | CAVINHUANG | PROMPT_ENGINEER | RATNA_CREATED
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent    Agent?         @relation(fields: [agentId], references: [id], onDelete: Cascade)
   versions SkillVersion[]
 
   @@index([agentId, category])
@@ -459,13 +463,13 @@ model Skill {
 
 // Skill versioning — track every change
 model SkillVersion {
-  id          String   @id @default(cuid())
-  skillId     String
-  version     Int
-  prompt      String   // snapshot of prompt at this version
-  changedBy   String?  // owner | ratna
-  changeNote  String?  // why was it changed?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  skillId    String
+  version    Int
+  prompt     String // snapshot of prompt at this version
+  changedBy  String? // owner | ratna
+  changeNote String? // why was it changed?
+  createdAt  DateTime @default(now())
 
   skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
@@ -474,14 +478,14 @@ model SkillVersion {
 
 // MemoryAudit — audit trail for all memory/skill changes
 model MemoryAudit {
-  id          String   @id @default(cuid())
-  action      String   // CREATE | EDIT | DELETE | CONNECT | DISCONNECT
-  entityType  String   // MEMORY | SKILL
-  entityId    String   // ID of memory or skill
-  agentId     String?  // which agent (if applicable)
-  changedBy   String?  // owner | ratna | system
-  details     String?  // JSON: what changed, old value, new value
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  action     String // CREATE | EDIT | DELETE | CONNECT | DISCONNECT
+  entityType String // MEMORY | SKILL
+  entityId   String // ID of memory or skill
+  agentId    String? // which agent (if applicable)
+  changedBy  String? // owner | ratna | system
+  details    String? // JSON: what changed, old value, new value
+  createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
   @@index([createdAt])
@@ -492,16 +496,16 @@ model MemoryAudit {
 // ============================================================
 
 model KnowledgeItem {
-  id          String   @id @default(cuid())
-  agentId     String?  // null = global knowledge, available to all agents
-  category    String   // FAQ | OBJECTION | PRODUCT_INFO | BANK_REQUIREMENT | RAB_DETAIL | SELLING_POINT | COMPANY_POLICY
-  question    String?  // for FAQ/objection
-  answer      String?  // for FAQ/objection
-  content     String?  // for general knowledge (markdown)
-  tags        String?  // JSON array of tags
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  agentId   String? // null = global knowledge, available to all agents
+  category  String // FAQ | OBJECTION | PRODUCT_INFO | BANK_REQUIREMENT | RAB_DETAIL | SELLING_POINT | COMPANY_POLICY
+  question  String? // for FAQ/objection
+  answer    String? // for FAQ/objection
+  content   String? // for general knowledge (markdown)
+  tags      String? // JSON array of tags
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   agent Agent? @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
@@ -514,119 +518,266 @@ model KnowledgeItem {
 // ============================================================
 
 model Approval {
-  id          String   @id @default(cuid())
+  id               String    @id @default(cuid())
   requesterAgentId String
-  approverUserId String?
-  type        String   // PO | FUND_REQUEST | PAYMENT | DOCUMENT_SIGN | POST_PUBLISH
-  referenceId String?  // ID of related entity (PO, FundRequest, etc)
-  payload     String   // JSON string of what needs approval
-  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
-  signatureUrl String? // digital signature or photo of physical sign
-  notes       String?
-  respondedAt DateTime?
-  createdAt   DateTime @default(now())
+  approverUserId   String?
+  type             String // PO | FUND_REQUEST | PAYMENT | DOCUMENT_SIGN | POST_PUBLISH
+  referenceId      String? // ID of related entity (PO, FundRequest, etc)
+  payload          String // JSON string of what needs approval
+  status           String    @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
+  signatureUrl     String? // digital signature or photo of physical sign
+  notes            String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
 
   agent    Agent    @relation(fields: [requesterAgentId], references: [id])
   approver AppUser? @relation(fields: [approverUserId], references: [id])
-  pos      PO[]
 }
 
 // ============================================================
 // 9. FINANCE: SUPPLIERS, POs, PAYMENTS (RINA domain)
 // ============================================================
 
+// SUPPLIER — toko material, dengan bank untuk auto-fill transfer instruction
 model Supplier {
-  id          String   @id @default(cuid())
-  name        String
+  id             String   @id @default(cuid())
+  name           String
   whatsappNumber String?
-  phone       String?
-  address     String?
-  contactPerson String?
-  totalDebt   Float    @default(0) // running total hutang
+  phone          String?
+  address        String?
+  contactPerson  String?
+  bankName       String? // untuk auto-fill transfer instruction
+  bankAccount    String? // no rekening supplier
+  bankHolder     String? // nama pemilik rekening
+  totalDebt      Float    @default(0) // cached, recomputed dari Payment ledger (redundant — source of truth = Payment)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+  payments       Payment[] // payments utk PO dari supplier ini (denormalized via supplierId)
+
+  @@unique([name])
+}
+
+// WORKER — master tukang (auto-seed 9 dari backup)
+model Worker {
+  id                 String   @id @default(cuid())
+  name               String // nama tukang
+  phone              String?
+  defaultBankName    String? // rekening default (override per Payment — beda tiap minggu)
+  defaultBankAccount String?
+  defaultBankHolder  String?
+  isCashOnly         Boolean  @default(false) // tunai only (paksakan transfer? false = transferable)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  wagePayments WagePayment[]
+  payments     Payment[]
+
+  @@unique([name])
+}
+
+// PURCHASE ORDER — 1 supplier, multi-item, tiap item bisa beda allocation.
+// format: PO/{projectCode}/{unitSegment}/{seq}/{MMYY}  (dash di DB: PO-A16-A12-001-0726)
+model PurchaseOrder {
+  id           String    @id @default(cuid())
+  poNumber     String    @unique // dash separator di DB/filename, slash di display
+  supplierId   String
+  projectId    String // projectCode prefix (e.g. A16) — wajib, bawa projectCode
+  unitId       String? // null = GDG / stok gudang (seq counter per unit per tahun)
+  status       String    @default("DRAFT") // DRAFT | ORDERED | RECEIVED | PARTIAL_PAID | PAID | VOIDED (recomputed dari Nota + Payment)
+  plannedTotal Float     @default(0) // Σ qty×price (rencana — PO nominal adalah rencana)
+  actualTotal  Float     @default(0) // Σ dari Nota (realisasi)
+  locked       Boolean   @default(false) // lock setelah nota pertama (PO nominal rencana, real beda)
+  poDate       DateTime  @default(now())
+  receivedAt   DateTime? // tanggal terima (dari nota pertama)
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  supplier Supplier        @relation(fields: [supplierId], references: [id])
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit     Unit?           @relation(fields: [unitId], references: [id])
+  items    POItem[]
+  notas    Nota[]
+  payments Payment[]
+  usages   MaterialUsage[] // auto-created dari directUse items (skip stok)
+
+  @@index([supplierId, status])
+  @@index([projectId, poDate])
+}
+
+// PO ITEM — tiap line bisa beda allocation (project/unit), directUse = skip stok
+model POItem {
+  id           String  @id @default(cuid())
+  poId         String
+  materialId   String
+  qty          Float
+  price        Float // unit price (rencana)
+  totalPrice   Float   @default(0) // qty × price
+  block        String? // text segment lama (migration safety dari backup)
+  directUse    Boolean @default(false) // langsung dipakai unit (skip stok, auto-Usage). Contoh: kamar mandi, carpot, pipa air
+  deliveredQty Float   @default(0) // diterima dari Nota (realisasi)
+  note         String?
+
+  po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  material Material      @relation(fields: [materialId], references: [id])
+
+  @@index([poId])
+}
+
+// NOTA — bukti beli dari supplier. 1 PO bisa >1 nota (karna nota bisa abis).
+model Nota {
+  id          String   @id @default(cuid())
+  poId        String
+  notaNumber  String? // nomor nota dari toko
+  notaDate    DateTime @default(now())
+  totalAmount Float    @default(0) // total nota (realisasi)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  po PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@index([poId])
+}
+
+// PAYMENT — partial per-recipient (replaces hammer pay). 1 Payment = 1 termin.
+// Type pembeda via FK mana yg isi (poId | wagePaymentId | expenseId). voided = no hard delete, audit preserved.
+// supplierId/workerId denormalized utk query outstanding per-penerima (single-owner, small data).
+model Payment {
+  id            String   @id @default(cuid())
+  poId          String?
+  wagePaymentId String?
+  expenseId     String?
+  amount        Float
+  method        String   @default("TRANSFER") // TRANSFER | CASH | GIRO
+  bankName      String? // snapshot bank penerima (override per payment — tukang rekening beda tiap minggu)
+  bankAccount   String?
+  bankHolder    String?
+  paidAt        DateTime @default(now())
+  voided        Boolean  @default(false) // void, bukan delete, utk audit
+  notes         String?
+  // denormalized utk query outstanding per-penerima
+  supplierId    String?
+  workerId      String?
+  createdAt     DateTime @default(now())
+
+  purchaseOrder PurchaseOrder? @relation(fields: [poId], references: [id])
+  wagePayment   WagePayment?   @relation(fields: [wagePaymentId], references: [id])
+  otherExpense  OtherExpense?  @relation(fields: [expenseId], references: [id])
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  worker        Worker?        @relation(fields: [workerId], references: [id])
+
+  @@index([poId])
+  @@index([wagePaymentId])
+  @@index([expenseId])
+  @@index([paidAt])
+}
+
+// WAGE TYPE — benchmark upah per pekerjaan per project (RAB price, dipake snapshot pas WagePayment dibuat)
+model WageType {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String // e.g. "Pondasi", "Plesteran", "Bata"
+  price       Float    @default(0) // benchmark per-unit budget (snapshot di WagePayment.fullTaskBudget)
+  unitMeasure String? // termin | bh | m2 | m
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  pos     PO[]
-  payments SupplierPayment[]
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wagePayments WagePayment[]
+
+  @@unique([projectId, name])
 }
 
-model PO {
-  id           String   @id @default(cuid())
-  poNumber     String   @unique // e.g. PO-2026-001
-  agentId      String   // RINA
-  supplierId   String
-  projectId    String?
-  unitIds      String?  // JSON array of unit IDs (1 PO can cover multiple units)
-  workItem     String?  // e.g. "Plaster", "Plesteran"
-  status       String   @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | SENT_TO_SUPPLIER | PARTIAL_DELIVERED | DELIVERED | PARTIAL_PAID | PAID | CANCELLED
-  subtotal     Float    @default(0)
-  totalAmount  Float    @default(0)
-  notes        String?
-  approvedAt   DateTime?
-  sentAt       DateTime?
-  deliveredAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+// WAGE PAYMENT — 1 record = 1 termin (partial payment real — bos mood: full 1.2jt atau partial 500K)
+model WagePayment {
+  id                   String   @id @default(cuid())
+  projectId            String
+  unitId               String?
+  workerId             String
+  wageTypeId           String
+  fullTaskBudget       Float    @default(0) // snapshot pas create (RAB locked saat tukang teken kontrak)
+  amount               Float    @default(0) // actual termin pekerjaan
+  workDescription      String? // nama pekerjaan + progress / hasil pekerjaan
+  status               String   @default("DRAFT") // DRAFT | UNPAID | PARTIAL_PAID | PAID (recomputed dari Payment)
+  budgetVarianceReason String? // wajib kalo amount > fullTaskBudget (B5)
+  weekClosing          String? // e.g. "2026-W25"
+  wageDate             DateTime @default(now()) // tanggal termin
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  agent    Agent    @relation(fields: [agentId], references: [id])
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-  lines    POLine[]
-  payments SupplierPayment[]
-  approvalRecords Approval[]  // back-relation: approvals linked to this PO
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit     Unit?     @relation(fields: [unitId], references: [id])
+  worker   Worker    @relation(fields: [workerId], references: [id])
+  wageType WageType  @relation(fields: [wageTypeId], references: [id])
+  payments Payment[]
 
-  @@index([supplierId, status])
-  @@index([status])
+  @@index([projectId, wageDate])
+  @@index([workerId])
 }
 
-model POLine {
-  id          String   @id @default(cuid())
-  poId        String
-  materialName String
-  quantity    Float
-  unitMeasure String   // zak | kg | m3 | btg | bh
-  unitPrice   Float
-  totalPrice  Float
-  deliveredQuantity Float @default(0) // actual delivered (may differ from ordered)
-  finalUnitPrice Float? // actual price at payment (may differ due to price change)
-  notes       String?
+// OTHER EXPENSE — biaya lain-lain (operasional, notary, SLF, KWH, fuel, salary, reimburse, dst). BUKAN material (A9: material WAJIB via PO).
+model OtherExpense {
+  id            String   @id @default(cuid())
+  projectId     String? // null = operational company-wide
+  unitId        String?
+  category      String // SALARY | FUEL | NOTARY | SLF | KWH | DP_REFUND | REIMBURSE | TAKSASI | RAP | MARKETING | OTHER
+  recipientName String // penerima
+  amount        Float    @default(0)
+  description   String
+  paymentCycle  String? // WEEKLY | MONTHLY | ONETIME
+  isCash        Boolean  @default(false) // tunai (no bank)
+  bankName      String?
+  bankAccount   String?
+  bankHolder    String?
+  status        String   @default("DRAFT") // DRAFT | UNPAID | PARTIAL_PAID | PAID (recomputed dari Payment)
+  expenseDate   DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  po PO @relation(fields: [poId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit     Unit?     @relation(fields: [unitId], references: [id])
+  payments Payment[]
+
+  @@index([projectId, expenseDate])
 }
 
-model SupplierPayment {
-  id          String   @id @default(cuid())
-  supplierId  String
-  poId        String?
-  amount      Float
-  method      String   @default("TRANSFER") // TRANSFER | CASH | GIRO
-  notes       String?
-  approvalId  String?
-  paidAt      DateTime @default(now())
-  createdAt   DateTime @default(now())
+// MEMO — pengajuan dana. append-only history via MemoLine utk carry-over tracking ("boss skip tanggal X")
+model Memo {
+  id         String   @id @default(cuid())
+  memoNumber String   @unique // sequential per tahun, e.g. MBP-W-001-0726 (fixes collision)
+  memoDate   DateTime @default(now())
+  status     String   @default("DRAFT") // DRAFT | PROPOSED | PARTIAL_PAID | COMPLETED | VOIDED
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-  po       PO?       @relation(fields: [poId], references: [id])
+  lines MemoLine[]
 }
 
-model FundRequest {
-  id           String   @id @default(cuid())
-  agentId      String   // RINA
-  requesterName String? // nama tukang/penerima
-  type         String   // TUKANG_WAGE | OPERATIONAL | NOTARY | SLF | KWH | FUEL | SALARY | DP_REFUND | REIMBURSE | OTHER
-  projectId    String?
-  unitIds      String?  // JSON array
-  description  String
-  amount       Float
-  status       String   @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
-  paidAt       DateTime?
-  notes        String?
-  approvedBy   String?
-  approvedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model MemoLine {
+  id                        String    @id @default(cuid())
+  memoId                    String
+  kind                      String // PO | WAGE | EXPENSE
+  itemId                    String // id PO / WagePayment / OtherExpense (loose FK polymorphic)
+  proposedAmount            Float     @default(0) // snapshot nominal saat diajukin
+  status                    String    @default("PROPOSED") // PROPOSED | PAID | SKIPPED
+  dueDate                   DateTime? // target bayar
+  paidAt                    DateTime? // kapan actually dibayar
+  notes                     String? // alasan skip / carry-over
+  carriedOverFromMemoLineId String? // self-ref: boss skip tanggal X → carry ke memo berikut
+  createdAt                 DateTime  @default(now())
 
-  agent    Agent    @relation(fields: [agentId], references: [id])
-  approver AppUser? @relation(fields: [approvedBy], references: [id])
+  memo      Memo       @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  priorLine MemoLine?  @relation("MemoLineCarryOver", fields: [carriedOverFromMemoLineId], references: [id])
+  carriedTo MemoLine[] @relation("MemoLineCarryOver")
+
+  @@index([memoId])
+  @@index([kind, itemId])
 }
 
 // ============================================================
@@ -647,56 +798,140 @@ model RAB {
 }
 
 model RABLine {
-  id            String   @id @default(cuid())
-  rabId         String
-  projectId     String
-  workItem      String   // e.g. "Plasteran", "Plesteran"
-  materialName  String
-  quantity      Float
-  unitMeasure   String
-  unitPrice     Float
-  totalPrice    Float
+  id                 String   @id @default(cuid())
+  rabId              String
+  projectId          String
+  workItem           String // e.g. "Plasteran", "Plesteran"
+  materialName       String
+  quantity           Float
+  unitMeasure        String
+  unitPrice          Float
+  totalPrice         Float
   supplierSuggestion String?
-  createdAt     DateTime @default(now())
+  createdAt          DateTime @default(now())
 
   rab     RAB     @relation(fields: [rabId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id])
 }
 
-model MaterialStock {
+// CATEGORY — master kategori material (15 dari backup)
+model Category {
+  id        String   @id @default(cuid())
+  name      String // e.g. "Semen", "Bata", "Pasir", "Lainnya"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials Material[]
+
+  @@unique([name])
+}
+
+// MATERIAL — master material (163 dari backup). minStock utk low-stock alert (semen/bata/pasir tinggi).
+model Material {
   id          String   @id @default(cuid())
-  projectId   String
-  materialName String
-  unitMeasure String
-  quantity    Float    @default(0)
-  minimumStock Float   @default(0) // 10% threshold
-  unitPrice   Float?
-  lastRestockAt DateTime?
+  name        String
+  categoryId  String?
+  unitMeasure String // zak | kg | m3 | btg | bh | lembar | sak
+  minStock    Float    @default(0) // low-stock threshold (semen/bata/pasir set tinggi)
+  lastPrice   Float? // AVCO running price (cached, see StockAdjustment/POItem utk history)
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category    Category?           @relation(fields: [categoryId], references: [id])
+  stock       Stock?              @relation("MaterialStock") // 1:1 (PK di Stock.materialId)
+  adjustments StockAdjustment[]
+  poItems     POItem[]
+  usageItems  MaterialUsageItem[]
 
-  @@unique([projectId, materialName, unitMeasure])
+  @@unique([name])
 }
 
-model MaterialUsage {
-  id          String   @id @default(cuid())
-  unitId      String
-  materialName String
-  quantity    Float
-  unitMeasure String
-  workItem    String?  // which work item this was used for
-  reportedBy  String?  // nama orang lapangan
-  reportMethod String? // PHOTO | TEXT | VOICE
-  photoUrl    String?
-  notes       String?
-  usedAt      DateTime @default(now())
-  createdAt   DateTime @default(now())
+// STOCK — 1:1 ke Material (PK = materialId). Stok gudang global (C4: stock = pengeluaran global). AVCO running price.
+model Stock {
+  materialId String   @id // 1:1 PK = Material.id
+  quantity   Float    @default(0)
+  avgPrice   Float    @default(0) // AVCO running unit cost
+  updatedAt  DateTime @updatedAt
 
-  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  material Material @relation("MaterialStock", fields: [materialId], references: [id], onDelete: Cascade)
+}
+
+// STOCK ADJUSTMENT — audit log. NO silent set; tiap perubahan saldo insert adjustment + reason.
+// Relates to Material (1:1 Stock reachable via materialId). refId pointed to Material.stock — single relation to Material keeps it clean.
+model StockAdjustment {
+  id         String   @id @default(cuid())
+  materialId String
+  deltaQty   Float    @default(0) // (+) in / (−) out
+  reason     String // wajib — alasan (utk OPNAME wajib): KARNA penyesuaian stok opname / return sisa / etc
+  type       String // INITIAL | PO_RECEIVED | USAGE_OUT | DIRECT_USE_SKIP | OPNAME | RETURN_TO_STOCK
+  prevQty    Float    @default(0)
+  newQty     Float    @default(0)
+  unitCost   Float? // snapshot harga pas adjustment (AVCO in)
+  refId      String? // PO id / MaterialUsage id / null utk manual opname
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, date])
+}
+
+// MATERIAL USAGE — rewritten (name preserved utk Unit.materialUsages / Project.materialUsages relations).
+// 1 usage = 1 event pemakaian material (bisa multi item via MaterialUsageItem). AVCO snapshot harga frozen di item.
+model MaterialUsage {
+  id         String   @id @default(cuid())
+  unitId     String? // null = pemakaian stok gudang umum / project-wide
+  projectId  String
+  poId       String? // link ke PO kalo dari directUse auto-create (skip stok) atau distribution
+  source     String // WAREHOUSE_DISTRIBUTION | DIRECT_USE | STOCK_OPNAME | RETURN_TO_STOCK
+  reportedBy String? // nama mandor/orang lapangan
+  notes      String?
+  usedAt     DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  unit    Unit?               @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  po      PurchaseOrder?      @relation(fields: [poId], references: [id])
+  items   MaterialUsageItem[]
 
   @@index([unitId, usedAt])
+  @@index([projectId, usedAt])
+}
+
+// MATERIAL USAGE ITEM — line item per material. price = AVCO snapshot frozen pas usage (B5/B7).
+model MaterialUsageItem {
+  id          String   @id @default(cuid())
+  usageId     String
+  materialId  String
+  qty         Float    @default(0)
+  price       Float    @default(0) // AVCO snapshot frozen at usage time (historical unit cost stable)
+  unitMeasure String
+  workItem    String? // e.g. "Pondasi", "Plesteran"
+  subtotal    Float    @default(0) // qty × price
+  createdAt   DateTime @default(now())
+
+  usage    MaterialUsage @relation(fields: [usageId], references: [id], onDelete: Cascade)
+  material Material      @relation(fields: [materialId], references: [id])
+
+  @@index([usageId])
+  @@index([materialId])
+}
+
+// FILE REF — polymorphic pointer ke Google Drive {kind, refId, driveFileId, driveUrl}.
+// Drives per-entity PDF archive bundle (PO doc + notas + transfer proofs → 1 PDF) + monthly money-out bundle.
+model FileRef {
+  id          String   @id @default(cuid())
+  kind        String // PO_DOC | NOTA | TRANSFER_PROOF | WAGE_EVIDENCE | EXPENSE_PROOF | REPORT | BUNDLE_MONTHLY | BUNDLE_ENTITY
+  refId       String // polymorphic: id PO/WagePayment/OtherExpense/Memo (loose, no FK)
+  driveFileId String // Google Drive file id
+  driveUrl    String? // share/view url
+  fileName    String?
+  mimeType    String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind, refId])
+  @@index([refId])
 }
 
 model ProgressPhoto {
@@ -706,7 +941,7 @@ model ProgressPhoto {
   photoUrl    String
   caption     String?
   takenBy     String?
-  weekClosing String?  // e.g. "2026-W25" for Friday closing book
+  weekClosing String? // e.g. "2026-W25" for Friday closing book
   takenAt     DateTime @default(now())
   createdAt   DateTime @default(now())
 
@@ -714,17 +949,17 @@ model ProgressPhoto {
 }
 
 model UnitBudgetTracking {
-  id           String   @id @default(cuid())
-  unitId       String
-  workItem     String
-  budgetAmount Float
-  actualAmount Float    @default(0)
-  usagePercent Float    @default(0) // computed: actual/budget
-  isOverBudget Boolean  @default(false)
+  id            String    @id @default(cuid())
+  unitId        String
+  workItem      String
+  budgetAmount  Float
+  actualAmount  Float     @default(0)
+  usagePercent  Float     @default(0) // computed: actual/budget
+  isOverBudget  Boolean   @default(false)
   warningSentAt DateTime?
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
@@ -736,45 +971,45 @@ model UnitBudgetTracking {
 // ============================================================
 
 model Document {
-  id          String   @id @default(cuid())
-  customerId  String?
-  agentId     String?
-  projectId   String?
-  type        String   // KTP | NPWP | KK | AKTA_NIKAH | SLIP_GAJI | SK_KERJA | NIB | LABA_RUGI | BANK_FORM | BPHTB | NOTARY | OTHER
-  bankName    String?  // BTN | MANDIRI | SUMSELBABEL | null if not bank-specific
-  fileName    String
-  fileUrl     String
-  fileSize    Int?
-  mimeType    String?
+  id            String   @id @default(cuid())
+  customerId    String?
+  agentId       String?
+  projectId     String?
+  type          String // KTP | NPWP | KK | AKTA_NIKAH | SLIP_GAJI | SK_KERJA | NIB | LABA_RUGI | BANK_FORM | BPHTB | NOTARY | OTHER
+  bankName      String? // BTN | MANDIRI | SUMSELBABEL | null if not bank-specific
+  fileName      String
+  fileUrl       String
+  fileSize      Int?
+  mimeType      String?
   extractedData String? // JSON of OCR/extracted fields
-  status      String   @default("UPLOADED") // UPLOADED | EXTRACTED | FILLED_TEMPLATE | SIGNED | ARCHIVED
-  notes       String?
-  uploadedBy  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status        String   @default("UPLOADED") // UPLOADED | EXTRACTED | FILLED_TEMPLATE | SIGNED | ARCHIVED
+  notes         String?
+  uploadedBy    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  agent    Agent?    @relation(fields: [agentId], references: [id])
-  uploadedByUser AppUser? @relation(fields: [uploadedBy], references: [id])
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  agent          Agent?    @relation(fields: [agentId], references: [id])
+  uploadedByUser AppUser?  @relation(fields: [uploadedBy], references: [id])
 }
 
 model DocumentTemplate {
-  id          String   @id @default(cuid())
-  bankName    String
+  id           String   @id @default(cuid())
+  bankName     String
   templateName String
-  templateUrl String?
-  fields      String?
-  version     Int      @default(1)
-  isActive    Boolean  @default(true)
-  type        String?
-  category    String?
-  sortOrder   Int?
-  isRequired  Boolean?
-  description String?
-  mimeType    String?
-  fileSize    Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  templateUrl  String?
+  fields       String?
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  type         String?
+  category     String?
+  sortOrder    Int?
+  isRequired   Boolean?
+  description  String?
+  mimeType     String?
+  fileSize     Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // ============================================================
@@ -789,13 +1024,13 @@ model SurveySchedule {
   duration    Int      @default(60) // minutes
   location    String?
   status      String   @default("SCHEDULED") // SCHEDULED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
-  assignedTo  String?  // nama human yang nemuin: Ayen / Desri / Owner
+  assignedTo  String? // nama human yang nemuin: Ayen / Desri / Owner
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  agent    Agent?    @relation(fields: [agentId], references: [id])
+  agent    Agent?   @relation(fields: [agentId], references: [id])
 }
 
 // ============================================================
@@ -803,15 +1038,15 @@ model SurveySchedule {
 // ============================================================
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  agentId     String?
-  action      String
-  entityType  String?
-  entityId    String?
-  metadata    String?  // JSON
-  ipAddress   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String?
+  agentId    String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   String? // JSON
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
   user AppUser? @relation(fields: [userId], references: [id])
 
@@ -827,22 +1062,22 @@ model AuditLog {
 // ============================================================
 
 model PendingAction {
-  id              String   @id @default(cuid())
-  conversationId  String?  // which conversation thread this belongs to
-  customerId      String?  // optional: which customer this is about
-  channel         String   @default("DASHBOARD") // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
-  senderNumber    String?  // for WA: who initiated
-  type            String   // DELETE | CREATE | UPDATE
-  targetType      String   // CUSTOMER | FIELD
-  targetId        String?  // customer id being deleted/updated
-  targetName      String?  // human-readable target name
-  fieldName       String?  // for UPDATE: which field
-  newValue        String?  // for UPDATE: new value
-  customerData    String?  // for CREATE: JSON of new customer data
-  status          String   @default("PENDING") // PENDING | CONFIRMED | CANCELLED | EXPIRED
-  createdAt       DateTime @default(now())
-  expiresAt       DateTime // 5 minutes TTL
-  confirmedAt     DateTime?
+  id             String    @id @default(cuid())
+  conversationId String? // which conversation thread this belongs to
+  customerId     String? // optional: which customer this is about
+  channel        String    @default("DASHBOARD") // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  senderNumber   String? // for WA: who initiated
+  type           String // DELETE | CREATE | UPDATE
+  targetType     String // CUSTOMER | FIELD
+  targetId       String? // customer id being deleted/updated
+  targetName     String? // human-readable target name
+  fieldName      String? // for UPDATE: which field
+  newValue       String? // for UPDATE: new value
+  customerData   String? // for CREATE: JSON of new customer data
+  status         String    @default("PENDING") // PENDING | CONFIRMED | CANCELLED | EXPIRED
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime // 5 minutes TTL
+  confirmedAt    DateTime?
 
   @@index([conversationId, status])
   @@index([channel, senderNumber, status])
@@ -856,28 +1091,28 @@ model PendingAction {
 // ============================================================
 
 model SessionContext {
-  id              String   @id @default(cuid())
-  conversationId  String?
-  channel         String   // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
-  senderNumber    String?
+  id             String  @id @default(cuid())
+  conversationId String?
+  channel        String // DASHBOARD | WHATSAPP_PRIVATE | WHATSAPP_GROUP
+  senderNumber   String?
 
   // Last entities referenced
   lastCustomerId   String?
   lastCustomerName String?
 
   // JSON array: [{docType, fileId, version, fileName, createdAt}]
-  lastDocs        String?
+  lastDocs String?
 
   // Last topic/intent for traceback
-  lastIntent      String?
-  lastTopic       String?  // free text summary
+  lastIntent String?
+  lastTopic  String? // free text summary
 
   // Auto-renew tracking
   lastInteractionAt DateTime
-  expiresAt       DateTime  // lastInteractionAt + 48 hours
+  expiresAt         DateTime // lastInteractionAt + 48 hours
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([conversationId, channel, senderNumber])
   @@index([channel, senderNumber, expiresAt])
@@ -892,16 +1127,16 @@ model SessionContext {
 // ============================================================
 
 model BankConfig {
-  id            String   @id @default(cuid())
-  bankCode      String   @unique // BTN, MANDIRI, BSB_SYARIAH, BCA, etc.
-  bankName      String   // Display name: "BTN", "Mandiri", "BSB Syariah"
-  description   String?  // Optional description
-  templatePath  String?  // Legacy: Path to PDF template (deprecated — use templates JSON)
-  documents     String?  // JSON: { requiredDocuments, formboxFields, customDocs, templates, stages, ... }
-  isActive      Boolean  @default(true)
-  createdBy     String?  // 'system' (migration) or 'dina' (via chat) or 'owner' (UI)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  bankCode     String   @unique // BTN, MANDIRI, BSB_SYARIAH, BCA, etc.
+  bankName     String // Display name: "BTN", "Mandiri", "BSB Syariah"
+  description  String? // Optional description
+  templatePath String? // Legacy: Path to PDF template (deprecated — use templates JSON)
+  documents    String? // JSON: { requiredDocuments, formboxFields, customDocs, templates, stages, ... }
+  isActive     Boolean  @default(true)
+  createdBy    String? // 'system' (migration) or 'dina' (via chat) or 'owner' (UI)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([isActive])
   @@index([bankCode])
@@ -935,7 +1170,7 @@ model BankConfig {
 
 model NotarisSetting {
   id        String   @id @default(cuid())
-  name      String   // nama + gelar notaris
+  name      String // nama + gelar notaris
   address   String?
   city      String?
   isActive  Boolean  @default(true)
@@ -947,34 +1182,34 @@ model NotarisSetting {
 // Director info + bank account numbers per bank, shared across all customers
 model CompanySetting {
   id              String   @id @default("default") // single global record
-  companyName     String?  // Nama PT (Marlindo Bangun Persada)
-  directorName    String?  // Nama Direktur (Andrian Bong)
-  directorNik     String?  // NIK Direktur
-  directorPhone   String?  // No. HP Direktur/Owner (global untuk semua tim Anjayo 16)
-  directorAddress String?  // Alamat KTP Direktur (global)
-  officeAddress   String?  // Alamat Kantor/Perusahaan (global)
-  city            String?  // Kota (Pangkalpinang)
-  btnAccount      String?  // No. Rekening BTN
-  mandiriAccount  String?  // No. Rekening Mandiri
-  bsbAccount      String?  // No. Rekening BSB Syariah
-  btnBranch       String?  // Cabang BTN
-  mandiriBranch   String?  // Cabang Mandiri
-  bsbBranch       String?  // Cabang BSB
+  companyName     String? // Nama PT (Marlindo Bangun Persada)
+  directorName    String? // Nama Direktur (Andrian Bong)
+  directorNik     String? // NIK Direktur
+  directorPhone   String? // No. HP Direktur/Owner (global untuk semua tim Anjayo 16)
+  directorAddress String? // Alamat KTP Direktur (global)
+  officeAddress   String? // Alamat Kantor/Perusahaan (global)
+  city            String? // Kota (Pangkalpinang)
+  btnAccount      String? // No. Rekening BTN
+  mandiriAccount  String? // No. Rekening Mandiri
+  bsbAccount      String? // No. Rekening BSB Syariah
+  btnBranch       String? // Cabang BTN
+  mandiriBranch   String? // Cabang Mandiri
+  bsbBranch       String? // Cabang BSB
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 model Notification {
-  id          String   @id @default(cuid())
-  userId      String?
-  agentId     String?
-  type        String   // APPROVAL_NEEDED | NEW_LEAD | BUDGET_WARNING | STOCK_LOW | SURVEY_REMINDER | SYSTEM
-  title       String
-  message     String
+  id            String   @id @default(cuid())
+  userId        String?
+  agentId       String?
+  type          String // APPROVAL_NEEDED | NEW_LEAD | BUDGET_WARNING | STOCK_LOW | SURVEY_REMINDER | SYSTEM
+  title         String
+  message       String
   referenceType String?
-  referenceId String?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  referenceId   String?
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
   @@index([userId, isRead])
   @@index([agentId, isRead])
@@ -985,18 +1220,18 @@ model Notification {
 // ============================================================
 
 model BankPipeline {
-  id          String   @id @default(cuid())
-  customerId  String
-  bankName    String
-  status      String   @default("NOT_SUBMITTED") // NOT_SUBMITTED | BERKAS_MASUK | PROSES_BANK | SP3K | AKAD
-  submittedAt DateTime?
-  sp3kAt      DateTime?
-  akadAt      DateTime?
-  rejectAt    DateTime?
+  id           String    @id @default(cuid())
+  customerId   String
+  bankName     String
+  status       String    @default("NOT_SUBMITTED") // NOT_SUBMITTED | BERKAS_MASUK | PROSES_BANK | SP3K | AKAD
+  submittedAt  DateTime?
+  sp3kAt       DateTime?
+  akadAt       DateTime?
+  rejectAt     DateTime?
   rejectReason String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
