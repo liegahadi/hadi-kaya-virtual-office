@@ -2958,11 +2958,14 @@ PDF generator sistem baru pakai format fisik ini (overlay via pdf-lib yang udah 
 
 ### 25.14 Implementation Plan (Phase A-E)
 
-#### Phase A — Prisma Schema Migration
-- Drop 5 stale models + old MaterialUsage (rewrite)
-- Add ±14 new models (Finance core + Material + Files)
-- Modify Project.code → @unique, Supplier + bank fields
-- Verification: `npx prisma validate`, `npx prisma format`
+#### Phase A — Prisma Schema Migration ✅ DONE (commit `3210d8a`)
+- ✅ Drop 5 stale models (PO, POLine, SupplierPayment, FundRequest, MaterialStock) + old MaterialUsage (rewrite, name preserved)
+- ✅ Add ±14 new models (Finance core: PurchaseOrder/POItem/Nota/Payment/WageType/WagePayment/OtherExpense/Worker/Memo/MemoLine + Material: Category/Material/Stock/StockAdjustment/MaterialUsageItem + Files: FileRef)
+- ✅ Modify Project.code → @unique (nullable-safe), Supplier + bankName/bankAccount/bankHolder
+- ✅ Add back-relations di Project + Unit (purchaseOrders, wagePayments, otherExpenses, materialUsages)
+- ✅ Verified: `npx prisma validate` ✓, `npx prisma format` ✓, `npx prisma generate` ✓, `npx next build` ✓
+- ⚠️ 3 file code lama masih reference stale models (inter-agent.ts, weekly-report, database-explorer) — akan di-replace di Phase C
+- 📊 Stats: +739 insertions, -504 deletions di `prisma/schema.prisma`
 
 #### Phase B — Import Backup JSON
 Source: `upload/18072026 Backup.json` (2.9MB, 16 keys)
@@ -3074,5 +3077,176 @@ JANGAN hapus/diubah:
 - "Finance module plan", "Phase A-E"
 
 **RECALL caranya:** Baca section 25 ini dari PRD.md → ikutin semua keputusan yang udah di-lock → jangan nekat bikin keputusan baru tanpa konfirmasi owner.
+
+---
+
+## 26. AI AGENTS — TELEGRAM BOT PLAN (21 Juli 2026)
+
+> **Decision**: RINA + DINA pakai **Telegram bot** dulu (bukan WhatsApp). WA plan disimpan untuk future iteration kalau sudah ada VPS Hostinger.
+> **Reasoning**: Telegram gratis, no SIM card, webhook jalan di Vercel (no VPS needed), support multi-bot, official Bot API.
+
+### 26.1 Why Telegram (vs WhatsApp)
+
+| Aspect | Telegram Bot | WhatsApp (Baileys) |
+|--------|--------------|---------------------|
+| **Hosting** | Vercel webhook (gratis) | VPS Hostinger (Rp 600K/tahun) |
+| **Phone/SIM** | ❌ Tidak perlu | ✅ 1 SIM per bot |
+| **Official API** | ✅ Bot API documented | ❌ Unofficial (Baileys) |
+| **IP Block** | ❌ Tidak ada | ⚠️ WA block IP datacenter |
+| **Multi-bot** | ✅ 1 token per bot | ✅ 1 nomor per bot |
+| **File upload** | ✅ 20MB free | ✅ |
+| **Menu/Command** | ✅ Inline keyboard + commands | ✅ Text commands |
+| **Cost** | Rp 0 | Rp 600K/tahun + SIM |
+| **Setup time** | 30 menit | 2-3 jam + setup VPS |
+
+### 26.2 RINA Bot — Finance AI (Telegram)
+
+**Bot username**: `@HadiKayaRinaBot` (akan didaftarkan via @BotFather)
+
+**Capabilities**:
+1. **Command-based** (structured, cepat):
+   - `/start` — menu utama (inline keyboard)
+   - `/outstanding` — list hutang belum dibayar (per penerima/kategori)
+   - `/memo` — draft Memo mingguan (pilih items via inline button)
+   - `/po <projectCode>` — list PO per project
+   - `/cost <blockNumber>` — biaya unit (e.g., `/cost A12`)
+   - `/project <code>` — cost-to-date per project (e.g., `/project A16`)
+   - `/stock` — low-stock alert
+   - `/cashflow [bulan]` — cashflow summary
+   - `/memo pay <memoId>` — mark Memo items PAID (partial per-recipient)
+2. **Menu buttons** (inline keyboard):
+   ```
+   📊 Dashboard | 💰 Outstanding
+   📝 Buat Memo | 🏗️ Cost per Project
+   📦 Stock Alert | 📈 Laporan
+   ```
+3. **File upload**:
+   - Upload foto → auto-save ke Google Drive (evidence/nota)
+   - Upload PDF nota → link ke PO
+4. **Free text fallback** (GLM-4.6):
+   - "RINA, berapa total ke Toko Acil bulan ini?" → query DB → jawab
+   - "RINA, bikin memo mingguan untuk PO UNPAID + wage Heri" → draft Memo
+
+**LLM**: GLM-4.6 via z-ai-web-dev-sdk (existing llm-router.ts, hard rule 10)
+
+### 26.3 DINA Bot — Document AI (Telegram)
+
+**Bot username**: `@HadiKayaDinaBot`
+
+**Capabilities**:
+1. **Command-based**:
+   - `/start` — menu utama
+   - `/berkas <customerId>` — list berkas konsumen
+   - `/generate sk <templateId>` — generate SK Kerja + Slip Gaji
+   - `/generate laporan <templateId>` — generate Laporan Keuangan
+   - `/status <customerId>` — status berkas konsumen
+2. **Menu buttons**:
+   ```
+   📁 List Konsumen | 📄 Generate SK+Slip
+   💼 Generate Laporan | 🔍 Cari Berkas
+   ```
+3. **File upload**: scan KTP/sertifikat → OCR → auto-fill form
+4. **Free text**: "DINA, buat SK Kerja untuk Budi Santoso" → AI parse → generate
+
+### 26.4 Marketing AI — Free Chat (Telegram, future)
+
+10 Marketing AI bots (Ayu, Bima, Citra, Dian, Eka, Fajar, Gita, Hadi, Indah, Joko):
+- **Free chat** (no command, natural conversation)
+- Setiap bot: 1 Telegram token, 1 persona
+- Target: chat dengan prospek KPR di grup Telegram atau DM
+- Pakai BaseAgent + memory layer + knowledge retrieval yang udah z.ai built
+
+### 26.5 Telegram Bot Architecture
+
+```
+┌─────────────────┐     webhook      ┌──────────────────────────┐
+│ Telegram Server │ ───────────────→ │ /api/telegram/[bot]/webhook │
+│  (api.tg)       │                  │  (Vercel route)            │
+└─────────────────┘                  └──────────────────────────┘
+                                                ↓
+                                      ┌──────────────────┐
+                                      │ Bot Handler      │
+                                      │ - parse command  │
+                                      │ - call tool      │
+                                      │ - LLM fallback   │
+                                      └──────────────────┘
+                                                ↓
+                                      ┌──────────────────┐
+                                      │ Tools (RINA)     │
+                                      │ - query PO       │
+                                      │ - draft Memo     │
+                                      │ - recompute Debt │
+                                      │ - generate PDF   │
+                                      └──────────────────┘
+```
+
+### 26.6 Implementation Plan (Telegram)
+
+**Phase F.1 — Setup (1 jam)**:
+- Daftar bot via @BotFather di Telegram (dapat token untuk RINA + DINA)
+- Set env vars di Vercel: `TELEGRAM_RINA_TOKEN`, `TELEGRAM_DINA_TOKEN`
+- Set webhook: `POST https://api.telegram.org/bot<token>/setWebhook?url=https://hadi-kaya-virtual-office.vercel.app/api/telegram/rina/webhook`
+
+**Phase F.2 — Bot Handler (2 jam)**:
+- `src/lib/telegram/bot-handler.ts` — shared handler (command parser + LLM fallback)
+- `src/lib/telegram/rina-tools.ts` — RINA tools (query finance data, draft memo)
+- `src/lib/telegram/dina-tools.ts` — DINA tools (generate berkas, query customer)
+- `src/app/api/telegram/[bot]/webhook/route.ts` — webhook receiver
+
+**Phase F.3 — Commands + Menu (2 jam)**:
+- Implement commands per 26.2 (RINA) + 26.3 (DINA)
+- Inline keyboard menu
+- File upload handler → save to Google Drive
+
+**Phase F.4 — LLM Fallback (1 jam)**:
+- Free text → GLM-4.6 → parse intent → call tool → response
+- Reuse BaseAgent + memory layer
+
+**Phase F.5 — Testing (1 jam)**:
+- Test commands via Telegram app
+- Test file upload
+- Test LLM free chat
+
+### 26.7 WhatsApp Bot Plan (DEFERRED — Save for Future)
+
+**Trigger untuk resume WA**:
+- VPS Hostinger sudah dibeli (Rp 600K/tahun)
+- 1 SIM card untuk DINA sudah siap (6287761323344)
+- Telegram RINA proven + owner eksplisit mau WA juga
+
+**Yang sudah ready** (code di repo):
+- `wa-bot/` folder (Baileys v6.7, multi-agent config-driven)
+- `mini-services/wa-bridge/` (Bun-based bridge)
+- 14 AI Agents persona di DB (DINA, RINA, MITRA, RATNA, 10 Marketing)
+- Behavior rules di PRD section 8 (group tag, DM rules, work hours)
+
+**Yang belum**:
+- Beli VPS Hostinger via bank transfer
+- Setup Docker + n8n + WA bot di VPS
+- Setup Cloudflare Tunnel untuk HTTPS (free)
+- Test WA end-to-end (1 nomor DINA dulu)
+- Extend ke RINA, MITRA, RATNA, 10 Marketing (bertahap)
+
+### 26.8 LLM Provider untuk Bots
+
+- **RINA + DINA**: GLM-4.6 via z-ai-web-dev-sdk (free, hardcoded config per hard rule 10)
+- **Marketing AI** (future): multi-provider via 9router kalau sudah deploy di VPS, atau OpenRouter fallback
+- **Fallback**: kalau GLM-4.6 rate limit, fallback ke Gemini 2.5 Pro direct (1500 RPM free)
+
+### 26.9 Security Notes
+
+- Telegram bot token = secret, simpan di Vercel env vars (jangan commit ke repo)
+- Webhook verify `X-Telegram-Bot-Api-Secret-Token` header (optional, tapi recommended)
+- Owner chat ID whitelist (biar bot ga respon ke orang lain)
+- File upload: scan MIME type, limit 20MB, save to Drive folder `/Telegram/{bot}/{date}/`
+
+### 26.10 Recall Triggers (Telegram)
+
+**RECALL section 26 kalau owner bertanya tentang:**
+- "Telegram", "Bot Telegram", "RINA bot", "DINA bot"
+- "BotFather", "Telegram token", "webhook Telegram"
+- "Inline keyboard", "Telegram command", "/memo", "/outstanding"
+- "Marketing AI bot", "10 Marketing AI"
+- "WhatsApp bot" (recall 26.7 untuk deferred WA plan)
 
 ---
