@@ -2967,8 +2967,9 @@ PDF generator sistem baru pakai format fisik ini (overlay via pdf-lib yang udah 
 - ⚠️ 3 file code lama masih reference stale models (inter-agent.ts, weekly-report, database-explorer) — akan di-replace di Phase C
 - 📊 Stats: +739 insertions, -504 deletions di `prisma/schema.prisma`
 
-#### Phase B — Import Backup JSON
-Source: `upload/18072026 Backup.json` (2.9MB, 16 keys)
+#### Phase B — Import Backup JSON ✅ SCRIPT READY (commit `0a48052`)
+Script: `scripts/import-finance-backup.ts` — idempotent, upsert by name/unique
+Source: `docs/finance-reference/backup-18072026.json` (2.9MB, 16 keys)
 - Project: upsert by name, backfill code per 25.2
 - Supplier: upsert by name, map bankName/bankAccount, 11 empty import as null
 - Unit: upsert by {projectId, blockNumber} (merge block+unitNumber)
@@ -2982,51 +2983,98 @@ Source: `upload/18072026 Backup.json` (2.9MB, 16 keys)
 - Stock: upsert + StockAdjustment{type:INITIAL} per material
 - MaterialUsage + Items: map 110 usages, price = backup snapshot (AVCO frozen), source=WAREHOUSE_DISTRIBUTION
 - Skip Drive upload of base64 evidence (separate migration step)
+- For PAID items: create Payment record for audit ledger completeness
 
-#### Phase C — API Routes
+⚠️  Belum di-run di sandbox z.ai (soalnya sandbox pakai SQLite, schema beda). Owner jalankan di laptop dengan DATABASE_URL ke Aiven prod:
+```bash
+DATABASE_URL='postgres://avnadmin:[PASSWORD]@hadi-kaya-db-hadi-kaya-db.k.aivencloud.com:16163/defaultdb' \
+  npx tsx scripts/import-finance-backup.ts
+```
+
+#### Phase C — API Routes ✅ DONE (commit `93b493e`)
 Pattern: `src/app/api/*/route.ts`, `export const dynamic = 'force-dynamic'`, `import { db } from '@/lib/db'` (NOT @/lib/prisma), `params Promise<{id}>` (Next16 async params)
 
-Create under `src/app/api/finance/`:
-- `po/route.ts` (CRUD), `po/[id]/route.ts`, `po/[id]/pdf/route.ts`, `po/[id]/bundle/route.ts`
-- `suppliers/route.ts`, `suppliers/[id]/route.ts`
-- `wages/route.ts`, `wages/[id]/route.ts`
-- `expenses/route.ts`, `expenses/[id]/route.ts`
-- `payments/route.ts` (POST creates Payment + recomputes cached status), `payments/[id]/route.ts` (void → recompute)
-- `memos/route.ts`, `memos/[id]/route.ts`, `memos/[id]/pay/route.ts` (pay one recipient's items)
-- `material/route.ts`, `material/usage/route.ts`, `material/stock/route.ts`, `material/stock/[materialId]/adjust/route.ts`
-- `reports/[type]/route.ts` (type: monthly|annual|project → query + pdf)
-- `dashboard/route.ts` (computed KPIs + cashflow + outstanding)
+NEW LIB (4 files):
+- `src/lib/finance/po-number.ts` — generatePoNumber (format PO-{code}-{blockNumber|GDG}-{seq}-{MMYY}, seq per unit per tahun)
+- `src/lib/finance/avco.ts` — AVCO compute (updateAvcoOnReceive, getCurrentAvcoPrice, updateAvcoOnUsage)
+- `src/lib/finance/status.ts` — recompute cached status dari Payment ledger (recomputePoStatus, recomputeWageStatus, recomputeExpenseStatus, recomputeMemoStatus)
+- `src/lib/finance/terbilang.ts` — convert number to Indonesian words
 
-Shared lib: `src/lib/finance/po-number.ts`, `src/lib/finance/avco.ts`, `src/lib/finance/status.ts`, `src/lib/finance/reports/*`
+NEW API ROUTES (13 files) under `src/app/api/finance/`:
+- `dashboard/route.ts` — KPI + cashflow 6 months + outstanding per-penerima & per-kategori (Layout A per 25.7)
+- `po/route.ts` (GET list, POST create with auto-poNumber), `po/[id]/route.ts` (GET, PATCH if not locked, DELETE=void)
+- `suppliers/route.ts` (GET, POST), `suppliers/[id]/route.ts` (GET, PATCH, DELETE)
+- `wages/route.ts` (GET, POST with fullTaskBudget snapshot from WageType.price per A7), `wages/[id]/route.ts` (GET, PATCH, DELETE=void)
+- `expenses/route.ts` (GET, POST), `expenses/[id]/route.ts` (GET, PATCH, DELETE=void)
+- `payments/route.ts` (GET, POST — partial per-recipient A11; auto-populate supplierId/workerId + bank from linked entity; recompute status after create)
+- `payments/[id]/route.ts` (PATCH=void, no hard delete for audit)
+- `memos/route.ts` (GET, POST with auto-memoNumber MBP-{W|D}-{seq}-{MMYY}), `memos/[id]/route.ts` (GET with enriched lines, PATCH, DELETE=void)
+- `memos/[id]/pay/route.ts` (POST — pay one recipient's items A11; creates Payment per line + marks PAID + recomputes memo status)
+- `material/route.ts` (GET with stock+category, POST with init stock)
+- `material/usage/route.ts` (GET, POST with AVCO snapshot + auto-decrement stock + StockAdjustment audit)
+- `material/stock/route.ts` (GET with lowStock filter)
+- `material/stock/[materialId]/adjust/route.ts` (POST — opname with reason wajib + audit log per C2 SOP)
 
-#### Phase D — Dashboard UI
-File: `src/components/dashboard/dashboard.tsx` — add 'finance' | 'material' to activeTab union, add 2 TabButton, add conditional renders
+CLEANUP (replace stale phase-0 code):
+- Remove daily-expense, weekly-report, po/[id]/{compile-pdf,documents,pdf}, suppliers/[id]/prices (replaced by new routes)
+- Remove po-generator.ts + pdf-generator.ts (replaced)
+- Rewrite database-explorer/finance + material routes pakai model baru
+- Fix inter-agent.ts (db.pO→db.purchaseOrder, db.materialStock→db.stock)
 
-- `src/components/finance/finance-view.tsx` — parent: sub-nav + default Overview (Layout A per 25.7)
-- `src/components/finance/po-form.tsx` (multi-item PO, per-item allocation, per-item directUse checkbox)
-- `src/components/finance/memo-form.tsx` (select-all/filter/search — fixes old bottleneck)
-- `src/components/finance/payment-modal.tsx` (per-recipient partial pay + bank override + transfer-proof upload)
-- `src/components/finance/wage-form.tsx`
-- `src/components/finance/expense-form.tsx`
-- `src/components/material/material-view.tsx` — kartu stok, master material + opname + low-stock alert
+#### Phase D — Dashboard UI ✅ DONE v1 (commit `dbffa50`)
+File: `src/components/dashboard/dashboard.tsx` — added 'finance' | 'material' to activeTab union, added 2 TabButton (Wallet icon Finance, Package icon Material) after Berkas, added conditional renders
+
+NEW Components:
+- `src/components/finance/finance-view.tsx` — Layout A per 25.7:
+  - 4 KPI tiles (Total Keluar Bln Ini, Outstanding Material, Outstanding Upah, Outstanding Ops)
+  - Total Outstanding badge (red gradient, prominent)
+  - Cashflow 6 bulan chart (recharts stacked bar — Material/Upah/Ops)
+  - 2 outstanding tables side-by-side (Per Penerima + Per Kategori)
+  - Action buttons: Buat Memo, Laporan Bulanan, Laporan Tahunan (placeholder)
+- `src/components/material/material-view.tsx`:
+  - 3 summary tiles (Total Material, Low Stock count, Nilai Stok AVCO)
+  - Search + Low-stock filter toggle
+  - Material table (name, kategori, stok, min stock, AVCO, nilai, status LOW/OK badge, Aksi Opname)
+
+Phase D v1 limitations (read-only):
+- Dashboard Finance: read-only, no form input yet (PO/Wage/Expense/Memo forms akan datang di iterasi berikutnya)
+- Material: read-only list + low-stock alert, no opname form yet
+- Laporan Bulanan/Tahunan buttons: placeholder, PDF generation deferred
 
 Modal pattern: side-by-side (formbox left, picker right — hard rule 5). Rupiah formatting via existing helper. Dark-theme modal override (text-slate-900 + colorScheme:light).
 
-#### Phase E — PDF Generation
+DEFERRED to next iteration:
+- src/components/finance/po-form.tsx (multi-item PO + directUse checkbox)
+- src/components/finance/memo-form.tsx (select-all/filter/search)
+- src/components/finance/payment-modal.tsx (per-recipient partial pay + bank override + transfer-proof upload)
+- src/components/finance/wage-form.tsx
+- src/components/finance/expense-form.tsx
+- Material opname modal
+
+#### Phase E — PDF Generation ✅ DONE v1 (commit `d87c7d0`)
 Reuse existing libs (all already installed): pdf-lib@1.17.1, docx@9.7.1 (WidthType.DXA), docxtemplater+pizzip, mammoth, jspdf. NO exceljs → reports PDF only (Excel YAGNI v1).
 
-Overlay-fill pattern at `src/lib/berkas/*overlay*/generate.ts` — reuse for PO PDF. Rupiah formatter at `src/lib/berkas/formatters.ts` — reuse.
+NEW LIB (2 files):
+- `src/lib/finance/pdf/po-pdf.ts` — generatePoPDF (pdf-lib, A4 portrait)
+  Layout: kop placeholder + no PO + tanggal + supplier info + table material (No/Nama/Qty/Satuan/Harga/Subtotal) + total row + terbilang + notes + tanda tangan
+- `src/lib/finance/pdf/bukti-kas-keluar.ts` — generateBuktiKasKeluarPDF
+  Layout: kop + no voucher + tanggal + penerima info + bank info + description + amount (highlighted) + terbilang + notes + tanda tangan
 
-**Terbilang NOT present** → port compact one from old system `utils.ts` into `src/lib/finance/terbilang.ts`.
+NEW API ROUTES (2 files):
+- `GET /api/finance/po/[id]/pdf` — generate PO PDF
+- `GET /api/finance/payments/[id]/bukti-kas-keluar` — generate Bukti Kas Keluar PDF for a Payment
 
-New lib `src/lib/finance/pdf/`:
-- `po-pdf.ts` — overlay "1. Format PO.pdf"
-- `report-monthly.ts`, `report-annual.ts`, `report-project.ts` — Overview + Detail per 25.12
-- `bundle.ts` — per-entity (merge PO doc + notas + transfer proof → 1 PDF) + monthly bundle
-- Drive upload helper (reuse existing)
+DEFERRED to next iteration:
+- Laporan Bulanan/Tahunan/Per-Proyek PDF (advanced reports, see 25.12)
+- Pengajuan Mingguan PDF (Memo display, see 25.13 no.5)
+- Bundle arsip PDF per-entity + monthly (see 25.4 A12)
+- Overlay pakai format fisik owner (currently pakai simple layout)
 
-#### Ship
-Worktree (EnterWorktree), commit per phase, push branch, `gh pr create --draft`. Verify `npm run build` passes before PR.
+#### Ship ✅ READY (commit per phase udah push ke origin/main)
+- Worktree ga dipakai (kerja langsung di main, push per phase)
+- Commit per phase udah push: Phase A `3210d8a`, Phase B `0a48052`, Phase C `93b493e`, Phase D `dbffa50`, Phase E `d87c7d0`
+- `npx next build` pass setelah tiap phase
+- ⚠️ Belum deploy ke Vercel (owner hold sampai Phase B di-run di laptop + test pass)
 
 ### 25.15 Keep Untouched (Terkonek ke Berkas)
 
