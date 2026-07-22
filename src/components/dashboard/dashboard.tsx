@@ -5,6 +5,7 @@ import {
   Building2, Users, Map, BookOpen, Settings, Bot, MessageSquare,
   Bell, CheckCircle2, AlertCircle, Sparkles, Zap, ShieldCheck,
   TrendingUp, Clock, MapPin, Calendar, FileText, Brain, Database, RefreshCw,
+  Wallet, Package,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +20,8 @@ import { VirtualOfficeMapWrapper } from '@/components/dashboard/virtual-office-m
 import { BerkasViewV2 } from '@/components/berkas-view-v2'
 import { MemoryTab } from '@/components/dashboard/memory-tab'
 import { DatabaseTab } from '@/components/dashboard/database-tab'
+import { FinanceView } from '@/components/finance/finance-view'
+import { MaterialView } from '@/components/material/material-view'
 import { ChatPanel } from '@/components/chat/chat-panel'
 
 // ============================================================
@@ -96,7 +99,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<
-    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'memory' | 'database' | 'settings'
+    'office' | 'chat' | 'pipeline' | 'siteplan' | 'knowledge' | 'berkas' | 'finance' | 'material' | 'memory' | 'database' | 'settings'
   >('office')
 
   // Check Google Drive connection status on mount
@@ -202,6 +205,18 @@ export default function Dashboard() {
               badge={stats.customers.total}
             />
             <TabButton
+              active={activeTab === 'finance'}
+              onClick={() => setActiveTab('finance')}
+              icon={<Wallet className="w-4 h-4" />}
+              label="Finance"
+            />
+            <TabButton
+              active={activeTab === 'material'}
+              onClick={() => setActiveTab('material')}
+              icon={<Package className="w-4 h-4" />}
+              label="Material"
+            />
+            <TabButton
               active={activeTab === 'memory'}
               onClick={() => setActiveTab('memory')}
               icon={<Brain className="w-4 h-4" />}
@@ -231,6 +246,8 @@ export default function Dashboard() {
           {activeTab === 'siteplan' && <SitePlanView stats={stats} />}
           {activeTab === 'knowledge' && <KnowledgeView stats={stats} />}
           {activeTab === 'berkas' && <BerkasViewV2 projectId={stats.projects[0]?.id || ''} />}
+          {activeTab === 'finance' && <FinanceView />}
+          {activeTab === 'material' && <MaterialView />}
           {activeTab === 'memory' && <MemoryTab />}
           {activeTab === 'database' && <DatabaseTab />}
           {activeTab === 'settings' && <SettingsView stats={stats} onRefresh={fetchStats} />}
