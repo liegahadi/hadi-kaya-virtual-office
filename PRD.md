@@ -2589,3 +2589,490 @@ Memo adalah grouping pembayaran — owner kumpulkan beberapa PO/wage/expense jad
 - **Auto-backup**: `cloudConfig.autoBackupEnabled = true` (tapi `isConnected = false` — belum connected ke cloud storage)
 
 ---
+
+## 25. FINANCE MODULE — LOCKED DECISIONS (20 Juli 2026)
+
+> **PURPOSE**: Bagian ini jadi "single source of truth" untuk semua keputusan Finance module yang udah di-lock lewat diskusi panjang dengan Claude Code (NVIDIA NIM/GLM-5.2) di laptop owner.
+> Semua AI assistant (z.ai, Cursor, Claude Code, ChatGPT) WAJIB baca section ini sebelum mulai kerja Finance.
+> Kalau ada perubahan keputusan, update section ini (bukan di tempat lain).
+
+### 25.1 Context
+
+Owner selama 7 bulan pakai sistem lama (Google AI Studio React+Electron app) untuk tracking Finance & Material konstruksi. Banyak bottleneck muncul:
+- PO dibuat SETELAH barang datang (salah SOP)
+- "Hammer pay" (1 klik mark semua item di Memo jadi PAID, padahal belum transfer semua)
+- Re-pick unpaid item tiap minggu manual (no filter, no search, no select-all)
+- Bukti transfer ga pernah persist (ephemeral state, hilang pas tutup page)
+- No direct-use path (kamar mandi/carpot/pipa inflate warehouse, harus di-bleed manual)
+- No stock opname audit
+- AVCO confusion on mixed-price batches
+- Bank detail cuma auto-fill di supplier, tukang harus buka record PO tiap kali
+
+Owner mau rebuild Finance+Material flow di hadi-kaya-virtual-office (Next.js), BUKAN copy-paste plek dari sistem lama — bangun dari nol pakai SOP yang udah dipikirin matang.
+
+### 25.2 PO Number Format (LOCKED)
+
+**Format**: `PO/{projectCode}/{blockNumber|GDG}/{seq}/{MMYY}`
+
+**Contoh**:
+- `PO-A16-A12-001-0726` (di DB/filename, dash separator)
+- `PO/A16/A12/001/0726` (di display, slash separator)
+
+**Aturan**:
+- `projectCode` = singkatan per proyek (lihat 25.3 untuk 8 kode)
+- `blockNumber|GDG`:
+  - `blockNumber` (e.g. "A12") = composite field di Unit (block + unitNumber merged)
+  - `GDG` = literal untuk stok gudang umum (bukan unit spesifik)
+- `seq` = nomor urut, reset per tahun per unit
+- `MMYY` = 2 digit bulan + 2 digit tahun
+
+**8 Project Codes** (Claude usulin, owner koreksi via dashboard):
+| Nama Project | Type | Code |
+|--------------|------|------|
+| Anjayo 16 | Subsidi | A16 |
+| Permata Muntai | Subsidi | PM |
+| Toko Kopi | Komersil | TK |
+| Kantor Anjayo | Komersil | KA |
+| Rumah Pasir Putih | Komersil | RP |
+| Anjayo 1 | Komersil | A01 |
+| Rumah Stadion | Komersil | RS |
+| Rumah Pojok | Komersil | RPK |
+
+### 25.3 Finance SOP Decisions (LOCKED)
+
+#### Q1 — Prioritas Eksekusi
+**A** Dashboard Finance UI dulu (cashflow + outstanding hutang). Setelah UI ready, baru RINA AI chat / RAB integration.
+
+#### Q2 — Evidence Image Storage
+**A** Google Drive. Folder structure: `/Finance/{projectCode}/{poNumber|kind}/{filename}`.
+Reuse Google OAuth yang udah wired (hard rule: no new infra, no new creds).
+
+#### Q3 — Memo Status Workflow
+**A** PENDING/COMPLETED saja. No DRAFT/REJECTED. Memo = batching tool pengajuan dana mingguan/harian, bukan approval workflow.
+
+#### Q4 — PO Number Format
+Locked per 25.2 di atas.
+
+#### Q5 — Supplier Bank Data Kosong
+Skip dulu. Owner isi manual via dashboard (11 supplier bank kosong di backup JSON).
+
+#### Q6 — RINA Deploy
+**A** Dashboard only. RINA jadi in-app chat di tab Finance, reuse BaseAgent/agent infra yang udah ada. WA bot (B/C) premature sampai RINA proven.
+
+#### Q7 — LLM Provider untuk RINA
+**A** GLM-4.6 via z-ai-web-dev-sdk (existing llm-router.ts). No new creds, no new SDK. 9router skip (bayar, redundant sama OpenRouter). Gemini standby kalo reasoning angka Finance kurang.
+
+#### Q8 — Project budgetedCost Field
+**Defer**. Pakai RAB sebagai source (single source of truth, no duplicate data). Kalo urgent mau insight sebelum RAB ready, fallback nullable field sementara, deprecate pas RAB masuk.
+
+### 25.4 Detailed Finance Flow Decisions (LOCKED)
+
+#### A1 — Approval Step
+**A** Skip. Single-user v1 (owner = boss = user yang input), self-approve. Approval queue baru ditambah pas multi-user (C7).
+
+#### A2 — PO Planned vs Actual
+**A** Two columns. `plannedTotal` = Σ qty×price (rencana). `actualTotal` dari uploaded Nota (realisasi, bisa >1 nota karna nota abis). PO locked setelah nota pertama. Hutang = `actual − Σ payments`. Jangan edit PO existing biar history kebaca.
+
+#### A3 — Material Master vs Toko Names
+Material master = nama umum (e.g. "Wastafel"). Toko kasih nama merek (e.g. "ACP"). Crosscheck pakai harga + tanya toko langsung. Saat input PO, pilih dari material master yang sudah ada, ga boleh buat baru diam-diam.
+
+#### A4 — PO Scope
+1 PO = 1 supplier, bisa 1 atau multi item pekerjaan. 2 versi untuk owner:
+- PO perencanaan (1 PO banyak supplier untuk tahap pondasi-atas)
+- PO eksekusi (1 PO 1 supplier untuk 1 atau lebih item pekerjaan)
+
+#### A5 — Wage Payment (Tukang)
+1 WagePayment = 1 termin. Bisa bayar sebagian (partial). Per Payment record + progress bar. Bos mood: bisa full 1.2jt atau partial 500K.
+
+#### A6 — Wage Evidence Foto
+Foto hasil/progress pekerjaan (BUKAN hadir/bon). Upload ke Drive. Future: RINA bantu draft dari deskripsi, tapi input data tetap manual dulu.
+
+#### A7 — RAB Snapshot untuk Wage
+`fullTaskBudget` snapshot lock pas WagePayment create (RAB price dikunci pas tukang teken kontrak). `amount` beda vs `fullTaskBudget` → `budgetVarianceReason` wajib diisi.
+
+#### A8 — OtherExpense Categories
+Default fix 12-16 kategori + editable via Settings (tambah/kurang).
+
+#### A9 — Cash Material
+**Wajib via PO**. Buang `isMaterialCash`/`materialItems` hack dari sistem lama. OtherExpense = pure operasional (gaji, SLF, notary, KWH, fuel, komisi, reimburse, kasbon, PBB, PPH, hutang, lainnya).
+
+#### A10 — Memo Item Telat/Ditunda
+**A** Memo status: PENDING → (partial) → COMPLETED. Status baris individu: UNPAID/PAID. Bisa partial-bayar sebagian item, sisa tetap PENDING → lanjut minggu depan.
+
+#### A11 — Mark Paid
+**A** Per-recipient partial pay. Centang supplier/tukang/kategori yang udah dibayar → mark PAID, sisa tetap UNPAID. Memo PENDING sampai semua selesai. **Replaces hammer pay**.
+
+#### A12 — PDF Bundle Arsip
+**B** Bundle SEMUA money-out (PO + Wage + Expense) per entity → 1 PDF arsip. Plus bulanan → 1 PDF lengkap (semua money-out bulan itu jadi 1 bundle).
+
+#### A13 — Antrean Hutang Belum Dibayar
+**D** Tabel sortable campuran (sortable per kolom: penerima, kategori, project). Paling fleksibel.
+
+### 25.5 Material SOP Decisions (LOCKED)
+
+#### B1 — Stock Opname
+**PERLU**. `StockAdjustment{materialId, deltaQty, reason, type, prevQty, newQty, date}` audit log. NO silent set; tiap perubahan saldo insert adjustment + reason wajib.
+
+#### B2 — Low-Stock Alert
+Per-material `minStock` threshold (semen/bata/pasir set tinggi). Notification saat stok di bawah threshold.
+
+#### B3 — Sisa Material Setelah Rumah Selesai
+**A** Return-to-stock action (kembali ke gudang global).
+
+#### B4 — Direct-Use Flag
+`POItem.directUse: Boolean = false`. Saat true → auto-create `MaterialUsage` ke unit (skip stok, auto-Usage). Contoh: kamar mandi, carpot, pipa air.
+
+#### B5 — Costing Method
+**A** AVCO + snapshot. AVCO running price di `Stock.avgPrice`. Saat Usage dibuat, `MaterialUsageItem.price` = AVCO saat itu, di-lock permanen (frozen). Efek:
+- Unit A1 (awal): modal material pakai AVCO 64rb/zak → frozen
+- PO baru 200@68rb → AVCO drift ke ~67rb
+- Unit A6 (akhir): modal pakai AVCO 67rb → frozen
+- → Modal real per unit stabil, kenaikan harga keliatan otomatis (64→67)
+
+#### B6 — UnitAnalysis (Biaya Total Unit)
+Total realisasi (PO + Wage + Expense yang dialokasikan ke unit). RAB comparison nunggu RAB ready (defer).
+
+#### B7 — Material Default Price
+Harga acuan, tampil saat bikin PO (bisa diubah). Plus pantau harga supplier per material (fitur bandingkan supplier, future).
+
+### 25.6 Finance ↔ Material Crossover Decisions (LOCKED)
+
+#### C1 — Stok Naik Kapan
+**C** Saat PO received (button "Barang diterima" terpisah dari "sudah dibayar"). 2 lifecycle independen. Stok naik di momen received, BUKAN saat PO create atau PAID.
+
+#### C2 — Force SOP (Owner delegate to AI)
+- Stock **tidak boleh minus** via Usage (sistem block)
+- Kalo gudang ga cukup → opname/adjust dulu (alasan wajib + audit log)
+- Kecuali via direct-use (POItem.directUse → auto Usage skip cek stok, soalnya emang fresh dari PO bukan dari gudang)
+- Manual adjust = `StockAdjustment{reason, type, prevQty, newQty}` audit log
+
+#### C3 — Biaya Unit A12 = Usage-Based
+Pakai Usage yang dialokasiin ke A12 (bukan PO). Direct-use auto Usage → konsisten. PO-ke-gudang belum dihitung biaya unit sampai dipakai. Untuk audit:
+```
+Modal A12 = Material dipakai (Usage) Rp X + Upah Rp Y + Ops Rp Z
+Sisa gudang muncul terpisah sbg "uang terikat stok Rp W" (bukan biaya unit)
+```
+
+#### C4 — Stok vs Biaya Rumah
+**Stok = global expenditure** (uang udah keluar), **BUKAN biaya rumah** sampai dipakai. Dual tampil:
+- Finance = uang keluar real
+- Material = modal real per unit (Usage-based)
+- Beda angka normal (selisih = stok belum dipakai)
+
+#### C5 — Subsidi vs Komersil
+Beda RAB. Komersil-no-rab untuk rumah bos/mertua (no RAB pasti, pengeluaran material tidak pasti).
+
+#### C6 — RAB Format
+Owner lupa simpan. Akan dikirim besok (format PO + RAB Material + RAB Upah Tukang). Sementara defer.
+
+#### C7 — Multi-User
+v1 single-user (owner). Multi-user + login nanti. Tapi perlu diingat: multi-team/multi-user bisa beda RAB harga pekerjaan tukang, RAB harga/jenis/kebutuhan/qty material.
+
+#### C8 — Pengajuan Material dari Lapangan
+**Roadmap** v2. Mandor/bng lapangan request material via WA → owner buat PO. Future feature.
+
+### 25.7 Tab Structure & Dashboard (LOCKED)
+
+#### S9 — Tab Layout
+**2** tab terpisah: "Finance" + "Material". Bukan campuran.
+
+#### S10 — Default View Finance
+Cashflow + Outstanding hutang belum dibayar muncul pertama pas buka tab Finance.
+
+#### Dashboard Finance Layout A (LOCKED)
+```
+┌─ KPI TILES (4) ──────────────────────────────────┐
+│ Total Keluar bln ini | Outstanding Material       │
+│ Outstanding Upah     | Outstanding Ops            │
+├─ CASHFLOW 6 BULAN (recharts stacked bar) ─────────┤
+│ Material (biru) / Upah (hijau) / Ops (abu)        │
+│ Toggle: Bulan ini / 6 bln / 12 bln                │
+├─ OUTSTANDING HUTANG BELUM DIBAYAR ────────────────┤
+│ Per Penerima              │ Per Kategori           │
+│ Toko Acil Rp 3.5jt [Bayar]│ Material Rp 8.2jt      │
+│ Heri (upah) Rp 2jt [Bayar]│ Upah Rp 3.1jt          │
+│                          │ Ops Rp 1.2jt            │
+├─ [Buat Memo] [Laporan Bulanan] [Laporan Tahunan] ─┤
+└───────────────────────────────────────────────────┘
+```
+
+### 25.8 Worker Bank Account (LOCKED)
+
+#### #7 — Tukang Bank Account
+**A** Field bank di Worker (master tukang), BISA null = tunai.
+- `defaultBankName`, `defaultBankAccount`, `defaultBankHolder`
+- `isCashOnly` Boolean (tunai only — biasanya dipaksa transfer buat track record)
+- Override per Payment: `Payment.bankName/bankAccount/bankHolder` snapshot (soalnya tukang rekening beda tiap minggu)
+
+### 25.9 9 Master Tukang (Auto-Seed dari Backup)
+
+Worker master di-auto-seed dari backup JSON (distinct workerNames):
+1. Heri
+2. Wasku
+3. Remy
+4. Arif
+5. Damar
+6. Gellent
+7. Koni
+8. Parto
+9. Yayat
+
+Default bank null (owner isi weekly atau via Payment override).
+
+### 25.10 Material Benchmark (Owner Input)
+
+Untuk default `minStock` + RAB estimate:
+- 1 rumah = **59-63 zak semen** (~61 zak average)
+- 1 rumah = **9 mobil pasir**
+
+### 25.11 Schema Prisma Delta (LOCKED)
+
+#### DROP Stale Models (0 usage, no live data — verified):
+- PO
+- POLine
+- SupplierPayment
+- FundRequest
+- MaterialStock
+- old MaterialUsage (rewrite, name preserved)
+
+Cascading cleanup:
+- `Agent`: drop `pos PO[]`, `fundRequests FundRequest[]`
+- `Approval`: drop `pos PO[]`
+- `Supplier`: drop `pos PO[]`, `payments SupplierPayment[]`; add new relations
+- `Project`: drop `materialStock MaterialStock[]`
+
+#### MODIFY Existing:
+- `Project`: `code String?` → `code String? @unique` (nullable-safe vs existing prod rows + seed.ts; import backfill + dashboard set)
+- `Unit`: no field change (blockNumber already composite "A12")
+- `Supplier`: ADD `bankName String?`, `bankAccount String?`, `bankHolder String?`
+
+#### NEW Models (±14):
+**Finance Core:**
+1. `PurchaseOrder` (+ format PO/{code}/{blockNumber|GDG}/{seq}/{MMYY}, plannedTotal/actualTotal/locked/receivedAt)
+2. `POItem` (+ directUse Boolean, deliveredQty, allocation override)
+3. `Nota` (1 PO bisa >1 nota, karna nota abis)
+4. `Payment` (partial per-recipient, voided flag, polymorphic FK to PO|WagePayment|OtherExpense, bank snapshot)
+5. `WageType` (benchmark upah per pekerjaan per project, RAB price)
+6. `WagePayment` (1 record = 1 termin, fullTaskBudget snapshot, amount, budgetVarianceReason)
+7. `OtherExpense` (pure operasional, no material)
+8. `Worker` (master tukang + bank + isCashOnly)
+9. `Memo` (pengajuan dana, memoNumber sequential)
+10. `MemoLine` (append-only history, PROPOSED|PAID|SKIPPED, carriedOverFromMemoLineId self-ref)
+
+**Material:**
+11. `Category` (master kategori, 15 dari backup)
+12. `Material` (master material, 163 dari backup, minStock, lastPrice AVCO)
+13. `Stock` (1:1 ke Material via PK=materialId, avgPrice AVCO running)
+14. `StockAdjustment` (audit log, type: INITIAL|PO_RECEIVED|USAGE_OUT|DIRECT_USE_SKIP|OPNAME|RETURN_TO_STOCK)
+15. `MaterialUsage` (rewritten: +source enum, +poId link)
+16. `MaterialUsageItem` (line item, AVCO snapshot frozen)
+
+**Files:**
+17. `FileRef` (polymorphic Drive pointer, kind: PO_DOC|NOTA|TRANSFER_PROOF|WAGE_EVIDENCE|EXPENSE_PROOF|REPORT|BUNDLE_MONTHLY|BUNDLE_ENTITY)
+
+#### Convention:
+- Enum = String + comment (codebase has 0 native enums; native breaks convention + painful Postgres migration)
+- Money type = Float (matches codebase; tech-debt → migrate to Decimal/cents when reconciliation matters at scale)
+- Deferred YAGNI for v1: MaterialRAB/RAB/RABLine (RAB format arrives later), Project.budgetedCost, ProjectType enum, multi-user/AppUser FK, per-POItem nota attribution
+
+### 25.12 Laporan Finance Design (3 Jenis — "Kaya Buku")
+
+#### Konvensi Akuntansi Konstruksi yang Diterapin:
+- **Job-costing per unit** = biaya rumah A12 = (Material Usage ke A12) + (Wage ke A12) + (Expense alokasi A12)
+- **Committed Cost** = PO plannedTotal. Paid-to-date = Σ Payment. Outstanding = planned − paid = "hutang belum dibayar"
+- **Variance** = plannedTotal vs actualTotal. Favorable (actual < planned) / unfavorable (actual > planned). Flag merah kalo unfavorable material
+- **WIP** = unit belum selesai → cost-to-date. Sisa ke selesai = (kalo ada RAB) budgeted − cost-to-date
+- **Subsidi vs Komersil** = pisah per project type
+- **Cashflow** = uang keluar REAL (Payment). Stok belum dipakai = expenditure global, BUKAN biaya rumah
+
+#### 1️⃣ LAPORAN BULANAN
+**OVERVIEW (halaman 1):**
+- Cashflow bulan ini: total keluar per kategori (Material/Upah/Ops)
+- Outstanding hutang akhir bulan (PO+Wage+Expense belum PAID)
+- KPI tiles: Total material dibeli, Total upah dibayar, Total operasional, Belum dibayar
+- Variance bulan ini (planned vs actual, favorable/unfavorable)
+- Top 5 penerima pembayaran bulan ini
+
+**DETAIL ("kaya buku"):**
+1. Pembelian material per toko/supplier — per supplier: list PO (no, tanggal, item, planned, actual, variance), subtotal supplier, grand total
+2. Pembayaran upah tukang per unit — per unit: list wage (pekerjaan, tukang, termin, amount, budget, progress%, foto evidence ref), subtotal unit, grand total
+3. Pembayaran upah tukang per blok — aggregate blok (A1-A5) → total per blok + breakdown unit
+4. Pemakaian material per unit — per unit: list Usage (material, qty, AVCO price snapshot, sub, source warehouse/direct), subtotal unit, grand total
+5. Pemakaian material per blok — aggregate per blok
+6. Biaya lain-lainnya (Other Expense) — per kategori, list item, subtotal, grand total; pisah global vs project-scoped
+7. Lampiran bukti — ref ke FileRef bundle (nota, transfer proof, evidence)
+
+#### 2️⃣ LAPORAN TAHUNAN
+**OVERVIEW:**
+- Cashflow 12 bulan (tabel + bar chart, per kategori)
+- Total keluar tahun ini vs tahun lalu (YoY)
+- Outstanding akhir tahun
+- Variance tahunan (planned vs actual, sumber overspending)
+- Biaya per project (ranking mana project paling mahal)
+- Unit selesai vs masih WIP tahun ini
+
+**DETAIL:**
+- Per bulan breakdown (12 section ringkas)
+- Per project rollup tahunan
+- Per blok/aggregate unit tahunan
+- Per supplier tahunan
+- Top spending categories + trend
+
+#### 3️⃣ LAPORAN PER PROYEK (Lifecycle)
+**OVERVIEW:**
+- Project header (code, nama, type, total unit, status)
+- Total biaya proyek cost-to-date = material + upah + ops
+- Biaya per unit (ranking unit mana paling mahal)
+- Unit selesai vs WIP + biaya masing-masing
+- Outstanding hutang proyek ini
+- Variance proyek (planned vs actual)
+
+**DETAIL:**
+1. Biaya per unit (lengkap) — material usage + wage + expense + HPP total + status
+2. Upah tukang per unit + per blok
+3. Pemakaian material per unit + per blok
+4. Pembelian material per supplier (scoping proyek)
+5. Biaya operasional (scoping proyek + alokasi global yang masuk)
+6. WIP / per-unit cost-to-date
+7. Timeline pembayaran — kronologi Payment
+8. Lampiran — FileRef bundle per project
+
+#### Cross-Cutting Conventions:
+- Angka ribuan pakai titik, "Rp", empty row = ""
+- Variance unfavorable → tebal/merah; favorable → hijau
+- No kop surat di template (hard rule 1)
+- Font + layout via pdf-lib (DXA width), konsisten dengan SK/Slip generator
+
+### 25.13 7 Format Dokumen Fisik (Owner's Real Formats)
+
+Owner punya 7 PDF format fisik yang dipakai di lapangan:
+1. **Format PO** — kop placeholder, no PO, tanggal, supplier, table material (nama/qty/satuan/harga), subtotal+PPN+total, tanda tangan
+2. **RAB Material** — table material per kategori pekerjaan, qty, harga, subtotal
+3. **RAB Upah Tukang** — table tukang per pekerjaan, harga per pekerjaan (match WageType.price)
+4. **Pengajuan Dana Mingguan** — list item (PO/Wage/Expense) + total + period (= Memo display)
+5. **Pengajuan Dana (Front Payment)** — variant untuk bayar DP/tahap awal
+6. **Bukti Kas Keluar** — voucher per-recipient + rekening + terbilang + tanda tangan
+7. **Contoh Pengajuan Mingguan** — filled real example (test data)
+
+PDF generator sistem baru pakai format fisik ini (overlay via pdf-lib yang udah di stack). BUKAN ketiplek sistem lama — bangun dari nol.
+
+### 25.14 Implementation Plan (Phase A-E)
+
+#### Phase A — Prisma Schema Migration
+- Drop 5 stale models + old MaterialUsage (rewrite)
+- Add ±14 new models (Finance core + Material + Files)
+- Modify Project.code → @unique, Supplier + bank fields
+- Verification: `npx prisma validate`, `npx prisma format`
+
+#### Phase B — Import Backup JSON
+Source: `upload/18072026 Backup.json` (2.9MB, 16 keys)
+- Project: upsert by name, backfill code per 25.2
+- Supplier: upsert by name, map bankName/bankAccount, 11 empty import as null
+- Unit: upsert by {projectId, blockNumber} (merge block+unitNumber)
+- Material/Category: upsert, fix categoryId="Lainnya" integrity issue
+- WageType: upsert {projectId, name}
+- PurchaseOrder + POItem: generate poNumber per new format back-computed from PO.date
+- WagePayment: snapshot fullTaskBudget from WageType.price, evidenceImage base64 → FileRef placeholder (real upload later)
+- OtherExpense: map category, status, paymentCycle
+- Worker: auto-seed 9 master from backup (25.9)
+- Memo + MemoLine: explode poIds/wageIds/expenseIds into MemoLine rows
+- Stock: upsert + StockAdjustment{type:INITIAL} per material
+- MaterialUsage + Items: map 110 usages, price = backup snapshot (AVCO frozen), source=WAREHOUSE_DISTRIBUTION
+- Skip Drive upload of base64 evidence (separate migration step)
+
+#### Phase C — API Routes
+Pattern: `src/app/api/*/route.ts`, `export const dynamic = 'force-dynamic'`, `import { db } from '@/lib/db'` (NOT @/lib/prisma), `params Promise<{id}>` (Next16 async params)
+
+Create under `src/app/api/finance/`:
+- `po/route.ts` (CRUD), `po/[id]/route.ts`, `po/[id]/pdf/route.ts`, `po/[id]/bundle/route.ts`
+- `suppliers/route.ts`, `suppliers/[id]/route.ts`
+- `wages/route.ts`, `wages/[id]/route.ts`
+- `expenses/route.ts`, `expenses/[id]/route.ts`
+- `payments/route.ts` (POST creates Payment + recomputes cached status), `payments/[id]/route.ts` (void → recompute)
+- `memos/route.ts`, `memos/[id]/route.ts`, `memos/[id]/pay/route.ts` (pay one recipient's items)
+- `material/route.ts`, `material/usage/route.ts`, `material/stock/route.ts`, `material/stock/[materialId]/adjust/route.ts`
+- `reports/[type]/route.ts` (type: monthly|annual|project → query + pdf)
+- `dashboard/route.ts` (computed KPIs + cashflow + outstanding)
+
+Shared lib: `src/lib/finance/po-number.ts`, `src/lib/finance/avco.ts`, `src/lib/finance/status.ts`, `src/lib/finance/reports/*`
+
+#### Phase D — Dashboard UI
+File: `src/components/dashboard/dashboard.tsx` — add 'finance' | 'material' to activeTab union, add 2 TabButton, add conditional renders
+
+- `src/components/finance/finance-view.tsx` — parent: sub-nav + default Overview (Layout A per 25.7)
+- `src/components/finance/po-form.tsx` (multi-item PO, per-item allocation, per-item directUse checkbox)
+- `src/components/finance/memo-form.tsx` (select-all/filter/search — fixes old bottleneck)
+- `src/components/finance/payment-modal.tsx` (per-recipient partial pay + bank override + transfer-proof upload)
+- `src/components/finance/wage-form.tsx`
+- `src/components/finance/expense-form.tsx`
+- `src/components/material/material-view.tsx` — kartu stok, master material + opname + low-stock alert
+
+Modal pattern: side-by-side (formbox left, picker right — hard rule 5). Rupiah formatting via existing helper. Dark-theme modal override (text-slate-900 + colorScheme:light).
+
+#### Phase E — PDF Generation
+Reuse existing libs (all already installed): pdf-lib@1.17.1, docx@9.7.1 (WidthType.DXA), docxtemplater+pizzip, mammoth, jspdf. NO exceljs → reports PDF only (Excel YAGNI v1).
+
+Overlay-fill pattern at `src/lib/berkas/*overlay*/generate.ts` — reuse for PO PDF. Rupiah formatter at `src/lib/berkas/formatters.ts` — reuse.
+
+**Terbilang NOT present** → port compact one from old system `utils.ts` into `src/lib/finance/terbilang.ts`.
+
+New lib `src/lib/finance/pdf/`:
+- `po-pdf.ts` — overlay "1. Format PO.pdf"
+- `report-monthly.ts`, `report-annual.ts`, `report-project.ts` — Overview + Detail per 25.12
+- `bundle.ts` — per-entity (merge PO doc + notas + transfer proof → 1 PDF) + monthly bundle
+- Drive upload helper (reuse existing)
+
+#### Ship
+Worktree (EnterWorktree), commit per phase, push branch, `gh pr create --draft`. Verify `npm run build` passes before PR.
+
+### 25.15 Keep Untouched (Terkonek ke Berkas)
+
+JANGAN hapus/diubah:
+- ✅ Pipeline Konsumen (tab) — terkonek ke Berkas via `customer.stage`
+- ✅ Site Plan (tab) — terkonek ke Unit
+- ✅ Customer models — `Unit.customerId` + `GoogleDoc.customerId` FK langsung ke Customer
+- ✅ Berkas tab (terkonek Customer via CustomerFolder, AddCustomerModal, customer.stage buat hitung status berkas)
+
+### 25.16 Critical Files untuk Finance Module
+
+- `prisma/schema.prisma` — drop 5 stale + rewrite MaterialUsage + add 14 + modify Project/Unit/Supplier
+- `scripts/import-finance-backup.ts` — new
+- `src/components/dashboard/dashboard.tsx` — add finance+material tabs
+- `src/components/finance/*` + `src/components/material/*` — new UI
+- `src/app/api/finance/**/*.ts` — new routes
+- `src/lib/finance/**` — po-number, avco, status, reports, pdf, terbilang
+- `.env` — owner confirms DATABASE_URL (currently stale SQLite path, prod = Aiven Postgres)
+
+### 25.17 Pending (Defer ke Next Iteration)
+
+- RAB format integration (owner akan kasih format besok)
+- Project budgetedCost (pakai RAB sebagai source)
+- Multi-user + login (v1 single-user)
+- WhatsApp bot RINA (dashboard only dulu)
+- Pengajuan material dari lapangan via WA (mandor request)
+- 9router integration (paused, butuh VPS)
+- AI generate laporan keuangan route fix (workaround: Formbox Manual)
+- HF Token revoke (security cleanup — owner MUST revoke di https://huggingface.co/settings/tokens karena token bocor di chat sebelumnya, jangan tulis token-nya di repo)
+
+### 25.18 Recall Triggers (Tambah ke Section 24.9)
+
+**RECALL section 25 ini kalau owner bertanya tentang:**
+- "PO format", "PO/A16/A12", "PO number", "GDG"
+- "Direct use", "directUse flag", "kamar mandi langsung pakai"
+- "AVCO", "snapshot harga", "modal per unit"
+- "Hammer pay", "partial pay", "per-recipient"
+- "Stock opname", "StockAdjustment", "audit log stock"
+- "Memo line", "carry over", "skipped item"
+- "Variance", "planned vs actual", "favorable/unfavorable"
+- "WIP", "cost-to-date", "committed cost"
+- "FileRef", "bundle arsip", "bundle bulanan"
+- "Worker bank", "tukang rekening beda tiap minggu"
+- "Project code", "A16", "PM", "TK", "KA", "RP", "A01", "RS", "RPK"
+- "Laporan bulanan", "Laporan tahunan", "Laporan per proyek"
+- "7 PDF format", "format PO fisik", "bukti kas keluar"
+- "Dashboard layout A", "KPI tiles", "outstanding hutang"
+- "Finance module plan", "Phase A-E"
+
+**RECALL caranya:** Baca section 25 ini dari PRD.md → ikutin semua keputusan yang udah di-lock → jangan nekat bikin keputusan baru tanpa konfirmasi owner.
+
+---
