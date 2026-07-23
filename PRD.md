@@ -4043,3 +4043,94 @@ Semua 15 keputusan utama dari diskusi owner dengan Claude Code (baca plis.txt) s
 **Total: 26 DONE, 1 SKIP (auto-refresh) = 27/27 tasks complete**
 
 ---
+
+### 30.10 Ide Fitur Baru Iterasi 6+ (30 ide)
+
+#### CONSTRUCTION MANAGEMENT (baru — belum ada sama sekali)
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 1 | **Construction Schedule / Gantt Chart** | Timeline pekerjaan per unit: Pondasi → Bata → Atap → Plafon → Keramik → Finishing. Visual progress bar per item. Owner bisa lihat unit mana di tahap mana. | 3-4 jam | HIGH |
+| 2 | **Unit Completion %** | Auto-calculate % selesai per unit berdasarkan WageType yang sudah dibayar (13 pekerjaan × % dibayar). "Unit E1: 65% selesai (8/13 pekerjaan dibayar)". | 2-3 jam | HIGH |
+| 3 | **Progress Photos per Unit** | Upload foto progress pembangunan per unit per tahap. Timeline visual: foto pondasi → foto atap → foto finishing. Bisa kirim ke buyer/bank. | 2-3 jam | HIGH |
+| 4 | **Quality Control Checklist** | Checklist per item pekerjaan sebelum dibayar. e.g., Pondasi: ✓ besi terpasang ✓ cor selesai ✓ ukuran sesuai → baru boleh bayar. | 2-3 jam | MEDIUM |
+| 5 | **Construction Progress Report PDF** | Laporan progress per unit untuk bank/buyer: foto + % selesai + biaya spent + sisa pekerjaan. Auto-generate dari data. | 2-3 jam | MEDIUM |
+
+#### FINANCE — ADVANCED
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 6 | **Tax (PPN/PPh) Calculator** | Hitung PPN 11% + PPh 22/23/26 per transaksi. Auto-generate faktur pajak. Field PPN di PO + Payment. | 2-3 jam | HIGH |
+| 7 | **Installment Tracking** | Track cicilan ke supplier (bukan cuma PAID/UNPAID). "Toko Acil: 3 cicilan, 2 dibayar, 1 tersisa Rp 2jt jatuh tempo 15 Agt". | 2-3 jam | MEDIUM |
+| 8 | **Profit & Loss per Project** | Income (penjualan rumah) vs Expense (material + upah + ops) = Profit per project. "Anjayo 16: Revenue Rp 2.4M, Cost Rp 1.8M, Profit Rp 600jt". | 2-3 jam | HIGH |
+| 9 | **Auto-Generate PO dari RAB** | Dari RAB Material, auto-generate PO draft: material list + qty + suggested supplier (dari PO sebelumnya). Owner tinggal review + approve. | 3-4 jam | HIGH |
+| 10 | **Material Waste Tracking** | Track selisih material dibeli vs dipakai vs terbuang. "Semen: beli 65 zak, dipakai 61 zak, waste 4 zak (6%)". Detect theft/inefficiency. | 2-3 jam | MEDIUM |
+
+#### MATERIAL — ADVANCED
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 11 | **Material Reservation** | Reserve material untuk unit tertentu sebelum dipakai. "Reserve 60 zak semen untuk unit E8 mulai minggu depan". Prevent stock dipakai unit lain. | 2-3 jam | MEDIUM |
+| 12 | **Material Substitution** | Kalau material A habis, suggest substitusi: "Semen Tiga Roda habis → pakai Semen Gresik (harga mirip, stok 40 zak)". | 2-3 jam | LOW |
+| 13 | **Delivery Tracking** | Track status pengiriman dari supplier: Ordered → Shipped → Delivered. ETA + actual delivery date. | 2-3 jam | LOW |
+| 14 | **Barcode/QR Scanner** | Scan material di gudang pakai HP → auto-update stock. Generate QR code per material untuk label fisik. | 3-4 jam | LOW |
+| 15 | **Stock Reorder Suggestions** | Auto-suggest PO untuk restock berdasarkan: minStock + RAB upcoming + lead time supplier. "Semen di bawah minStock + unit E9 butuh 60 zak minggu depan → suggest PO 100 zak ke Toko Acil". | 2-3 jam | HIGH |
+
+#### UX / DASHBOARD
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 16 | **Notification Center** | 1 halaman semua alert: low stock + budget alert + outstanding aging + weekly closing. Bell icon di header dengan badge count. | 2-3 jam | HIGH |
+| 17 | **Mobile-Optimized View** | Responsive layout untuk HP/tablet. Owner bisa input PO/upah/expense dari HP di lapangan. | 3-4 jam | HIGH |
+| 18 | **Keyboard Shortcuts** | Ctrl+P = buat PO, Ctrl+W = catat upah, Ctrl+E = catat biaya, Ctrl+S = search, dll. Display shortcut hints di tooltips. | 1-2 jam | LOW |
+| 19 | **Custom Dashboard Widgets** | Owner pilih widget mana yang mau ditampilkan: KPI tiles, cashflow chart, outstanding table, low stock alert, budget alert. Drag-and-drop layout. | 3-4 jam | LOW |
+| 20 | **Dark/Light Theme Toggle** | Toggle antara dark/light theme. Sekarang cuma dark. | 1 jam | LOW |
+
+#### AI / AUTOMATION
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 21 | **AI Cost Prediction** | Prediksi biaya konstruksi unit baru berdasarkan historical data (material price trend + wage cost per unit). "Unit E9 estimasi: Rp 75.2jt (±5% confidence)". | 3-4 jam | HIGH |
+| 22 | **AI Supplier Recommendation** | Recommend supplier terbaik per material berdasarkan: harga termurah + on-time delivery + quality score. "Untuk semen: Toko Acil (termurah Rp 64K, delivery 1 hari)". | 2-3 jam | MEDIUM |
+| 23 | **Voice Input via Telegram** | Kirim voice message ke RINA bot → AI parse → create record. "RINA, catat upah Heri pondasi E1 1.2 juta" → auto-create WagePayment. | 3-4 jam | MEDIUM |
+| 24 | **AI Anomaly Detection** | Detect transaksi unusual: "PO semen 200 zak (biasanya 60-65 zak per PO) — apakah benar?" Alert ke owner. | 2-3 jam | LOW |
+| 25 | **Auto-Reconcile Nota vs PO** | Match nota items dengan PO items. Detect: "Nota berisi 65 zak semen, PO berisi 60 zak — selisih 5 zak, actualTotal naik Rp 320K". | 2-3 jam | MEDIUM |
+
+#### INTEGRATION / EXPORT
+
+| # | Fitur | Deskripsi | Estimasi | Priority |
+|---|-------|-----------|----------|----------|
+| 26 | **Export to Excel (.xlsx)** | Export PO/Wage/Expense/Material ke Excel dengan formatting (bukan cuma CSV). Multi-sheet workbook. | 2-3 jam | MEDIUM |
+| 27 | **Email Notifications** | Kirim email alert: low stock, over budget, outstanding > 30 hari, weekly closing report. | 2-3 jam | MEDIUM |
+| 28 | **Data Backup Scheduler** | Auto-backup database ke Google Drive tiap malam (cron job). Download backup dari dashboard. | 2-3 jam | HIGH |
+| 29 | **Audit Trail / Change Log** | Track siapa ubah apa kapan untuk semua entity (PO, Wage, Expense, Material, Stock). Immutable log. | 2-3 jam | MEDIUM |
+| 30 | **WhatsApp Broadcast ke Supplier** | Auto-kirim WA ke supplier: "PO baru PO-A16-E8-001-0726, mohon konfirmasi harga + stok". (Butuh WA bot atau WA Business API). | 3-4 jam | LOW |
+
+### 30.11 Rekomendasi Priority Iterasi 6
+
+**Batch 1 — Construction Management (HIGH, 10-14 jam)**:
+1. Construction Schedule / Gantt Chart
+2. Unit Completion %
+3. Progress Photos per Unit
+5. Construction Progress Report PDF
+9. Auto-Generate PO dari RAB
+
+**Batch 2 — Finance Advanced (HIGH, 7-10 jam)**:
+6. Tax (PPN/PPh) Calculator
+8. Profit & Loss per Project
+15. Stock Reorder Suggestions
+16. Notification Center
+
+**Batch 3 — AI + Automation (MEDIUM, 8-12 jam)**:
+21. AI Cost Prediction
+22. AI Supplier Recommendation
+23. Voice Input via Telegram
+25. Auto-Reconcile Nota vs PO
+
+**Batch 4 — UX + Integration (MEDIUM, 8-12 jam)**:
+17. Mobile-Optimized View
+26. Export to Excel
+27. Email Notifications
+28. Data Backup Scheduler
+
+---
