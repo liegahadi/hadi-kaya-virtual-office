@@ -68,10 +68,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate, config: BotCo
       return { success: true, response: response.text }
     }
 
-    // Handle file upload (future: save to Drive)
+    // Handle file upload (Task 6: save to Drive)
     if (update.message?.document || update.message?.photo) {
-      await sendTelegramMessage(config.botToken, chatId, '📎 File diterima. Upload ke Google Drive akan datang di iterasi berikutnya.')
-      return { success: true }
+      const fileId = update.message.document?.file_id || update.message.photo?.[update.message.photo.length - 1]?.file_id || ''
+      const fileName = update.message.document?.file_name || `photo-${Date.now()}.jpg`
+      const mimeType = update.message.document?.mime_type || 'image/jpeg'
+      if (!fileId) return { success: false, error: 'No file_id' }
+      const result = await handleFileUpload(config, fileId, fileName, mimeType)
+      await sendTelegramMessage(config.botToken, chatId, result.text)
+      return { success: true, response: result.text }
     }
 
     return { success: true, response: 'No action' }
@@ -139,10 +144,8 @@ async function handleCommand(text: string, config: BotConfig): Promise<CommandRe
     }
   }
 
-  // Default: free text → suggest menu
-  return {
-    text: `Halo! Aku ${config.botName.toUpperCase()} bot.\n\nKetik /start untuk lihat menu, atau /help untuk daftar command.\n\nAtau coba:\n${config.botName === 'rina' ? '/outstanding — lihat hutang belum dibayar\n/cashflow — ringkasan kas keluar\n/stock — low stock alert\n/cost A12 — biaya unit A12' : '/konsumen — list konsumen\n/berkas — info generate berkas'}`,
-  }
+  // Default: free text → LLM fallback (GLM-4.6 via z-ai direct fetch)
+  return await handleFreeText(text, config.botName)
 }
 
 async function handleCallback(data: string, config: BotConfig): Promise<CommandResponse> {
@@ -340,6 +343,165 @@ async function getCustomersList(): Promise<CommandResponse> {
     text += `${i + 1}. ${c.name}\n   Bank: ${c.bankName || '-'} | Stage: ${c.stage || '-'}\n`
   })
   return { text }
+}
+
+// === LLM Free Text Fallback (Task 5) ===
+// GLM-4.6 via z-ai-web-dev-sdk direct fetch (hard rule 10)
+const ZAI_CONFIG = {
+  baseUrl: 'https://internal-api.z.ai/v1',
+  apiKey: 'Z.ai',
+  chatId: 'chat-f06846fc-648f-4dd5-adc6-1033ce58ef0c',
+  token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZmU4MGI1YWMtNWM2ZC00ZjEzLWJjZjctMjI0NmFlZTUxNWFjIiwiY2hhdF9pZCI6ImNoYXQtZjA2ODQ2ZmMtNjQ4Zi00ZGQ1LWFkYzYtMTAzM2NlNThlZjBjIiwicGxhdGZvcm0iOiJ6YWkifQ.owCuUI9B-Qsh-n4v2Tnhh2Ivr3I_FuwPOtXkzpSzRyk',
+  userId: 'fe80b5ac-5c6d-4f13-bcf7-2246aee515ac',
+}
+
+async function callZaiChat(systemPrompt: string, userPrompt: string): Promise<string> {
+  const url = `${ZAI_CONFIG.baseUrl}/chat/completions`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${ZAI_CONFIG.apiKey}`,
+    'X-Z-AI-From': 'Z',
+    'X-Chat-Id': ZAI_CONFIG.chatId,
+    'X-User-Id': ZAI_CONFIG.userId,
+    'X-Token': ZAI_CONFIG.token,
+  }
+  const body = {
+    messages: [
+      { role: 'assistant', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    thinking: { type: 'disabled' },
+  }
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`ZAI API error ${res.status}: ${errText.substring(0, 200)}`)
+  }
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || ''
+}
+
+async function handleFreeText(text: string, botName: string): Promise<CommandResponse> {
+  try {
+    // Build context: finance summary
+    let context = ''
+    if (botName === 'rina') {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'https://hadi-kaya-virtual-office.vercel.app'}/api/finance/dashboard`)
+      const d = await res.json()
+      if (d.success) {
+        const { kpi, outstanding } = d.data
+        context = `FINANCE CONTEXT:\n`
+        context += `- Total Keluar Bln Ini: ${fmt(kpi.totalKeluarBlnIni)}\n`
+        context += `- Outstanding Material: ${fmt(kpi.outstandingMaterial)}\n`
+        context += `- Outstanding Upah: ${fmt(kpi.outstandingUpah)}\n`
+        context += `- Outstanding Ops: ${fmt(kpi.outstandingOps)}\n`
+        context += `- Total Outstanding: ${fmt(kpi.totalOutstanding)}\n`
+        context += `- Top 5 Penerima: ${outstanding.perPenerima.slice(0, 5).map((p: any) => `${p.name} (${fmt(p.amount)})`).join(', ')}\n`
+      }
+    }
+
+    const systemPrompt = botName === 'rina'
+      ? `Kamu adalah RINA, asisten AI Finance untuk PT. Marlindo Bangun Persada (developer properti Pangkalpinang). Jawab pertanyaan owner tentang keuangan dengan singkat, jelas, pakai Bahasa Indonesia santai. Gunakan context data finance yang tersedia. Jika data tidak cukup, sarankan owner buka dashboard.\n\n${context}`
+      : `Kamu adalah DINA, asisten AI Document untuk PT. Marlindo Bangun Persada. Jawab pertanyaan owner tentang berkas KPR, generate dokumen, dan status konsumen. Jawab singkat, jelas, Bahasa Indonesia santai.`
+
+    const response = await callZaiChat(systemPrompt, text)
+    return { text: response.substring(0, 4000) } // Telegram message limit
+  } catch (err: any) {
+    console.error('[telegram] LLM fallback error:', err)
+    return {
+      text: `Maaf, aku ga bisa proses pertanyaan itu sekarang. Coba /start untuk lihat menu, atau /help untuk daftar command.\n\nError: ${err?.message?.substring(0, 100) || 'unknown'}`,
+    }
+  }
+}
+
+// === File Upload Handler (Task 6) ===
+async function handleFileUpload(config: BotConfig, fileId: string, fileName: string, mimeType: string): Promise<CommandResponse> {
+  try {
+    // Download file dari Telegram
+    const fileInfoRes = await fetch(`https://api.telegram.org/bot${config.botToken}/getFile?file_id=${fileId}`)
+    const fileInfo = await fileInfoRes.json()
+    if (!fileInfo.ok) throw new Error('Failed to get file info from Telegram')
+
+    const filePath = fileInfo.result.file_path
+    const downloadUrl = `https://api.telegram.org/file/bot${config.botToken}/${filePath}`
+
+    // Download file content
+    const fileRes = await fetch(downloadUrl)
+    if (!fileRes.ok) throw new Error('Failed to download file')
+    const fileBuffer = Buffer.from(await fileRes.arrayBuffer())
+    const fileSizeKB = Math.round(fileBuffer.length / 1024)
+
+    // Try upload ke Google Drive (reuse existing OAuth)
+    let driveUrl: string | null = null
+    try {
+      const { getDriveClientOAuth, isOAuthConfigured, isGoogleConnected } = await import('@/lib/google/auth')
+      if (isOAuthConfigured()) {
+        const connected = await isGoogleConnected()
+        if (connected) {
+          const drive = await getDriveClientOAuth()
+          const today = new Date().toISOString().slice(0, 10)
+          const folderName = `Telegram-${config.botName}-${today}`
+          // Search or create folder
+          const folderSearch = await drive.files.list({
+            q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive',
+          })
+          let folderId = folderSearch.data.files?.[0]?.id
+          if (!folderId) {
+            const folderCreate = await drive.files.create({
+              requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder' },
+              fields: 'id',
+            })
+            folderId = folderCreate.data.id || undefined
+          }
+          // Upload file
+          const { Readable } = await import('stream')
+          const uploadRes = await drive.files.create({
+            requestBody: { name: fileName, parents: folderId ? [folderId] : undefined },
+            media: { mimeType, body: Readable.from(fileBuffer) },
+            fields: 'id, webViewLink',
+          })
+          driveUrl = uploadRes.data.webViewLink || null
+
+          // Set permission anyone with link can view
+          if (uploadRes.data.id) {
+            await drive.permissions.create({
+              fileId: uploadRes.data.id,
+              requestBody: { role: 'reader', type: 'anyone' },
+            })
+          }
+
+          // Save FileRef to DB
+          await db.fileRef.create({
+            data: {
+              kind: config.botName === 'rina' ? 'WAGE_EVIDENCE' : 'EXPENSE_PROOF',
+              refId: 'telegram-upload',
+              driveFileId: uploadRes.data.id || '',
+              driveUrl: driveUrl || undefined,
+              fileName,
+              mimeType,
+            },
+          })
+        }
+      }
+    } catch (driveErr: any) {
+      console.error('[telegram] Drive upload error:', driveErr?.message)
+    }
+
+    if (driveUrl) {
+      return {
+        text: `✅ File tersimpan!\n\n📄 ${fileName}\n📦 ${fileSizeKB} KB\n🔗 ${driveUrl}`,
+      }
+    } else {
+      return {
+        text: `📎 File diterima: ${fileName} (${fileSizeKB} KB)\n\n⚠️ Upload ke Google Drive gagal (owner belum login Google atau error). Buka dashboard → connect Google Drive dulu.`,
+      }
+    }
+  } catch (err: any) {
+    console.error('[telegram] File upload error:', err)
+    return { text: `❌ Gagal upload file: ${err?.message?.substring(0, 100) || 'unknown'}` }
+  }
 }
 
 // === Telegram API helpers ===
