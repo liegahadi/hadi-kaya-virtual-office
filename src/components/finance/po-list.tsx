@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Search, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Download, Eye, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { PoFormModal } from './po-form'
+import { PoDetailModal } from './po-detail-modal'
 
 interface PO {
   id: string
@@ -43,6 +45,8 @@ export function PoList() {
   const [projects, setProjects] = useState<any[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [poFormOpen, setPoFormOpen] = useState(false)
+  const [detailPoId, setDetailPoId] = useState<string | null>(null)
   const perPage = 20
 
   const fetchPos = async () => {
@@ -107,6 +111,9 @@ export function PoList() {
           <option value="">Semua Project</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
         </select>
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-[10px]" onClick={() => setPoFormOpen(true)}>
+          <Plus className="w-3 h-3 mr-1" /> PO Baru
+        </Button>
       </div>
 
       {/* Table */}
@@ -132,7 +139,7 @@ export function PoList() {
               ) : pos.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-8 text-slate-500">Tidak ada PO</td></tr>
               ) : pos.map(po => (
-                <tr key={po.id} className="border-b border-slate-800 hover:bg-slate-800/40">
+                <tr key={po.id} className="border-b border-slate-800 hover:bg-slate-800/40 cursor-pointer" onClick={() => setDetailPoId(po.id)}>
                   <td className="p-2 font-mono text-slate-200">{po.displayPoNumber}</td>
                   <td className="p-2 text-slate-400">{new Date(po.poDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                   <td className="p-2 text-slate-200">{po.supplier?.name}</td>
@@ -143,7 +150,7 @@ export function PoList() {
                   <td className="p-2 text-center">
                     <Badge variant="outline" className={`text-[9px] ${statusColor[po.status] || 'bg-slate-700'}`}>{po.status}</Badge>
                   </td>
-                  <td className="p-2 text-center whitespace-nowrap">
+                  <td className="p-2 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <a href={`/api/finance/po/${po.id}/pdf`} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center justify-center w-6 h-6 text-blue-400 hover:bg-blue-900/30 rounded" title="Download PDF">
                       <Download className="w-3 h-3" />
@@ -170,6 +177,9 @@ export function PoList() {
           </Button>
         </div>
       </div>
+
+      {poFormOpen && <PoFormModal open={poFormOpen} onClose={() => setPoFormOpen(false)} onSaved={fetchPos} />}
+      <PoDetailModal poId={detailPoId} open={!!detailPoId} onClose={() => setDetailPoId(null)} />
     </div>
   )
 }

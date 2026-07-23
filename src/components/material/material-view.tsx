@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { Package, AlertTriangle, Search, RefreshCw, Plus, Wrench } from 'lucide-react'
 import { MaterialFormModal } from '../finance/material-form'
 import { OpnameModal } from '../finance/opname-modal'
+import { UsageFormModal } from '../finance/usage-form'
 
 interface MaterialItem {
   id: string
@@ -31,6 +32,7 @@ export function MaterialView() {
   const [search, setSearch] = useState('')
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
   const [materialFormOpen, setMaterialFormOpen] = useState(false)
+  const [usageFormOpen, setUsageFormOpen] = useState(false)
   const [opnameMaterial, setOpnameMaterial] = useState<MaterialItem | null>(null)
 
   const fetchMaterials = async () => {
@@ -88,6 +90,9 @@ export function MaterialView() {
           <Button variant="outline" size="sm" onClick={fetchMaterials} disabled={refreshing} className="border-slate-700 text-slate-300 hover:bg-slate-800">
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setUsageFormOpen(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" /> Catat Pemakaian
           </Button>
           <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setMaterialFormOpen(true)}>
             <Plus className="w-3.5 h-3.5 mr-1.5" /> Material Baru
@@ -207,6 +212,9 @@ export function MaterialView() {
       {/* MODALS */}
       {materialFormOpen && (
         <MaterialFormModal open={materialFormOpen} onClose={() => setMaterialFormOpen(false)} onSaved={fetchMaterials} />
+      )}
+      {usageFormOpen && (
+        <UsageFormModal open={usageFormOpen} onClose={() => setUsageFormOpen(false)} onSaved={fetchMaterials} />
       )}
       {opnameMaterial && (
         <OpnameModal
