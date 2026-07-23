@@ -12,6 +12,9 @@ import { Package, AlertTriangle, Search, RefreshCw, Plus, Wrench } from 'lucide-
 import { MaterialFormModal } from '../finance/material-form'
 import { OpnameModal } from '../finance/opname-modal'
 import { UsageFormModal } from '../finance/usage-form'
+import { CategoryTracking } from './category-tracking'
+
+type MatSubTab = 'stock' | 'tracking'
 
 interface MaterialItem {
   id: string
@@ -31,6 +34,7 @@ export function MaterialView() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+  const [matSubTab, setMatSubTab] = useState<MatSubTab>('stock')
   const [materialFormOpen, setMaterialFormOpen] = useState(false)
   const [usageFormOpen, setUsageFormOpen] = useState(false)
   const [opnameMaterial, setOpnameMaterial] = useState<MaterialItem | null>(null)
@@ -100,7 +104,20 @@ export function MaterialView() {
         </div>
       </div>
 
-      {/* Summary tiles */}
+      {/* Sub-tab: Stock | Category Tracking */}
+      <div className="flex gap-1 border-b border-slate-800 pb-1">
+        <button onClick={() => setMatSubTab('stock')}
+          className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${matSubTab === 'stock' ? 'border-emerald-500 text-emerald-400 bg-slate-800/50' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+          Stok Material
+        </button>
+        <button onClick={() => setMatSubTab('tracking')}
+          className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${matSubTab === 'tracking' ? 'border-emerald-500 text-emerald-400 bg-slate-800/50' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+          Tracking per Pekerjaan
+        </button>
+      </div>
+
+      {matSubTab === 'stock' && (
+      <>
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 bg-blue-950/40 border-blue-800/50">
           <p className="text-[10px] text-blue-300 font-medium">Total Material</p>
@@ -208,6 +225,10 @@ export function MaterialView() {
           </table>
         </div>
       </Card>
+      </>
+      )}
+
+      {matSubTab === 'tracking' && <CategoryTracking />}
 
       {/* MODALS */}
       {materialFormOpen && (
