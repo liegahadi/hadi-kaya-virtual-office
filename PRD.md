@@ -3411,3 +3411,189 @@ Setelah Vercel deploy selesai + owner verify dashboard Finance+Material jalan:
 5. **Multi-user** — v2, tunggu kebutuhan
 
 ---
+
+## 28. ITERASI 2 — UI Fix + Form Input + RAB + Laporan + Telegram (23 Juli 2026)
+
+> Iterasi kedua setelah Vercel-only setup. Owner request: fix UI dark theme + form input UI + RAB integration + Laporan PDF + Telegram bot.
+
+### 28.1 UI Dark Theme Fix
+
+**Masalah**: App default DARK theme, tapi komponen Finance/Material pakai text-slate-800 (dark text) di bg white → font ga keliatan.
+
+**Fix**: Rewrite finance-view.tsx + material-view.tsx dengan:
+- Cards: `bg-slate-900/50 border-slate-800`
+- Text: `text-slate-100/300/400` (light text di dark bg)
+- KPI tiles: `bg-{color}-950/40 border-{color}-800/50` (subtle, ga blinding)
+- Badges: `bg-{color}-900/60 text-{color}-200 border-{color}-700`
+- Recharts tooltip: `bg-slate-900 border-slate-700 text-slate-200`
+- Inputs: `bg-slate-800 border-slate-700 text-slate-100`
+
+### 28.2 Form Input UI (Phase D v2)
+
+5 modal components baru:
+
+1. **po-form.tsx** — Buat PO Baru
+   - Multi-item PO dengan directUse checkbox per item (kamar mandi/carpot/pipa → skip stok)
+   - Supplier/Project/Unit/Date picker
+   - Format ribuan untuk qty + price (titik setiap 3 angka)
+   - Planned total auto-calc
+   - Auto-generate poNumber di API (format PO-{code}-{blockNumber|GDG}-{seq}-{MMYY})
+
+2. **memo-form.tsx** — Buat Memo Pengajuan
+   - Fetch UNPAID POs + Wages + Expenses (auto-load dari API)
+   - Search filter
+   - Select-all / Clear buttons (fix bottleneck lama: re-pick manual tiap minggu)
+   - Total auto-calc
+   - Tipe W (mingguan) / D (harian)
+   - Auto-generate memoNumber di API (MBP-{W|D}-{seq}-{MMYY})
+
+3. **payment-modal.tsx** — Bayar (partial per-recipient, A11)
+   - Trigger dari "Bayar" button di Outstanding per Penerima
+   - Amount bisa partial (kurang dari outstanding)
+   - Method: TRANSFER / CASH / GIRO
+   - Bank override (snapshot per payment — tukang rekening beda tiap minggu)
+   - Date picker
+   - Auto-populate bank dari supplier/worker master
+   - Recompute status setelah payment (PO/Wage/Expense → PAID/PARTIAL_PAID/UNPAID)
+
+4. **material-form.tsx** — Material Baru
+   - Nama, kategori (dari existing), satuan, minStock, lastPrice
+   - Auto-create Stock record + StockAdjustment INITIAL
+
+5. **opname-modal.tsx** — Stok Opname
+   - 2 mode: SET (stok baru) atau DELTA (tambah/kurang)
+   - Reason WAJIB (audit log per C2 SOP)
+   - Auto-compute prevQty + newQty
+   - Insert StockAdjustment record (type: OPNAME)
+
+### 28.3 RAB Integration (Phase D — RAB)
+
+**Source**: `docs/finance-reference/04-rab-material.pdf` + `06-rab-upah-tukang.pdf`
+
+**Script**: `scripts/seed-rab-anjayo-16.ts` (idempotent, run ke Aiven)
+
+**RAB Upah Tukang** (13 pekerjaan standard Anjayo 16, total Rp 21M per rumah):
+1. Pondasi + Cor Sloof + Pasang Bata 3 keping — Rp 1.2M
+2. Subsitank (Gali Lobang+Cor), Pipa Subsitank & Urukan — Rp 800K
+3. Pasang Bata + Tebeng Layar. Cor Ring Balok, Cor Kolom, Pas kusen, Roster, Dak — Rp 4.5M
+4. Rangka Atap + Penutup Atap + NOK + List Plank — Rp 1.5M
+5. Plester Keliling + Instalasi Pipa Listrik + Openingan & Finishing + Finishing Dak — Rp 4M
+6. Instalasi 11 Titik (Termasuk pasang mangkok listrik + Pemasangan saklar) — Rp 350K
+7. Pemasangan Plafon — Rp 1.1M
+8. Pasang Keramik Lantai + Plint + Pas Keramik lantai kamar mandi + dinding — Rp 1.9M
+9. Pasang Pintu kunci & daun pintu — Rp 350K
+10. Pembuatan Meja Dapur dan rabat Belakang, Pembatas Belakang, Carpot — Rp 1M
+11. Pengecatan — Rp 1M
+12. Serah Terima kunci + Pembersihan awal & akhir 15% — Rp 2.1M
+13. Retensi — Rp 1.2M
+
+**RAB Material** (26 lines, total Rp 52.8M per rumah):
+- Pondasi: Besi 10/8/6, Paku 2/3, Semen 7 zak, Benang, Batu Cor, Bata 3200 keping
+- Pemasangan Bata: Semen 25 zak, Pasir 3 mobil, Bata 8000 keping
+- Subsitank: Pipa Subsitank 4 btg, Semen 5 zak
+- Plafon: Gypsum 30 lembar, Holo 2x4 20 btg
+- Atap: Rangka Atap, Genteng 30 m2
+- Keramik: Keramik 40x40 60 m2, Keramik Dinding 30 m2
+- Listrik: Kabel 1x1.5 100m, Saklar+Stop 11 set
+- Pintu: Pintu Depan, Pintu Kamar 2 bh
+- Pengecatan: Cat Tembok 6 galon
+- Pipa Air: Pipa 3/4 20 btg
+
+**Material.minStock benchmark** (updated di Aiven):
+- Semen: 60 (59-63 zak per rumah)
+- Bata: 3000
+- Pasir: 5
+- Batu Cor: 1
+- Gypsum: 20
+
+### 28.4 Laporan Bulanan PDF (Phase E v2)
+
+**Lib**: `src/lib/finance/pdf/report-monthly.ts` — `generateMonthlyReportPDF`
+
+**Layout** (per PRD 25.12):
+- Kop placeholder (no kop surat per hard rule 1)
+- Judul: LAPORAN KEUANGAN BULANAN + periode + project
+- Ringkasan KPI (6 baris): Total Material, Upah, Ops, TOTAL, Outstanding Awal, Outstanding Akhir
+- Detail Section 1: Pembelian Material per Supplier (variance planned vs actual, red/green)
+- Detail Section 2: Pembayaran Upah per Unit (worker, pekerjaan, amount, budget, % progress)
+- Detail Section 3: Upah per Blok (aggregate)
+- Detail Section 4: Pemakaian Material per Unit (qty, AVCO price, subtotal, source)
+- Detail Section 5: Biaya Lain-lain (kategori, penerima, amount)
+- Tanda tangan pemilik
+
+**API**: `GET /api/finance/reports/[type]?month=YYYY-MM&projectId=XXX`
+- type: `monthly` (DONE) | `annual` (placeholder) | `project` (placeholder)
+- Output: PDF inline (Content-Disposition: inline)
+
+**Trigger**: Finance dashboard → "Laporan Bulanan" button → window.open API endpoint
+
+### 28.5 Telegram Bot (Phase F)
+
+**Lib**: `src/lib/telegram/bot-handler.ts` — shared handler untuk RINA + DINA
+
+**API**: `POST /api/telegram/[bot]/webhook` — Vercel webhook receiver (no VPS needed)
+
+**Bot Config** (env vars di Vercel):
+- `TELEGRAM_RINA_TOKEN` — token dari @BotFather untuk @HadiKayaRinaBot
+- `TELEGRAM_DINA_TOKEN` — token dari @BotFather untuk @HadiKayaDinaBot
+- `TELEGRAM_OWNER_CHAT_ID` — chat ID owner (whitelist, per PRD 26.9 security)
+
+**RINA Commands** (per PRD 26.2):
+- `/start` — menu utama (inline keyboard)
+- `/outstanding` — hutang belum dibayar (per penerima + per kategori)
+- `/cashflow` — cashflow 6 bulan terakhir
+- `/stock` — low stock alert
+- `/cost A12` — biaya unit A12
+- `/project A16` — biaya project Anjayo 16
+- `/memo` — info buat memo (deferred — too complex for Telegram)
+- `/help` — daftar command
+
+**DINA Commands** (per PRD 26.3):
+- `/start` — menu utama
+- `/konsumen` — list konsumen (20 terbaru)
+- `/berkas` — info generate berkas (deferred)
+- `/help` — daftar command
+
+**Inline Keyboard Menu**:
+- RINA: Outstanding Hutang | Cashflow | Low Stock Alert | Help
+- DINA: List Konsumen | Info Berkas
+
+**File Upload**: Foto/document upload → "diterima, upload ke Drive future" (placeholder)
+
+**Setup** (owner flow):
+1. Buka Telegram → cari @BotFather
+2. `/newbot` → bikin @HadiKayaRinaBot + @HadiKayaDinaBot
+3. Dapat token masing-masing
+4. Set env vars di Vercel: TELEGRAM_RINA_TOKEN, TELEGRAM_DINA_TOKEN, TELEGRAM_OWNER_CHAT_ID
+5. Get chat ID owner: chat ke @userinfobot, dapatkan chat ID
+6. Set webhook: `GET /api/telegram/rina/webhook?action=setup` (dan untuk dina)
+7. Test: chat bot di Telegram → `/start`
+
+### 28.6 Status Iterasi 2
+
+| Task | Status | Commit |
+|------|--------|--------|
+| UI Dark Theme Fix | ✅ DONE | (sama dengan form input) |
+| PO Form Modal | ✅ DONE | (sama) |
+| Memo Form Modal | ✅ DONE | (sama) |
+| Payment Modal | ✅ DONE | (sama) |
+| Material Form Modal | ✅ DONE | (sama) |
+| Opname Modal | ✅ DONE | (sama) |
+| RAB Integration (Anjayo 16) | ✅ DONE | seed-rab-anjayo-16.ts |
+| Laporan Bulanan PDF | ✅ DONE | report-monthly.ts + reports/[type]/route.ts |
+| Telegram Bot (RINA + DINA) | ✅ DONE | bot-handler.ts + telegram/[bot]/webhook/route.ts |
+
+### 28.7 Pending (Iterasi 3 — Future)
+
+- Polish: filter PO by project, search, sorting
+- Laporan Tahunan PDF (advanced)
+- Laporan Per-Proyek PDF (lifecycle)
+- Bundle arsip PDF per-entity + monthly
+- Telegram bot: file upload → Google Drive
+- Telegram bot: LLM free text fallback (GLM-4.6)
+- WhatsApp bot (deferred — VPS Hostinger)
+- 9router integration (deferred)
+- RAB integration: comparison actual vs RAB per item pekerjaan
+- Multi-user + login (v2)
+
+---
