@@ -3950,3 +3950,60 @@ Semua 15 keputusan utama dari diskusi owner dengan Claude Code (baca plis.txt) s
 25. **Supplier Bank Directory** — 1 halaman daftar semua bank account (supplier + worker), bisa export ke PDF untuk transfer instruction.
 
 ---
+
+### 30.8 Iterasi 5 — Expanded Features (23 Juli 2026)
+
+#### Owner Feedback (Iterasi 5):
+- ❌ Hapus "Dashboard Auto-Refresh" (ide #2) — ga perlu
+- ✅ Expand "Cash Flow Forecast" — bukan cuma unpaid, tapi plan pekerjaan untuk unit(s) + compute material + wage + total kas needed
+- ✅ Expand "Category Filter" — track material usage per workItem vs RAB, detect over/under budget per item pekerjaan
+- ✅ Expand "Project Dashboard" — per project + per unit detail
+
+#### Status Iterasi 5:
+
+| # | Task | Status | Commit |
+|---|------|--------|--------|
+| Fix 7 missing items (form buttons + bundle) | ✅ DONE | `50aa1be` |
+| Cash Flow Forecast (expanded) | ✅ DONE | `ba2975e` |
+| Category Tracking (expanded) | ✅ DONE | `ba2975e` |
+| Project Dashboard (per project + per unit) | ✅ DONE | `ba2975e` |
+
+#### Detail:
+
+**Cash Flow Forecast** (`/api/finance/forecast` + `cash-forecast.tsx`):
+- Owner pilih: project + workItems (e.g., "Pondasi sampai Atap")
+- System compute: material per workItem (from RAB) + upah per workItem (from WageType)
+- Supplier suggestions dari PO sebelumnya (material yang sama)
+- Grand total = (material + upah) × jumlah unit
+- Expandable detail per workItem (material items + supplier + upah)
+
+**Category Tracking** (`/api/finance/material/category-tracking` + `category-tracking.tsx`):
+- Per workItem: planned (RAB) vs actual (MaterialUsage) per material
+- Detect over/under budget per item pekerjaan
+- Collapsible sections per workItem
+- Status badge: Hemat (favorable) / Over (unfavorable) / Pas (on target)
+- WorkItem-level summary + per-material detail
+
+**Project Dashboard** (`project-dashboard.tsx`):
+- Per project: summary cost (material/upah/ops/total) + RAB vs Actual + units table
+- Per unit: click row → detail breakdown (material/upah/ops/total)
+- PDF download (Laporan Per-Proyek)
+
+#### Finance Tab Sub-Tabs (11 total):
+1. Dashboard
+2. Purchase Orders
+3. Upah Tukang
+4. Biaya Lain
+5. Memo Pengajuan
+6. RAB vs Actual
+7. Supplier
+8. Cost per Unit
+9. **Cash Forecast** (NEW)
+10. **Project Dashboard** (NEW)
+11. Pengaturan
+
+#### Material Tab Sub-Tabs (2 total):
+1. Stok Material
+2. **Tracking per Pekerjaan** (NEW)
+
+---
