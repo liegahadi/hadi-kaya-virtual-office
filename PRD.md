@@ -3837,3 +3837,52 @@ Aku susun 12 ide fitur baru, grouped by value:
 - **Material usage history** — sub-tab di material: list 110 usages dengan filter unit/project
 - **Return to stock action** — button di material detail untuk return sisa material ke gudang
 ---
+
+### 30.5 Status Iterasi 4 — ALL DONE ✅ (23 Juli 2026)
+
+| # | Task | Status | Commit |
+|---|------|--------|--------|
+| 10 | RAB vs Actual Comparison | ✅ DONE | `1ef2cac` |
+| A1 | Material Usage Form | ✅ DONE | `52f77a5` |
+| A2 | Wage Form Modal | ✅ DONE | `52f77a5` |
+| A3 | Expense Form Modal | ✅ DONE | `52f77a5` |
+| A4 | Supplier Management UI | ✅ DONE | `52f77a5` |
+| A5 | Project Code Editor | ✅ DONE | `52f77a5` |
+| B6 | Cost per Unit Ranking | ✅ DONE | `1af6560` |
+| B7 | Export CSV (PO/Wage/Expense) | ✅ DONE | `1af6560` |
+
+**Sub-tab Finance sekarang (9 tabs):**
+1. Dashboard — KPI + cashflow chart + outstanding tables
+2. Purchase Orders — list 122 PO dengan filter+search+pagination+PDF download
+3. Upah Tukang — list 58 wages dengan filter+search
+4. Biaya Lain — list 94 expenses dengan filter+search
+5. Memo Pengajuan — list 44 memos
+6. RAB vs Actual — comparison RAB vs realisasi (material + upah)
+7. Supplier — list/add/edit 20 suppliers dengan bank details
+8. Cost per Unit — ranking biaya per unit + export CSV buttons
+9. Pengaturan — edit project code
+
+**Owner bisa input SEMUA data dari UI:**
+- PO Baru → sub-tab Dashboard → "Buat PO Baru"
+- Material Usage → sub-tab Dashboard → "Catat Pemakaian" (button)
+- Upah Tukang → sub-tab Dashboard → "Catat Upah" (button)
+- Biaya Lain → sub-tab Dashboard → "Catat Biaya" (button)
+- Supplier → sub-tab Supplier → "Supplier Baru"
+- Project Code → sub-tab Pengaturan → edit inline
+- Memo → sub-tab Dashboard → "Buat Memo Pengajuan"
+- Payment → Dashboard → Outstanding per Penerima → "Bayar"
+- Stock Opname → tab Material → "Opname"
+
+**Export:**
+- PO CSV → sub-tab Cost per Unit → "Export PO (CSV)"
+- Upah CSV → sub-tab Cost per Unit → "Export Upah (CSV)"
+- Biaya Lain CSV → sub-tab Cost per Unit → "Export Biaya Lain (CSV)"
+
+**Reports (PDF):**
+- Laporan Bulanan → Dashboard → "Laporan Bulanan"
+- Laporan Tahunan → Dashboard → "Laporan Tahunan"
+- Laporan Per-Proyek → /api/finance/reports/project?projectId=XXX
+- Bundle PO → /api/finance/po/[id]/bundle
+- Bundle Monthly → /api/finance/reports/bundle-monthly?month=YYYY-MM
+
+---
