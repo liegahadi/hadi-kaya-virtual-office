@@ -1,6 +1,6 @@
 'use client'
-// MaterialView — Kartu stok + opname + low-stock alert
-// Per PRD section 25.5 (Material SOP) + 25.7 S9 (separate tab)
+// MaterialView — Dark theme
+// Kartu stok + opname + low-stock alert + material baru form
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Package, AlertTriangle, Search, RefreshCw, Plus, Wrench } from 'lucide-react'
+import { MaterialFormModal } from '../finance/material-form'
+import { OpnameModal } from '../finance/opname-modal'
 
 interface MaterialItem {
   id: string
@@ -28,6 +30,8 @@ export function MaterialView() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+  const [materialFormOpen, setMaterialFormOpen] = useState(false)
+  const [opnameMaterial, setOpnameMaterial] = useState<MaterialItem | null>(null)
 
   const fetchMaterials = async () => {
     setRefreshing(true)
@@ -75,17 +79,17 @@ export function MaterialView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Package className="w-5 h-5 text-emerald-600" /> Material & Gudang
+          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <Package className="w-5 h-5 text-emerald-400" /> Material & Gudang
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Master material + kartu stok + opname + low-stock alert</p>
+          <p className="text-xs text-slate-400 mt-0.5">Master material + kartu stok + opname + low-stock alert</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={fetchMaterials} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={fetchMaterials} disabled={refreshing} className="border-slate-700 text-slate-300 hover:bg-slate-800">
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setMaterialFormOpen(true)}>
             <Plus className="w-3.5 h-3.5 mr-1.5" /> Material Baru
           </Button>
         </div>
@@ -93,39 +97,39 @@ export function MaterialView() {
 
       {/* Summary tiles */}
       <div className="grid grid-cols-3 gap-3">
-        <Card className="p-3 bg-blue-50 border-blue-200">
-          <p className="text-[10px] text-blue-700 font-medium">Total Material</p>
-          <p className="text-xl font-bold text-blue-800">{materials.length}</p>
+        <Card className="p-3 bg-blue-950/40 border-blue-800/50">
+          <p className="text-[10px] text-blue-300 font-medium">Total Material</p>
+          <p className="text-xl font-bold text-blue-200">{materials.length}</p>
         </Card>
-        <Card className="p-3 bg-red-50 border-red-200">
-          <p className="text-[10px] text-red-700 font-medium flex items-center gap-1">
+        <Card className="p-3 bg-red-950/40 border-red-800/50">
+          <p className="text-[10px] text-red-300 font-medium flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" /> Low Stock
           </p>
-          <p className="text-xl font-bold text-red-800">{lowStockCount}</p>
+          <p className="text-xl font-bold text-red-200">{lowStockCount}</p>
         </Card>
-        <Card className="p-3 bg-emerald-50 border-emerald-200">
-          <p className="text-[10px] text-emerald-700 font-medium">Nilai Stok (AVCO)</p>
-          <p className="text-xl font-bold text-emerald-800">{fmt(totalStockValue)}</p>
+        <Card className="p-3 bg-emerald-950/40 border-emerald-800/50">
+          <p className="text-[10px] text-emerald-300 font-medium">Nilai Stok (AVCO)</p>
+          <p className="text-xl font-bold text-emerald-200">{fmt(totalStockValue)}</p>
         </Card>
       </div>
 
       {/* Search + filter */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <Input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari material..."
-            className="pl-9"
+            className="pl-9 bg-slate-900 border-slate-700 text-slate-100 placeholder-slate-500"
           />
         </div>
         <Button
           variant={showLowStockOnly ? 'default' : 'outline'}
           size="sm"
           onClick={() => setShowLowStockOnly(!showLowStockOnly)}
-          className={showLowStockOnly ? 'bg-red-600 hover:bg-red-700' : ''}
+          className={showLowStockOnly ? 'bg-red-600 hover:bg-red-700' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
         >
           <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
           {showLowStockOnly ? 'Tampilkan Semua' : 'Hanya Low Stock'}
@@ -133,25 +137,25 @@ export function MaterialView() {
       </div>
 
       {/* Material table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden bg-slate-900/50 border-slate-800">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 border-b">
+            <thead className="bg-slate-800/80 border-b border-slate-700">
               <tr>
-                <th className="text-left p-2 font-medium text-slate-700">Material</th>
-                <th className="text-left p-2 font-medium text-slate-700">Kategori</th>
-                <th className="text-right p-2 font-medium text-slate-700">Stok</th>
-                <th className="text-right p-2 font-medium text-slate-700">Min Stock</th>
-                <th className="text-right p-2 font-medium text-slate-700">AVCO</th>
-                <th className="text-right p-2 font-medium text-slate-700">Nilai</th>
-                <th className="text-center p-2 font-medium text-slate-700">Status</th>
-                <th className="text-center p-2 font-medium text-slate-700">Aksi</th>
+                <th className="text-left p-2 font-medium text-slate-300">Material</th>
+                <th className="text-left p-2 font-medium text-slate-300">Kategori</th>
+                <th className="text-right p-2 font-medium text-slate-300">Stok</th>
+                <th className="text-right p-2 font-medium text-slate-300">Min</th>
+                <th className="text-right p-2 font-medium text-slate-300">AVCO</th>
+                <th className="text-right p-2 font-medium text-slate-300">Nilai</th>
+                <th className="text-center p-2 font-medium text-slate-300">Status</th>
+                <th className="text-center p-2 font-medium text-slate-300">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {materials.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-slate-400">
+                  <td colSpan={8} className="text-center py-8 text-slate-500">
                     Tidak ada material ditemukan
                   </td>
                 </tr>
@@ -161,32 +165,32 @@ export function MaterialView() {
                   const avgPrice = m.stock?.avgPrice || 0
                   const isLow = qty <= m.minStock
                   return (
-                    <tr key={m.id} className="border-b hover:bg-slate-50">
-                      <td className="p-2 font-medium text-slate-800">{m.name}</td>
-                      <td className="p-2 text-slate-600">
-                        <Badge variant="outline" className="text-[9px]">{m.category?.name || '—'}</Badge>
+                    <tr key={m.id} className="border-b border-slate-800 hover:bg-slate-800/40">
+                      <td className="p-2 font-medium text-slate-100">{m.name}</td>
+                      <td className="p-2 text-slate-400">
+                        <Badge variant="outline" className="text-[9px] border-slate-600 text-slate-400">{m.category?.name || '—'}</Badge>
                       </td>
-                      <td className="p-2 text-right font-mono">
-                        {qty.toLocaleString('id-ID')} <span className="text-slate-400">{m.unitMeasure}</span>
+                      <td className="p-2 text-right font-mono text-slate-200">
+                        {qty.toLocaleString('id-ID')} <span className="text-slate-500">{m.unitMeasure}</span>
                       </td>
                       <td className="p-2 text-right text-slate-500 font-mono">{m.minStock.toLocaleString('id-ID')}</td>
-                      <td className="p-2 text-right font-mono">{fmt(avgPrice)}</td>
-                      <td className="p-2 text-right font-mono font-medium">{fmt(qty * avgPrice)}</td>
+                      <td className="p-2 text-right font-mono text-slate-300">{fmt(avgPrice)}</td>
+                      <td className="p-2 text-right font-mono font-medium text-slate-200">{fmt(qty * avgPrice)}</td>
                       <td className="p-2 text-center">
                         {isLow ? (
-                          <Badge variant="destructive" className="text-[9px]">
+                          <Badge variant="destructive" className="text-[9px] bg-red-900/60 text-red-200 border-red-700">
                             <AlertTriangle className="w-2.5 h-2.5 mr-0.5" /> LOW
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="text-[9px] bg-emerald-100 text-emerald-700">OK</Badge>
+                          <Badge variant="secondary" className="text-[9px] bg-emerald-900/60 text-emerald-200 border-emerald-700">OK</Badge>
                         )}
                       </td>
                       <td className="p-2 text-center">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px]"
-                          onClick={() => toast.info('Opname modal akan datang di iterasi berikutnya')}
+                          className="h-6 text-[10px] text-amber-400 hover:bg-amber-900/30 hover:text-amber-300"
+                          onClick={() => setOpnameMaterial(m)}
                         >
                           <Wrench className="w-3 h-3 mr-1" /> Opname
                         </Button>
@@ -200,9 +204,18 @@ export function MaterialView() {
         </div>
       </Card>
 
-      <p className="text-[10px] text-slate-400 pt-2">
-        💡 Phase D v1: read-only material list + low-stock alert. Form input (material baru + opname + usage) akan datang di iterasi berikutnya.
-      </p>
+      {/* MODALS */}
+      {materialFormOpen && (
+        <MaterialFormModal open={materialFormOpen} onClose={() => setMaterialFormOpen(false)} onSaved={fetchMaterials} />
+      )}
+      {opnameMaterial && (
+        <OpnameModal
+          open={!!opnameMaterial}
+          material={opnameMaterial}
+          onClose={() => setOpnameMaterial(null)}
+          onSaved={fetchMaterials}
+        />
+      )}
     </div>
   )
 }
