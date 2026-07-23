@@ -16,8 +16,13 @@ import { WageList } from './wage-list'
 import { ExpenseList } from './expense-list'
 import { MemoList } from './memo-list'
 import { RabComparison } from './rab-comparison'
+import { SupplierManagement } from './supplier-management'
+import { WageFormModal } from './wage-form'
+import { ExpenseFormModal } from './expense-form'
+import { ProjectSettings } from './project-settings'
+import { Store, Settings } from 'lucide-react'
 
-type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab'
+type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab' | 'suppliers' | 'settings'
 
 interface DashboardData {
   kpi: { totalKeluarBlnIni: number; outstandingMaterial: number; outstandingUpah: number; outstandingOps: number; totalOutstanding: number }
@@ -66,6 +71,8 @@ export function FinanceView() {
     { id: 'expenses', label: 'Biaya Lain', icon: <Receipt className="w-3.5 h-3.5" /> },
     { id: 'memos', label: 'Memo Pengajuan', icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { id: 'rab', label: 'RAB vs Actual', icon: <TrendingDown className="w-3.5 h-3.5" /> },
+    { id: 'suppliers', label: 'Supplier', icon: <Store className="w-3.5 h-3.5" /> },
+    { id: 'settings', label: 'Pengaturan', icon: <Settings className="w-3.5 h-3.5" /> },
   ]
 
   return (
@@ -110,6 +117,8 @@ export function FinanceView() {
       {subTab === 'expenses' && <ExpenseList />}
       {subTab === 'memos' && <MemoList />}
       {subTab === 'rab' && <RabComparison />}
+      {subTab === 'suppliers' && <SupplierManagement />}
+      {subTab === 'settings' && <ProjectSettings />}
 
       {poFormOpen && <PoFormModal open={poFormOpen} onClose={() => setPoFormOpen(false)} onSaved={fetchData} />}
       {memoFormOpen && <MemoFormModal open={memoFormOpen} onClose={() => setMemoFormOpen(false)} onSaved={fetchData} />}
