@@ -3743,3 +3743,73 @@ Task 7-10 tetap deferred (nunggu kebutuhan + infra):
 - 10. RAB vs Actual comparison — bisa dikerjakan kapan saja, tinggal request
 
 ---
+
+## 30. ITERASI 4 — RAB vs Actual + Feature Ideas (23 Juli 2026)
+
+### 30.1 Task 10: RAB vs Actual Comparison ✅ DONE (commit `1ef2cac`)
+
+**Yang dikerjakan**:
+- `src/lib/finance/rab-comparison.ts` — computeRabComparison(projectId)
+  - Material: RABLine (planned) vs MaterialUsageItem (actual) per workItem
+  - Upah: WageType.price × unitCount vs sum(WagePayment.amount)
+  - Variance: actual - planned (positive = unfavorable, negative = favorable)
+  - Include unplanned spending detection (actual tanpa RAB → 100% over)
+- `GET /api/finance/reports/rab-comparison?projectId=XXX`
+- `src/components/finance/rab-comparison.tsx` — UI dengan project selector + 2 comparison tables + grand total summary
+- Sub-tab "RAB vs Actual" di Finance (TrendingDown icon)
+- Status badges: Hemat (green), Over (red), Pas (gray)
+
+### 30.2 Feature Ideas untuk Iterasi Mendatang (Owner Decision)
+
+Aku susun 12 ide fitur baru, grouped by value:
+
+#### HIGH VALUE (Recommended)
+
+| # | Fitur | Deskripsi | Estimasi |
+|---|-------|-----------|----------|
+| 1 | **Material Usage Form** | Form catat pemakaian material: pilih unit, pilih material, qty, workItem → auto-decrement stock + AVCO snapshot. Saat ini owner bisa opname tapi belum bisa catat usage dari UI. | 1-2 jam |
+| 2 | **Wage Form Modal** | Form create wage payment baru: pilih worker, wageType (auto-fill budget), unit, amount, workDescription. Saat ini cuma bisa via API. | 1 jam |
+| 3 | **Expense Form Modal** | Form create expense baru: kategori, penerima, amount, description, project/unit. Saat ini cuma bisa via API. | 1 jam |
+| 4 | **Supplier Management UI** | Halaman supplier: list, add, edit, view PO history per supplier + total hutang. Saat ini cuma dropdown di PO form. | 1-2 jam |
+| 5 | **Export CSV/Excel** | Export PO list, wage list, expense list ke CSV untuk accounting external (pajak, audit). | 1 jam |
+
+#### MEDIUM VALUE
+
+| # | Fitur | Deskripsi | Estimasi |
+|---|-------|-----------|----------|
+| 6 | **Cost per Unit Ranking** | Dashboard sub-tab: biaya per unit A1-A12, ranking termahal-termurah. Detect outlier. | 1-2 jam |
+| 7 | **Supplier Price Comparison** | Bandingkan harga material antar supplier. "Semen paling murah di toko mana?" | 2-3 jam |
+| 8 | **Budget Forecasting** | Berdasarkan RAB + actual cost per unit selesai, prediksi modal untuk unit yang belum dibangun. | 2-3 jam |
+| 9 | **Project Code Editor** | Owner edit project.code via dashboard (untuk set kode project yang belum ada). | 30 menit |
+| 10 | **Notification Badge** | Low stock alert + outstanding hutang jatuh tempo → badge angka di tab Finance/Material. | 1-2 jam |
+
+#### LOW VALUE (Nice to have)
+
+| # | Fitur | Deskripsi | Estimasi |
+|---|-------|-----------|----------|
+| 11 | **Site Plan Cost Heatmap** | Overlay biaya per unit di Site Plan (hijau=murah, merah=mahal). | 3-4 jam |
+| 12 | **DINA Telegram Generate Berkas** | DINA bot trigger generate SK Kerja + Slip Gaji via Telegram. Upload KTP → OCR → generate. | 3-5 jam |
+
+### 30.3 Rekomendasi Urutan
+
+**Batch A (form input lengkap, 4-5 jam)**:
+1. Material Usage Form
+2. Wage Form Modal
+3. Expense Form Modal
+4. Supplier Management UI
+5. Project Code Editor
+
+→ Setelah ini, owner bisa input SEMUA data dari UI (ga perlu API/manual).
+
+**Batch B (analisis, 4-6 jam)**:
+6. Cost per Unit Ranking
+7. Export CSV/Excel
+8. Supplier Price Comparison
+9. Budget Forecasting
+10. Notification Badge
+
+**Batch C (visual/advanced, 6-9 jam)**:
+11. Site Plan Cost Heatmap
+12. DINA Telegram Generate Berkas
+
+---
