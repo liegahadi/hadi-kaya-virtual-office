@@ -3569,31 +3569,172 @@ Setelah Vercel deploy selesai + owner verify dashboard Finance+Material jalan:
 6. Set webhook: `GET /api/telegram/rina/webhook?action=setup` (dan untuk dina)
 7. Test: chat bot di Telegram → `/start`
 
-### 28.6 Status Iterasi 2
+### 28.6 Status Iterasi 2 — ALL DONE ✅
 
-| Task | Status | Commit |
-|------|--------|--------|
-| UI Dark Theme Fix | ✅ DONE | (sama dengan form input) |
-| PO Form Modal | ✅ DONE | (sama) |
-| Memo Form Modal | ✅ DONE | (sama) |
-| Payment Modal | ✅ DONE | (sama) |
-| Material Form Modal | ✅ DONE | (sama) |
-| Opname Modal | ✅ DONE | (sama) |
-| RAB Integration (Anjayo 16) | ✅ DONE | seed-rab-anjayo-16.ts |
-| Laporan Bulanan PDF | ✅ DONE | report-monthly.ts + reports/[type]/route.ts |
-| Telegram Bot (RINA + DINA) | ✅ DONE | bot-handler.ts + telegram/[bot]/webhook/route.ts |
+Iterasi 2 selesai 23 Juli 2026. Semua task dikerjakan, tested (build pass), dan push ke `origin/main`. Owner tinggal pull + tunggu Vercel auto-deploy + test.
 
-### 28.7 Pending (Iterasi 3 — Future)
+| # | Task | Status | Commit | Files |
+|---|------|--------|--------|-------|
+| 1 | UI Dark Theme Fix | ✅ DONE | `3eeb883` | finance-view.tsx, material-view.tsx rewrite |
+| 2 | PO Form Modal | ✅ DONE | `3eeb883` | po-form.tsx (multi-item + directUse) |
+| 3 | Memo Form Modal | ✅ DONE | `3eeb883` | memo-form.tsx (select-all/search) |
+| 4 | Payment Modal | ✅ DONE | `3eeb883` | payment-modal.tsx (partial per-recipient) |
+| 5 | Material Form Modal | ✅ DONE | `3eeb883` | material-form.tsx |
+| 6 | Opname Modal | ✅ DONE | `3eeb883` | opname-modal.tsx (SET/DELTA + reason wajib) |
+| 7 | RAB Integration (Anjayo 16) | ✅ DONE | `21abeb0` | seed-rab-anjayo-16.ts (13 WageTypes + 26 RABLines) |
+| 8 | Laporan Bulanan PDF | ✅ DONE | `21abeb0` | report-monthly.ts + reports/[type]/route.ts |
+| 9 | Telegram Bot (RINA + DINA) | ✅ DONE | `694a056` | bot-handler.ts + telegram/[bot]/webhook/route.ts |
+| 10 | PRD Section 28 | ✅ DONE | `694a056` | this section |
 
-- Polish: filter PO by project, search, sorting
-- Laporan Tahunan PDF (advanced)
-- Laporan Per-Proyek PDF (lifecycle)
-- Bundle arsip PDF per-entity + monthly
-- Telegram bot: file upload → Google Drive
-- Telegram bot: LLM free text fallback (GLM-4.6)
-- WhatsApp bot (deferred — VPS Hostinger)
-- 9router integration (deferred)
-- RAB integration: comparison actual vs RAB per item pekerjaan
-- Multi-user + login (v2)
+**Verification**:
+- `npx tsc --noEmit`: ✓ (0 errors di semua file baru)
+- `npx next build`: ✓ Compiled successfully
+- Schema Aiven: ✓ (Phase A applied)
+- Data Aiven: ✓ (120 PO + 58 wage + 94 expense + 163 material + 13 WageTypes + 26 RABLines + 9 Workers + 44 Memos + 110 Usages)
+
+**Owner Action Required** (setelah Vercel deploy):
+1. Buka https://hadi-kaya-virtual-office.vercel.app → login
+2. Test tab Finance: UI dark theme, KPI tiles, cashflow chart, outstanding tables
+3. Test "Buat PO Baru" modal (pilih supplier/project/items, save)
+4. Test "Buat Memo Pengajuan" modal (pilih UNPAID items, save)
+5. Test "Bayar" button (payment modal, partial per-recipient)
+6. Test "Laporan Bulanan" button (PDF download di tab baru)
+7. Test tab Material: list 163 material, low-stock filter, "Material Baru" + "Opname" buttons
+8. Setup Telegram bot (opsional, lihat 28.5 step-by-step)
+
+### 28.7 Pending → Moved to Section 29 (Iterasi 3 Plan)
+
+Lihat section 29 untuk plan iterasi 3 yang lebih detail (urutan task, estimasi, priority).
+
+---
+
+## 29. ITERASI 3 PLAN — Next Steps (23 Juli 2026)
+
+> Plan untuk iterasi 3. Owner review → pilih mau mulai dari mana → aku kerjakan sesuai priority.
+> Estimasi waktu: 11-16 jam kerja aku (bisa di-batch per task).
+
+### 29.1 Priority Order + Estimasi
+
+| # | Task | Priority | Estimasi | Dependency | Value |
+|---|------|----------|----------|------------|-------|
+| 1 | Polish Finance UI | HIGH | 1-2 jam | — | Owner bisa browse 122 PO + filter by project/supplier/status/search |
+| 2 | Laporan Tahunan PDF | HIGH | 2-3 jam | Laporan Bulanan (DONE) | Owner bisa lihat annual report untuk tax + audit |
+| 3 | Laporan Per-Proyek PDF | HIGH | 2-3 jam | — | Owner bisa compare cost per project (mana paling mahal/profitable) |
+| 4 | Bundle Arsip PDF | MEDIUM | 2-3 jam | FileRef (DONE) | 1 PO + notas + transfer proof → 1 PDF arsip |
+| 5 | Telegram LLM Free Text | MEDIUM | 2-3 jam | Telegram Bot (DONE) | Owner chat natural "RINA, berapa total ke Toko Acil?" → AI jawab |
+| 6 | Telegram File Upload → Drive | MEDIUM | 2-3 jam | Telegram Bot (DONE) + Google Drive (DONE) | Foto evidence/nota auto-save ke Drive via bot |
+| 7 | WhatsApp Bot | LOW | 5-10 jam | VPS Hostinger (BELUM ADA) | Deferred sampai VPS ready |
+| 8 | Multi-user + Login | LOW | 5-10 jam | — | v2, kalau ada staff lain input |
+| 9 | 9router integration | LOW | 3-5 jam | VPS Hostinger | Deferred, paused |
+| 10 | RAB vs Actual comparison | LOW | 2-3 jam | RAB (DONE) | Compare realisasi vs RAB per item pekerjaan |
+
+### 29.2 Detail Per Task
+
+#### Task 1: Polish Finance UI (HIGH — quick win)
+
+**Masalah**: Owner import 122 PO, tapi dashboard Finance cuma show KPI + chart + outstanding. Ga ada list PO yang bisa di-browse/filter.
+
+**Yang akan dikerjakan**:
+- Tambah tab "List PO" di Finance (sub-tab: Dashboard | PO List | Wages | Expenses | Memos)
+- PO List: table dengan filter (project, supplier, status, search by poNumber)
+- Sorting (by date, amount, status)
+- Pagination (10-20 per page)
+- Click row → detail modal (PO items, payments, notas)
+- Download PO PDF button per row
+- Same pattern untuk Wages, Expenses, Memos list
+
+**Files**:
+- `src/components/finance/po-list.tsx` (new)
+- `src/components/finance/wage-list.tsx` (new)
+- `src/components/finance/expense-list.tsx` (new)
+- `src/components/finance/memo-list.tsx` (new)
+- Update `finance-view.tsx` dengan sub-tab navigation
+
+**Estimasi**: 1-2 jam
+
+#### Task 2: Laporan Tahunan PDF (HIGH)
+
+**Yang akan dikerjakan**:
+- `src/lib/finance/pdf/report-annual.ts` — generateAnnualReportPDF
+- Layout: 12 bulan breakdown (cashflow table + bar chart) + per project rollup + per supplier rollup + top spending categories
+- API: `GET /api/finance/reports/annual?year=2026` (sudah ada placeholder)
+- Button "Laporan Tahunan" di Finance dashboard → window.open API
+
+**Estimasi**: 2-3 jam
+
+#### Task 3: Laporan Per-Proyek PDF (HIGH)
+
+**Yang akan dikerjakan**:
+- `src/lib/finance/pdf/report-project.ts` — generateProjectReportPDF
+- Layout: project header + total cost-to-date + biaya per unit (ranking) + unit selesai vs WIP + outstanding hutang project + variance + timeline pembayaran
+- API: `GET /api/finance/reports/project?projectId=XXX` (sudah ada placeholder)
+- Tambah button "Laporan Per-Proyek" di Finance dashboard → modal pilih project → download PDF
+
+**Estimasi**: 2-3 jam
+
+#### Task 4: Bundle Arsip PDF (MEDIUM)
+
+**Yang akan dikerjakan**:
+- `src/lib/finance/pdf/bundle.ts` — bundleEntityPDF + bundleMonthlyPDF
+- Per-entity: merge PO doc + notas + transfer proofs → 1 PDF (pakai pdf-lib copyPages)
+- Monthly: semua money-out bulan itu → 1 PDF lengkap
+- API: `GET /api/finance/po/[id]/bundle` + `GET /api/finance/reports/bundle-monthly?month=YYYY-MM`
+- Per PRD 25.4 A12: bundle SEMUA money-out (PO + Wage + Expense)
+
+**Estimasi**: 2-3 jam
+
+#### Task 5: Telegram LLM Free Text (MEDIUM)
+
+**Yang akan dikerjakan**:
+- Update `src/lib/telegram/bot-handler.ts` — tambah LLM fallback
+- Pakai z-ai-web-dev-sdk (GLM-4.6, hard rule 10)
+- Flow: command tidak dikenali → kirim ke LLM dengan context (finance data summary) → LLM jawab natural
+- Contoh: "RINA, berapa total ke Toko Acil bulan ini?" → LLM parse intent → query DB → jawab "Total ke Toko Acil bulan Juli 2026: Rp 5.2jt dari 3 PO"
+- System prompt: RINA persona + finance tools list + DB schema summary
+
+**Estimasi**: 2-3 jam
+
+#### Task 6: Telegram File Upload → Drive (MEDIUM)
+
+**Yang akan dikerjakan**:
+- Update `src/lib/telegram/bot-handler.ts` — handle document/photo message
+- Download file dari Telegram (getFile API)
+- Upload ke Google Drive (reuse existing Google OAuth + Drive helper)
+- Save ke folder `/Telegram/{bot}/{date}/{filename}`
+- Create FileRef record (kind: WAGE_EVIDENCE | NOTA | TRANSFER_PROOF)
+- Reply ke user: "✅ File tersimpan: [Drive URL]"
+
+**Estimasi**: 2-3 jam
+
+### 29.3 Rekomendasi Urutan Eksekusi
+
+**Batch 1 (HIGH priority, 5-8 jam)**:
+1. Polish Finance UI (quick win, owner langsung bisa browse data)
+2. Laporan Tahunan PDF (tax/audit ready)
+3. Laporan Per-Proyek PDF (decision making)
+
+**Batch 2 (MEDIUM, 4-6 jam)**:
+4. Bundle Arsip PDF (arsip fisik)
+5. Telegram LLM Free Text (RINA jadi AI chat beneran)
+6. Telegram File Upload → Drive (evidence/nota auto-save)
+
+**Batch 3 (LOW, deferred)**:
+7-10. WhatsApp, multi-user, 9router, RAB vs Actual — nunggu kebutuhan + infra
+
+### 29.4 Owner Decision Required
+
+Pilih salah satu:
+
+**A** — Kerjakan Batch 1 (3 task: Polish + Laporan Tahunan + Laporan Per-Proyek). Estimasi 5-8 jam. Aku kerjakan bertahap, push per task.
+
+**B** — Kerjakan Batch 1 + 2 (6 task). Estimasi 9-14 jam. Lengkap sampai Telegram LLM + file upload.
+
+**C** — Kerjakan task tertentu saja (sebut nomor task, e.g., "task 1 + 3 saja").
+
+**D** — Test dulu iterasi 2 (yang udah deploy), baru tentukan iterasi 3.
+
+**E** — Lain (sebut sendiri).
+
+Default kalau owner ga jawab: **A** (Batch 1, quick win + 2 laporan penting).
 
 ---
