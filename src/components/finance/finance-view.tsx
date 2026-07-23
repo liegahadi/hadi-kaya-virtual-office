@@ -15,8 +15,9 @@ import { PoList } from './po-list'
 import { WageList } from './wage-list'
 import { ExpenseList } from './expense-list'
 import { MemoList } from './memo-list'
+import { RabComparison } from './rab-comparison'
 
-type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos'
+type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab'
 
 interface DashboardData {
   kpi: { totalKeluarBlnIni: number; outstandingMaterial: number; outstandingUpah: number; outstandingOps: number; totalOutstanding: number }
@@ -64,6 +65,7 @@ export function FinanceView() {
     { id: 'wages', label: 'Upah Tukang', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'expenses', label: 'Biaya Lain', icon: <Receipt className="w-3.5 h-3.5" /> },
     { id: 'memos', label: 'Memo Pengajuan', icon: <ClipboardList className="w-3.5 h-3.5" /> },
+    { id: 'rab', label: 'RAB vs Actual', icon: <TrendingDown className="w-3.5 h-3.5" /> },
   ]
 
   return (
@@ -107,6 +109,7 @@ export function FinanceView() {
       {subTab === 'wages' && <WageList />}
       {subTab === 'expenses' && <ExpenseList />}
       {subTab === 'memos' && <MemoList />}
+      {subTab === 'rab' && <RabComparison />}
 
       {poFormOpen && <PoFormModal open={poFormOpen} onClose={() => setPoFormOpen(false)} onSaved={fetchData} />}
       {memoFormOpen && <MemoFormModal open={memoFormOpen} onClose={() => setMemoFormOpen(false)} onSaved={fetchData} />}
