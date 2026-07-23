@@ -3813,3 +3813,27 @@ Aku susun 12 ide fitur baru, grouped by value:
 12. DINA Telegram Generate Berkas
 
 ---
+
+### 30.4 Ide Optimasi Tab Finance & Material (Additional)
+
+#### Finance Tab Optimizations:
+- **Quick stats per sub-tab** — badge count di sub-tab nav (e.g., "PO List [122]", "Upah [58]", "Memo [5 PENDING]")
+- **PO detail modal** — click row di PO List → modal detail (items, payments, notas, download PDF/bundle)
+- **Auto-refresh after form save** — setelah create PO/Wage/Expense/Memo, list auto-refresh
+- **Empty state illustrations** — ilustrasi + CTA kalau list kosong (bukan cuma text "Tidak ada")
+- **Sort indicators** — clickable column headers untuk sort by date/amount/status
+- **Bulk actions** — select multiple PO → mark PAID / void / bundle PDF
+- **Search global** — 1 search box search across PO + Wage + Expense + Memo
+- **Date range filter** — filter by date range (dari-tanggal sampai-tanggal)
+- **Currency format consistency** — semua angka pakai format "Rp 1.234.567" (titik ribuan)
+
+#### Material Tab Optimizations:
+- **Stock card view** — toggle table/card view (card lebih visual, table lebih dense)
+- **Material detail modal** — click material → modal detail (kartu stok: in/out history, AVCO trend chart, usage per unit)
+- **Quick opname from table** — inline edit stok langsung di table (ga perlu buka modal)
+- **Category filter** — filter material by category (Pondasi, Badan Rumah, dll)
+- **Stock value chart** — mini chart trend nilai stok 6 bulan
+- **Low stock threshold editor** — inline edit minStock per material
+- **Material usage history** — sub-tab di material: list 110 usages dengan filter unit/project
+- **Return to stock action** — button di material detail untuk return sisa material ke gudang
+---
