@@ -3886,3 +3886,67 @@ Aku susun 12 ide fitur baru, grouped by value:
 - Bundle Monthly → /api/finance/reports/bundle-monthly?month=YYYY-MM
 
 ---
+
+### 30.6 Cross-Check baca plis.txt vs Kode — VERIFIED ✅
+
+Semua 15 keputusan utama dari diskusi owner dengan Claude Code (baca plis.txt) sudah sesuai dengan kode yang aku bangun.
+
+### 30.7 Ide Fitur Baru untuk Finance & Material (Iterasi 5+)
+
+#### FINANCE — Yang Bikin Lebih Cantik & Fungsional:
+
+1. **PO Detail Modal** — click row di PO List → modal detail dengan items table, payment history, nota list, download PDF/bundle buttons. Sekarang cuma bisa download PDF, belum bisa lihat detail.
+
+2. **Dashboard Auto-Refresh** — refresh data tiap 30 detik (polling) atau WebSocket realtime. Sekarang harus klik Refresh manual.
+
+3. **Search Global** — 1 search box di header Finance → search across PO + Wage + Expense + Memo + Material. Hasil dalam dropdown.
+
+4. **Date Range Filter** — filter semua list by date range (dari-tanggal sampai-tanggal). Sekarang cuma bisa filter status/project.
+
+5. **PO Status Workflow Visual** — progress bar visual di PO List: DRAFT → ORDERED → RECEIVED → PARTIAL_PAID → PAID. Lebih intuitive.
+
+6. **Outstanding Aging** — warna berbeda berdasarkan umur hutang: < 7 hari (hijau), 7-30 hari (kuning), > 30 hari (merah). Bikin prioritas jelas.
+
+7. **Quick Add Buttons di List** — di PO List/Wage List/Expense List, tombol "+ Tambah" langsung di header list (ga perlu balik ke Dashboard).
+
+8. **Bulk Payment** — select multiple items di Outstanding → "Bayar Semua Terpilih" → 1 Payment untuk multiple recipients.
+
+9. **Supplier Performance Score** — rating supplier berdasarkan: on-time delivery, harga kompetitif, quality. Bantu owner pilih supplier terbaik.
+
+10. **Cash Flow Forecast** — prediksi kas keluar bulan depan berdasarkan: PO UNPAID + Wage UNPAID + Expense UNPAID + recurring expenses (paymentCycle WEEKLY/MONTHLY).
+
+#### MATERIAL — Yang Bikin Lebih Cantik & Fungsional:
+
+11. **Material Detail Modal** — click material → modal dengan kartu stok (in/out history timeline), AVCO trend chart, usage per unit breakdown, low stock threshold editor.
+
+12. **Stock Movement Timeline** — visual timeline semua StockAdjustment per material (INITIAL → PO_RECEIVED → USAGE_OUT → OPNAME → RETURN_TO_STOCK). Like a stock card.
+
+13. **Material Usage Form dari Material Tab** — tombol "Catat Pemakaian" langsung di Material tab (ga perlu balik ke Finance Dashboard).
+
+14. **Category Filter + Group** — filter material by category, group by category dalam table (collapsible sections per category).
+
+15. **Stock Value Dashboard** — mini dashboard di Material tab: total nilai stok, trend 6 bulan, top 10 material termahal, breakdown per category (pie chart).
+
+16. **Low Stock Auto-Alert via Telegram** — kalau material jatuh di bawah minStock, RINA bot otomatis kirim notifikasi ke owner.
+
+17. **Material Price History Chart** — track harga beli per material over time (dari PO items). Visual kenaikan harga semen, bata, dll.
+
+18. **Return to Stock Action** — button di Material detail untuk return sisa material dari unit selesai ke gudang (type: RETURN_TO_STOCK).
+
+19. **Stock Opname Batch** — opname multiple material sekaligus (upload CSV: material, actual_qty, reason). Hemat waktu opname bulanan.
+
+20. **Material Master Bulk Import** — upload CSV untuk tambah/edit multiple materials sekaligus (nama, kategori, satuan, minStock, harga).
+
+#### CROSS-FINANCE-MATERIAL:
+
+21. **Project Dashboard** — 1 halaman per project: summary cost + RAB comparison + unit ranking + supplier breakdown + timeline. "1 click lihat semua tentang project A16".
+
+22. **Weekly Closing Report** — setiap Jumat, auto-generate summary: PO baru + wage dibayar + expense + outstanding + stock alert. Kirim ke Telegram/email.
+
+23. **Budget Alert** — kalau actual cost per unit melewati RAB, alert otomatis (UI badge + Telegram notif). "Unit E1 over budget 15%!"
+
+24. **Cost per Unit Trend** — chart biaya per unit dari waktu ke waktu. Detect kenaikan biaya konstruksi antar unit.
+
+25. **Supplier Bank Directory** — 1 halaman daftar semua bank account (supplier + worker), bisa export ke PDF untuk transfer instruction.
+
+---

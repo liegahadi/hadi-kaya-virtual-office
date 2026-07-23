@@ -1,0 +1,243 @@
+# PERCAKAPAN HADI KAYA VIRTUAL OFFICE
+# Export: 22 Juli 2026 - 23 Juli 2026
+# Platform: z.ai web chat (GLM model)
+# Topic: Finance & Material Module Development
+
+## RINGKASAN HARIAN
+
+### 22 Juli 2026
+
+#### Session Start - Migration & Planning
+- User request migrate chat ke LLM/Cursor
+- Aku bikin migration kit (SESSION_HANDOFF.md, .cursorrules, FIRST_MESSAGE_LLM.md)
+- Save reference files ke GitHub (docs/finance-reference/): backup JSON + 7 PDFs + RAB xlsx
+- Scrub Aiven password dari PRD (push protection issue)
+- Add PRD section 25 (Finance Module LOCKED DECISIONS) - 487 lines
+- Add PRD section 26 (Telegram Bot Plan) - 170 lines
+- Commit: 507b1b3, 73e2a7a, 2da71d4
+
+#### Phase A - Prisma Schema Migration (DONE)
+- Drop 5 stale models: PO, POLine, SupplierPayment, FundRequest, MaterialStock
+- Rewrite MaterialUsage (name preserved)
+- Add 14 new models: PurchaseOrder, POItem, Nota, Payment, WageType, WagePayment, OtherExpense, Worker, Memo, MemoLine, Material, Category, Stock, StockAdjustment, MaterialUsageItem, FileRef
+- Modify: Project.code @unique, Supplier + bank fields, Unit + back-relations
+- Verification: prisma validate ✓, prisma generate ✓, next build ✓
+- Commit: 3210d8a
+
+#### Phase B - Import Backup JSON (DONE)
+- Bikin scripts/import-finance-backup.ts (688 lines)
+- Import 13 section dari backup-18072026.json
+- 8 Projects, 21 Units, 20 Suppliers, 15 Categories, 163 Materials, 24 WageTypes
+- 9 Workers auto-seed (Heri, Wasku, Remy, Arif, Damar, Gellent, Koni, Parto, Yayat)
+- 120 PurchaseOrders + POItems + Payments
+- 58 WagePayments, 94 OtherExpenses, 44 Memos + MemoLines
+- 163 Stocks + StockAdjustments, 110 MaterialUsages + Items
+- Commit: 0a48052
+
+#### Phase C - API Routes + Lib (DONE)
+- 4 lib files: po-number.ts, avco.ts, status.ts, terbilang.ts
+- 13 API routes: dashboard, po (CRUD+PDF), suppliers, wages, expenses, payments, memos (+pay), material (CRUD+usage+stock+adjust)
+- Cleanup: remove stale daily-expense, weekly-report, old po routes
+- Rewrite database-explorer/finance + material pakai model baru
+- Fix inter-agent.ts (db.pO → db.purchaseOrder, db.materialStock → db.stock)
+- Commit: 93b493e
+
+#### Phase D - Dashboard UI v1 (DONE)
+- Finance tab: Layout A (4 KPI + cashflow chart + 2 outstanding tables + Memo/Laporan buttons)
+- Material tab: 3 summary tiles + search + filter + material table + low-stock alert
+- Commit: dbffa50
+
+#### Phase E - Basic PDF (DONE)
+- generatePoPDF (PO document: kop + no PO + supplier + table material + total + terbilang + tanda tangan)
+- generateBuktiKasKeluarPDF (voucher per-recipient)
+- API: /api/finance/po/[id]/pdf + /api/finance/payments/[id]/bukti-kas-keluar
+- Commit: d87c7d0
+
+#### Vercel-Only Setup (DONE)
+- Owner pusing dengan PowerShell env var syntax
+- Aku push schema + import data langsung dari sandbox ke Aiven
+- Bikin /api/admin/import-backup route (re-import dari browser)
+- Bikin src/lib/finance/import-backup.ts (shared lib)
+- Update PRD section 27 (Vercel-only setup)
+- Commit: d6e8f8f
+
+### 23 Juli 2026
+
+#### Iterasi 2 - UI Fix + Form Input + RAB + Laporan + Telegram
+
+##### UI Dark Theme Fix
+- Problem: Finance/Material pakai text-slate-800 (dark) di bg white → ga keliatan di dark theme app
+- Fix: Rewrite finance-view.tsx + material-view.tsx dengan slate-900/800 bg + slate-100/300 text
+- KPI tiles: bg-{color}-950/40 (subtle)
+- Recharts tooltip: bg-slate-900
+
+##### Form Input UI (5 modals)
+1. po-form.tsx — multi-item PO dengan directUse checkbox, format ribuan, planned total auto-calc
+2. memo-form.tsx — pilih UNPAID items, search, select-all, tipe W/D
+3. payment-modal.tsx — partial per-recipient, bank override, method TRANSFER/CASH/GIRO
+4. material-form.tsx — create material + init stock + minStock + lastPrice
+5. opname-modal.tsx — SET/DELTA mode, reason wajib (audit log)
+
+##### RAB Integration
+- scripts/seed-rab-anjayo-16.ts
+- RAB Upah Tukang: 13 pekerjaan standard (total Rp 21M per rumah)
+  1. Pondasi + Cor Sloof + Pasang Bata 3 keping — Rp 1.2M
+  2. Subsitank — Rp 800K
+  3. Pasang Bata + Tebeng Layar — Rp 4.5M
+  4. Rangka Atap — Rp 1.5M
+  5. Plester Keliling — Rp 4M
+  6. Instalasi 11 Titik — Rp 350K
+  7. Pemasangan Plafon — Rp 1.1M
+  8. Pasang Keramik — Rp 1.9M
+  9. Pasang Pintu — Rp 350K
+  10. Meja Dapur + Carpot — Rp 1M
+  11. Pengecatan — Rp 1M
+  12. Serah Terima — Rp 2.1M
+  13. Retensi — Rp 1.2M
+- RAB Material: 26 lines (total Rp 52.8M per rumah)
+- Material.minStock benchmark: Semen=60, Bata=3000, Pasir=5, Batu Cor=1, Gypsum=20
+- Run ke Aiven: ✓
+- Commit: 21abeb0
+
+##### Laporan Bulanan PDF
+- src/lib/finance/pdf/report-monthly.ts
+- Layout: kop + judul + ringkasan KPI + 5 detail sections:
+  1. Pembelian Material per Supplier (variance planned vs actual)
+  2. Pembayaran Upah per Unit (worker, pekerjaan, amount, budget, %)
+  3. Upah per Blok (aggregate)
+  4. Pemakaian Material per Unit (qty, AVCO price, subtotal, source)
+  5. Biaya Lain-lain (kategori, penerima, amount)
+- API: /api/finance/reports/[type]/route.ts (monthly)
+
+##### Telegram Bot (RINA + DINA)
+- src/lib/telegram/bot-handler.ts — shared handler
+- src/app/api/telegram/[bot]/webhook/route.ts — Vercel webhook receiver
+- RINA commands: /outstanding, /cashflow, /stock, /cost A12, /project A16, /memo
+- DINA commands: /konsumen, /berkas
+- Inline keyboard menu
+- Auth: whitelist owner chat ID (TELEGRAM_OWNER_CHAT_ID)
+- Setup: @BotFather → token → env vars → /api/telegram/{bot}/webhook?action=setup
+- Commit: 694a056
+
+##### PRD Updates
+- Section 28 (Iterasi 2): UI Fix + Form Input + RAB + Laporan + Telegram
+- Section 29 (Iterasi 3 Plan): 10 task dengan priority + estimasi
+- Commit: 7a01d82
+
+#### Iterasi 3 - Polish + Laporan + Bundle + Telegram LLM + File Upload
+
+##### Task 1: Polish Finance UI
+- Sub-tab navigation: Dashboard | PO | Wages | Expenses | Memos
+- po-list.tsx: filter (status, project), search, pagination 20/page, PDF download
+- wage-list.tsx: filter status, search
+- expense-list.tsx: filter status + category, search
+- memo-list.tsx: filter status, search
+- Commit: 761dc0f
+
+##### Task 2: Laporan Tahunan PDF
+- src/lib/finance/pdf/report-annual.ts
+- Layout: ringkasan KPI tahunan + 4 sections:
+  1. Cashflow 12 bulan
+  2. Biaya per Proyek (sorted by total)
+  3. Top 20 Supplier (poCount, total, %)
+  4. Top 15 Spending Categories
+- API: /api/finance/reports/annual?year=2026
+- Commit: 95bb9f6
+
+##### Task 3: Laporan Per-Proyek PDF
+- src/lib/finance/pdf/report-project.ts
+- Layout: project header + ringkasan biaya + 2 sections:
+  1. Biaya per Unit (urut termahal)
+  2. Timeline Pembayaran (20 terbaru)
+- API: /api/finance/reports/project?projectId=XXX
+- Commit: 95bb9f6
+
+##### Task 4: Bundle Arsip PDF
+- src/lib/finance/pdf/bundle.ts
+- bundlePoPDF: merge PO doc + payment proofs → 1 PDF
+- bundleMonthlyPDF: semua money-out bulan itu → 1 PDF
+- API: /api/finance/po/[id]/bundle + /api/finance/reports/bundle-monthly
+- Commit: dbf7667
+
+##### Task 5: Telegram LLM Free Text (GLM-4.6)
+- handleFreeText(): command tidak dikenali → call z-ai GLM-4.6
+- RINA: fetch /api/finance/dashboard → build finance context (KPI + top 5 outstanding)
+- System prompt RINA persona + DINA persona
+- callZaiChat(): direct fetch z-ai API (hardcoded config + X-Token header)
+- Response truncated to 4000 chars (Telegram limit)
+- Commit: 66811b7
+
+##### Task 6: Telegram File Upload → Drive
+- handleFileUpload(): download file dari Telegram → upload ke Google Drive
+- Folder: Telegram-{botName}-{date} (auto-create)
+- Set permission: anyone with link can view
+- Save FileRef record to DB
+- Reply: "✅ File tersimpan! [Drive URL]"
+- Commit: 66811b7
+
+#### Iterasi 4 - RAB vs Actual + Form Input Lengkap + Export
+
+##### Task 10: RAB vs Actual Comparison
+- src/lib/finance/rab-comparison.ts — computeRabComparison(projectId)
+- Material: RABLine (planned) vs MaterialUsageItem (actual) per workItem
+- Upah: WageType.price × unitCount vs sum(WagePayment.amount)
+- Variance: favorable (green) / unfavorable (red) / on target (gray)
+- UI: src/components/finance/rab-comparison.tsx (project selector + 2 tables + grand total)
+- API: /api/finance/reports/rab-comparison
+- Commit: 1ef2cac
+
+##### Batch A: Form Input Lengkap
+- A1: usage-form.tsx — catat pemakaian material (multi-item, auto-decrement stock + AVCO)
+- A2: wage-form.tsx — catat upah tukang (auto-fill budget, variance warning)
+- A3: expense-form.tsx — catat biaya lain (19 kategori)
+- A4: supplier-management.tsx — list/add/edit suppliers dengan bank details
+- A5: project-settings.tsx — edit project code (for PO number generation)
+- API: /api/finance/workers, /api/finance/wage-types, PATCH /api/projects/[id]
+- Sub-tab baru: Supplier + Pengaturan
+- Commit: 52f77a5
+
+##### Batch B: Cost per Unit + Export CSV
+- B6: cost-per-unit.tsx — ranking biaya per unit (material + upah + ops) + bar chart
+- B7: /api/finance/export?type=po|wages|expenses&format=csv — CSV export
+- Sub-tab baru: Cost per Unit
+- Commit: 1af6560
+
+##### PRD Updates
+- Section 30 (Iterasi 4): RAB vs Actual + 12 feature ideas + optimasi ideas
+- Section 30.5: Status ALL DONE
+- Commit: 9b957cb, 284f41e, 8a168fa
+
+## TOTAL COMMITS (22-23 Juli 2026)
+1. 507b1b3 - PRD section 25
+2. 73e2a7a - Reference files
+3. 2da71d4 - PRD section 26
+4. 3210d8a - Phase A schema
+5. 0a48052 - Phase B import script
+6. 93b493e - Phase C API routes
+7. dbffa50 - Phase D dashboard UI
+8. d87c7d0 - Phase E basic PDF
+9. d6e8f8f - Vercel-only setup
+10. 3eeb883 - UI dark theme + form input
+11. 21abeb0 - RAB seed + Laporan Bulanan
+12. 694a056 - Telegram Bot
+13. 7a01d82 - PRD section 28+29
+14. 761dc0f - Polish Finance UI
+15. 95bb9f6 - Laporan Tahunan + Per-Proyek
+16. dbf7667 - Bundle Arsip PDF
+17. 66811b7 - Telegram LLM + File Upload
+18. ad1df79 - PRD section 29 ALL DONE
+19. 1ef2cac - RAB vs Actual
+20. 9b957cb - PRD section 30
+21. 284f41e - PRD section 30.4
+22. 52f77a5 - Batch A form input
+23. 1af6560 - Batch B cost per unit + export
+24. 8a168fa - PRD section 30.5
+
+## TOTAL FILES CREATED/MODIFIED
+- Prisma schema: 1 (739 insertions, 504 deletions)
+- Lib files: 10 (po-number, avco, status, terbilang, import-backup, rab-comparison, 4 PDF generators)
+- API routes: 20+ (finance CRUD, reports, telegram, admin, export)
+- Components: 15+ (finance-view, material-view, 5 form modals, 4 list components, rab-comparison, cost-per-unit, supplier-management, project-settings)
+- Scripts: 2 (import-finance-backup, seed-rab-anjayo-16)
+- PRD: 2591 → 3883 lines (+1292 lines)
+- Docs: 9 reference files (backup JSON + 7 PDFs + RAB xlsx + README)
