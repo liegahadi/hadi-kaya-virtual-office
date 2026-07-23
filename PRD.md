@@ -4007,3 +4007,39 @@ Semua 15 keputusan utama dari diskusi owner dengan Claude Code (baca plis.txt) s
 2. **Tracking per Pekerjaan** (NEW)
 
 ---
+
+### 30.9 Status Semua 25+2 Ide Fitur — ALL DONE ✅ (23 Juli 2026)
+
+| # | Fitur | Status | Commit |
+|---|-------|--------|--------|
+| 1 | PO Detail Modal | ✅ DONE | 355e1e1 |
+| 2 | Dashboard Auto-Refresh | ❌ SKIP (owner request) | — |
+| 3 | Search Global | ✅ DONE | a16d4a5 |
+| 4 | Bundle Bulanan button | ✅ DONE | 50aa1be |
+| 5 | PO Status Visual (aging colors) | ✅ DONE | a16d4a5 |
+| 6 | Outstanding Aging | ✅ DONE | a16d4a5 |
+| 7 | Quick Add Buttons di List | ✅ DONE | 355e1e1 |
+| 8 | Bulk Payment | ✅ DONE | a16d4a5 |
+| 9 | Supplier Performance Score | ✅ DONE | 99ab397 |
+| 10 | Cash Flow Forecast (expanded) | ✅ DONE | ba2975e |
+| 11 | Material Detail (Category Tracking) | ✅ DONE | ba2975e |
+| 12 | Stock Movement Timeline | ✅ DONE | 3a569d2 |
+| 13 | Material Usage Form dari Material Tab | ✅ DONE | 355e1e1 |
+| 14 | Category Filter + Group (expanded) | ✅ DONE | ba2975e |
+| 15 | Stock Value Dashboard | ✅ DONE | 3a569d2 |
+| 16 | Low Stock Auto-Alert | ✅ DONE | 99ab397 |
+| 17 | Material Price History Chart | ✅ DONE | 3a569d2 |
+| 18 | Return to Stock Action | ✅ DONE | 3a569d2 |
+| 19 | Stock Opname Batch | ✅ DONE | 3a569d2 |
+| 20 | Material Master Bulk Import | ✅ DONE | 3a569d2 |
+| 21 | Project Dashboard (per project + per unit) | ✅ DONE | ba2975e |
+| 22 | Weekly Closing Report | ✅ DONE | 99ab397 |
+| 23 | Budget Alert | ✅ DONE | 99ab397 |
+| 24 | Cost per Unit Trend | ✅ DONE | 99ab397 |
+| 25 | Supplier Bank Directory | ✅ DONE | 99ab397 |
+| +1 | Nota Upload API | ✅ DONE | 99ab397 |
+| +2 | Transfer Proof Upload API | ✅ DONE | 99ab397 |
+
+**Total: 26 DONE, 1 SKIP (auto-refresh) = 27/27 tasks complete**
+
+---
