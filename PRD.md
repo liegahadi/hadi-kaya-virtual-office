@@ -3706,35 +3706,40 @@ Lihat section 29 untuk plan iterasi 3 yang lebih detail (urutan task, estimasi, 
 
 **Estimasi**: 2-3 jam
 
-### 29.3 Rekomendasi Urutan Eksekusi
+### 29.3 Status Iterasi 3 — ALL DONE ✅ (23 Juli 2026)
 
-**Batch 1 (HIGH priority, 5-8 jam)**:
-1. Polish Finance UI (quick win, owner langsung bisa browse data)
-2. Laporan Tahunan PDF (tax/audit ready)
-3. Laporan Per-Proyek PDF (decision making)
+Owner pilih "langsung lanjutkan semuanya" → semua 6 task dikerjakan, tested, push ke `origin/main`.
 
-**Batch 2 (MEDIUM, 4-6 jam)**:
-4. Bundle Arsip PDF (arsip fisik)
-5. Telegram LLM Free Text (RINA jadi AI chat beneran)
-6. Telegram File Upload → Drive (evidence/nota auto-save)
+| # | Task | Status | Commit | Files |
+|---|------|--------|--------|-------|
+| 1 | Polish Finance UI | ✅ DONE | `761dc0f` | po-list.tsx, wage-list.tsx, expense-list.tsx, memo-list.tsx, finance-view.tsx (sub-tab nav) |
+| 2 | Laporan Tahunan PDF | ✅ DONE | `95bb9f6` | report-annual.ts + reports/[type]/route.ts (annual implemented) |
+| 3 | Laporan Per-Proyek PDF | ✅ DONE | `95bb9f6` | report-project.ts + reports/[type]/route.ts (project implemented) |
+| 4 | Bundle Arsip PDF | ✅ DONE | `dbf7667` | bundle.ts (bundlePoPDF + bundleMonthlyPDF) + po/[id]/bundle/route.ts + reports/bundle-monthly/route.ts |
+| 5 | Telegram LLM Free Text | ✅ DONE | `66811b7` | bot-handler.ts (handleFreeText + callZaiChat GLM-4.6 + finance context) |
+| 6 | Telegram File Upload → Drive | ✅ DONE | `66811b7` | bot-handler.ts (handleFileUpload: download dari Telegram → upload ke Drive → save FileRef) |
 
-**Batch 3 (LOW, deferred)**:
-7-10. WhatsApp, multi-user, 9router, RAB vs Actual — nunggu kebutuhan + infra
+**Verification**:
+- `npx tsc --noEmit`: ✓ (0 errors)
+- `npx next build`: ✓ Compiled successfully
 
-### 29.4 Owner Decision Required
+**Owner Action Required** (setelah Vercel deploy):
+1. Buka https://hadi-kaya-virtual-office.vercel.app → login
+2. Tab Finance → sub-tab "Purchase Orders" → browse 122 PO dengan filter+search
+3. Sub-tab "Upah Tukang" → browse 58 wages
+4. Sub-tab "Biaya Lain" → browse 94 expenses
+5. Sub-tab "Memo Pengajuan" → browse 44 memos
+6. Dashboard → "Laporan Tahunan" button → PDF download (12 bulan + per project + per supplier)
+7. Dashboard → "Laporan Per-Proyek" (access via /api/finance/reports/project?projectId=XXX)
+8. Setup Telegram bot (jika belum) → chat free text ke RINA → LLM jawab pakai finance context
+9. Kirim foto ke RINA bot → auto-upload ke Google Drive → reply dengan Drive URL
 
-Pilih salah satu:
+### 29.4 Batch 3 (LOW — Deferred)
 
-**A** — Kerjakan Batch 1 (3 task: Polish + Laporan Tahunan + Laporan Per-Proyek). Estimasi 5-8 jam. Aku kerjakan bertahap, push per task.
-
-**B** — Kerjakan Batch 1 + 2 (6 task). Estimasi 9-14 jam. Lengkap sampai Telegram LLM + file upload.
-
-**C** — Kerjakan task tertentu saja (sebut nomor task, e.g., "task 1 + 3 saja").
-
-**D** — Test dulu iterasi 2 (yang udah deploy), baru tentukan iterasi 3.
-
-**E** — Lain (sebut sendiri).
-
-Default kalau owner ga jawab: **A** (Batch 1, quick win + 2 laporan penting).
+Task 7-10 tetap deferred (nunggu kebutuhan + infra):
+- 7. WhatsApp Bot — butuh VPS Hostinger
+- 8. Multi-user + Login — v2, kalau ada staff lain input
+- 9. 9router integration — paused
+- 10. RAB vs Actual comparison — bisa dikerjakan kapan saja, tinggal request
 
 ---
