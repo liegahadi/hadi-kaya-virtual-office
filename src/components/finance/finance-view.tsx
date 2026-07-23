@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Wallet, TrendingDown, AlertTriangle, Package, Wrench, FileText, Plus, RefreshCw, ArrowUpRight, List, LayoutDashboard, Users, Receipt, ClipboardList } from 'lucide-react'
+import { Wallet, TrendingDown, AlertTriangle, Package, Wrench, FileText, Plus, RefreshCw, ArrowUpRight, List, LayoutDashboard, Users, Receipt, ClipboardList, Zap } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { PoFormModal } from './po-form'
 import { MemoFormModal } from './memo-form'
@@ -20,6 +20,8 @@ import { SupplierManagement } from './supplier-management'
 import { WageFormModal } from './wage-form'
 import { ExpenseFormModal } from './expense-form'
 import { UsageFormModal } from './usage-form'
+import { GlobalSearch } from './global-search'
+import { BulkPaymentModal } from './bulk-payment-modal'
 import { ProjectSettings } from './project-settings'
 import { CostPerUnit } from './cost-per-unit'
 import { CashForecast } from './cash-forecast'
@@ -50,6 +52,7 @@ export function FinanceView() {
   const [wageFormOpen, setWageFormOpen] = useState(false)
   const [expenseFormOpen, setExpenseFormOpen] = useState(false)
   const [usageFormOpen, setUsageFormOpen] = useState(false)
+  const [bulkPayOpen, setBulkPayOpen] = useState(false)
   const [paymentRecipient, setPaymentRecipient] = useState<{ name: string; type: string; amount: number; refId?: string } | null>(null)
 
   const fetchData = async () => {
@@ -97,6 +100,7 @@ export function FinanceView() {
         <Button variant="outline" size="sm" onClick={fetchData} disabled={refreshing} className="border-slate-700 text-slate-300 hover:bg-slate-800">
           <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
         </Button>
+        <GlobalSearch />
       </div>
 
       {/* Sub-tab nav */}
@@ -138,6 +142,7 @@ export function FinanceView() {
       {wageFormOpen && <WageFormModal open={wageFormOpen} onClose={() => setWageFormOpen(false)} onSaved={fetchData} />}
       {expenseFormOpen && <ExpenseFormModal open={expenseFormOpen} onClose={() => setExpenseFormOpen(false)} onSaved={fetchData} />}
       {usageFormOpen && <UsageFormModal open={usageFormOpen} onClose={() => setUsageFormOpen(false)} onSaved={fetchData} />}
+      {bulkPayOpen && data && <BulkPaymentModal open={bulkPayOpen} onClose={() => setBulkPayOpen(false)} onSaved={fetchData} items={data.outstanding.perPenerima} />}
       {paymentOpen && paymentRecipient && (
         <PaymentModal open={paymentOpen} onClose={() => { setPaymentOpen(false); setPaymentRecipient(null) }} onSaved={fetchData} recipient={paymentRecipient} />
       )}
@@ -190,11 +195,14 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen,
           <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1 dark-scrollbar">
             {data.outstanding.perPenerima.length === 0 ? (
               <p className="text-xs text-slate-500 text-center py-6">Tidak ada hutang belum dibayar 🎉</p>
-            ) : data.outstanding.perPenerima.map((p: any, i: number) => (
-              <div key={i} className="flex items-center justify-between p-2 bg-slate-800/50 rounded text-xs">
+            ) : data.outstanding.perPenerima.map((p: any, i: number) => {
+              // Aging: assume recent if no date, compute age from date if available
+              const ageColor = p.age > 30 ? 'border-l-2 border-red-500' : p.age > 7 ? 'border-l-2 border-amber-500' : 'border-l-2 border-emerald-500'
+              return (
+              <div key={i} className={`flex items-center justify-between p-2 bg-slate-800/50 rounded text-xs ${ageColor}`}>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-200 truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400">{p.type}{p.bankAccount ? ` • ${p.bankAccount}` : ''}</p>
+                  <p className="text-[10px] text-slate-400">{p.type}{p.bankAccount ? ` • ${p.bankAccount}` : ''}{p.age !== undefined ? ` • ${p.age}h` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 ml-2">
                   <span className="font-bold text-red-300">{fmt(p.amount)}</span>
@@ -203,7 +211,8 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen,
                   </Button>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </Card>
 
@@ -238,6 +247,9 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen,
         </Button>
         <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={onMemoFormOpen}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat Memo
+        </Button>
+        <Button size="sm" variant="outline" className="border-emerald-700 text-emerald-300 hover:bg-emerald-900/30" onClick={() => setBulkPayOpen(true)}>
+          <Zap className="w-3.5 h-3.5 mr-1.5" /> Bulk Bayar
         </Button>
         <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/monthly', '_blank')}>
           <FileText className="w-3.5 h-3.5 mr-1.5" /> Laporan Bulanan
