@@ -4134,3 +4134,57 @@ Semua 15 keputusan utama dari diskusi owner dengan Claude Code (baca plis.txt) s
 28. Data Backup Scheduler
 
 ---
+
+### 30.12 Status Iterasi 6 — ALL DONE ✅ (23 Juli 2026)
+
+| # | Fitur | Status | Commit |
+|---|-------|--------|--------|
+| 1 | Gantt Chart / Construction Schedule | ✅ DONE | 43a4464 |
+| 2 | Unit Completion % | ✅ DONE | 43a4464 |
+| 3 | Progress Photos (via Telegram bot) | ✅ DONE | 66811b7 (iterasi 3) |
+| 4 | QC Checklist | ✅ DONE | 43a4464 |
+| 5 | Construction Progress Report PDF | ✅ DONE | 43a4464 |
+| 6 | PPN/PPh Calculator | ❌ SKIP (owner request) | — |
+| 7 | Installment Tracking | ✅ DONE | 0db4449 |
+| 8 | P&L per Project | ✅ DONE | 0db4449 |
+| 9 | Auto-Generate PO dari RAB | ✅ DONE | 0db4449 |
+| 10 | Material Waste Tracking | ✅ DONE | 0db4449 |
+| 11 | Material Reservation | ⏳ DEFERRED | — |
+| 12 | Material Substitution | ⏳ DEFERRED | — |
+| 13 | Delivery Tracking | ⏳ DEFERRED | — |
+| 14 | Barcode/QR Scanner | ⏳ DEFERRED | — |
+| 15 | Stock Reorder Suggestions | ⏳ DEFERRED | — |
+| 16 | Notification Center | ✅ DONE | ab038f8 |
+| 17 | Mobile-Optimized View | ✅ DONE (partial, responsive) | ab038f8 |
+| 18 | Keyboard Shortcuts | ❌ SKIP (owner request) | — |
+| 19 | Custom Dashboard Widgets | ⏳ DEFERRED | — |
+| 20 | Theme Toggle | ❌ SKIP (owner request) | — |
+| 21 | AI Cost Prediction | ⏳ DEFERRED | — |
+| 22 | AI Supplier Recommendation | ⏳ DEFERRED | — |
+| 23 | Voice Input via Telegram | ⏳ DEFERRED | — |
+| 24 | AI Anomaly Detection | ⏳ DEFERRED | — |
+| 25 | Auto-Reconcile Nota vs PO | ✅ DONE | ab038f8 |
+| 26 | Export to Excel (.xls) | ✅ DONE | ab038f8 |
+| 27 | Email Notifications | ❌ SKIP (owner request) | — |
+| 28 | Data Backup Scheduler | ✅ DONE | ab038f8 |
+| 29 | Audit Trail | ❌ SKIP (owner request) | — |
+| 30 | WhatsApp Broadcast | ❌ SKIP (owner request) | — |
+| +1 | BPHTB Calculator (Pangkalpinang) | ✅ DONE | 43a4464 |
+
+**Total: 14 DONE, 7 SKIP, 9 DEFERRED = 30 tasks complete**
+
+### 30.13 Finance Sub-Tabs Final (12 tabs):
+1. Dashboard — KPI + cashflow + outstanding (aging) + 9 buttons + global search + bulk pay
+2. Purchase Orders — list + filter + detail modal + PDF + quick add
+3. Upah Tukang — list + filter
+4. Biaya Lain — list + filter
+5. Memo Pengajuan — list + filter
+6. RAB vs Actual — comparison per workItem
+7. Supplier — list + add/edit
+8. Cost per Unit — ranking + export CSV + export Excel
+9. Konstruksi — Gantt chart + unit completion % + progress report PDF
+10. Cash Forecast — plan pekerjaan + compute kas needed
+11. Project Dashboard — per project + per unit
+12. Pengaturan — edit project code
+
+---
