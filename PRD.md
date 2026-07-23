@@ -3298,3 +3298,116 @@ JANGAN hapus/diubah:
 - "WhatsApp bot" (recall 26.7 untuk deferred WA plan)
 
 ---
+
+## 27. VERCEL-ONLY SETUP — No Local Command Line Needed (22 Juli 2026)
+
+> Owner pusing dengan Windows PowerShell setup (env var syntax beda dari Linux bash).
+> Solution: Vercel-only approach — schema + data import langsung dari sandbox z.ai, owner tinggal push ke GitHub.
+
+### 27.1 What Was Done (from sandbox z.ai)
+
+1. **Schema pushed to Aiven** — `npx prisma db push --accept-data-loss` di-run dari sandbox dengan `DATABASE_URL=Aiven`. Semua 14 model baru (Phase A) udah ada di Aiven DB.
+
+2. **Backup JSON imported to Aiven** — `npx tsx scripts/import-finance-backup.ts` di-run dari sandbox. Data yang ter-import:
+   - 8 Projects (dengan code A16/PM/TK/KA/RP/A01/RS/RPK)
+   - 21 Units (blockNumber composite: E1, D8, RumahPojok, dll)
+   - 20 Suppliers (dengan bank fields)
+   - 15 Categories
+   - 163 Materials + 163 Stocks + 163 StockAdjustments (INITIAL)
+   - 24 WageTypes
+   - 9 Workers (Heri, Wasku, Remy, Arif, Damar, Gellent, Koni, Parto, Yayat)
+   - 120 PurchaseOrders + 500 POItems + ~50 Payments (PAID POs)
+   - 58 WagePayments + ~30 Payments (PAID wages)
+   - 94 OtherExpenses + ~50 Payments (PAID expenses)
+   - 44 Memos + 279 MemoLines
+   - 110 MaterialUsages + 230 MaterialUsageItems (AVCO snapshot frozen)
+
+3. **API route `/api/admin/import-backup`** — untuk re-import dari browser (idempotent, upsert by name). Owner bisa hit URL kalau perlu re-import.
+
+4. **Shared lib `src/lib/finance/import-backup.ts`** — extract import logic, dipakai oleh both CLI script + API route.
+
+### 27.2 Owner Flow (Simplified)
+
+**Cukup 2 langkah:**
+
+1. **Push ke GitHub** (atau aku push dari sandbox):
+   ```bash
+   git pull origin main  # di laptop, untuk dapat code terbaru
+   ```
+   Vercel auto-deploy dalam 2 menit.
+
+2. **Buka dashboard**:
+   - https://hadi-kaya-virtual-office.vercel.app
+   - Login → klik tab **Finance** → dashboard muncul dengan KPI + cashflow + outstanding
+   - Klik tab **Material** → list 163 material + stok + low-stock alert
+
+**Tidak perlu**:
+- ❌ `npx prisma db push` lokal (schema udah di-push ke Aiven dari sandbox)
+- ❌ `npx tsx scripts/import-finance-backup.ts` lokal (data udah di-import ke Aiven dari sandbox)
+- ❌ Edit `.env` lokal (DATABASE_URL hanya perlu di Vercel env vars, udah ada)
+- ❌ `npm run dev` lokal (langsung pakai Vercel production)
+
+### 27.3 API Route for Re-Import (Optional)
+
+Kalau perlu re-import data (e.g., kalau ada data baru di backup JSON):
+
+1. Set env var di Vercel: `ADMIN_SECRET` = "pilih-secret-anda" (Settings → Environment Variables)
+2. Hit URL (POST atau GET):
+   ```
+   GET  https://hadi-kaya-virtual-office.vercel.app/api/admin/import-backup?secret=XXX
+   → cek status import (sudah/belum)
+
+   POST https://hadi-kaya-virtual-office.vercel.app/api/admin/import-backup?secret=XXX
+   → run import (idempotent, upsert by name)
+   ```
+3. Response JSON dengan stats (imported/skipped/errors per section)
+
+**Note**: API route `maxDuration = 300` (5 menit). Butuh Vercel Pro plan. Kalau Hobby (60s), import mungkin timeout — pakai CLI approach instead.
+
+### 27.4 Windows PowerShell Fallback (Kalau Perlu Run Lokal)
+
+Kalau Vercel import timeout atau ada masalah, owner bisa run lokal:
+
+**Option A — Edit `.env` file (paling gampang)**:
+1. Bikin file `.env` di root project (sudah di .gitignore, aman)
+2. Isi:
+   ```
+   DATABASE_URL="postgres://avnadmin:PASSWORD@hadi-kaya-db-hadi-kaya-db.k.aivencloud.com:16163/defaultdb?sslmode=require"
+   ```
+3. Run:
+   ```powershell
+   npx prisma db push
+   npx tsx scripts/import-finance-backup.ts
+   npm run dev
+   ```
+
+**Option B — PowerShell env var (temporary, per session)**:
+```powershell
+$env:DATABASE_URL = "postgres://avnadmin:PASSWORD@hadi-kaya-db-hadi-kaya-db.k.aivencloud.com:16163/defaultdb?sslmode=require"
+npx prisma db push
+npx tsx scripts/import-finance-backup.ts
+npm run dev
+```
+
+**⚠️ JANGAN pakai syntax Linux bash** `DATABASE_URL=value command` — itu ga jalan di PowerShell!
+
+### 27.5 Current State (22 Juli 2026)
+
+- ✅ Schema Phase A udah di Aiven DB (14 model baru)
+- ✅ Data import udah jalan dari sandbox (120 PO, 58 wage, 94 expense, 163 material, dll)
+- ✅ API routes Phase C udah deploy ke Vercel (auto-deploy dari GitHub)
+- ✅ Dashboard UI Phase D udah deploy (Finance + Material tabs)
+- ✅ PDF generation Phase E udah deploy (PO PDF + Bukti Kas Keluar)
+- ⏳ Vercel deploy terbaru: tunggu push terakhir (lib import-backup + API route admin/import-backup)
+
+### 27.6 What's Next (Owner Decision)
+
+Setelah Vercel deploy selesai + owner verify dashboard Finance+Material jalan:
+
+1. **Form input UI** (Phase D v2) — PO form, Wage form, Expense form, Memo form, Payment modal, Stock opname modal. Saat ini dashboard read-only.
+2. **Telegram Bot** (Phase F) — RINA + DINA bot via Telegram (PRD section 26)
+3. **Laporan PDF** (Phase E v2) — Bulanan/Tahunan/Per-Proyek + bundle arsip
+4. **RAB integration** — tunggu owner kirim format RAB
+5. **Multi-user** — v2, tunggu kebutuhan
+
+---
