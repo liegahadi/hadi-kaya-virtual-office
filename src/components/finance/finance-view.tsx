@@ -19,9 +19,10 @@ import { RabComparison } from './rab-comparison'
 import { SupplierManagement } from './supplier-management'
 import { WageFormModal } from './wage-form'
 import { ExpenseFormModal } from './expense-form'
+import { UsageFormModal } from './usage-form'
 import { ProjectSettings } from './project-settings'
 import { CostPerUnit } from './cost-per-unit'
-import { Store, Settings, BarChart3 } from 'lucide-react'
+import { Store, Settings, BarChart3, FileStack } from 'lucide-react'
 
 type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab' | 'suppliers' | 'cost' | 'settings'
 
@@ -44,6 +45,9 @@ export function FinanceView() {
   const [poFormOpen, setPoFormOpen] = useState(false)
   const [memoFormOpen, setMemoFormOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [wageFormOpen, setWageFormOpen] = useState(false)
+  const [expenseFormOpen, setExpenseFormOpen] = useState(false)
+  const [usageFormOpen, setUsageFormOpen] = useState(false)
   const [paymentRecipient, setPaymentRecipient] = useState<{ name: string; type: string; amount: number; refId?: string } | null>(null)
 
   const fetchData = async () => {
@@ -105,7 +109,7 @@ export function FinanceView() {
 
       {/* Sub-tab content */}
       {subTab === 'dashboard' && data && (
-        <DashboardTab data={data} loading={loading} onPayClick={handlePayClick} onPoFormOpen={() => setPoFormOpen(true)} onMemoFormOpen={() => setMemoFormOpen(true)} />
+        <DashboardTab data={data} loading={loading} onPayClick={handlePayClick} onPoFormOpen={() => setPoFormOpen(true)} onMemoFormOpen={() => setMemoFormOpen(true)} onWageFormOpen={() => setWageFormOpen(true)} onExpenseFormOpen={() => setExpenseFormOpen(true)} onUsageFormOpen={() => setUsageFormOpen(true)} />
       )}
       {subTab === 'dashboard' && loading && (
         <>
@@ -125,6 +129,9 @@ export function FinanceView() {
 
       {poFormOpen && <PoFormModal open={poFormOpen} onClose={() => setPoFormOpen(false)} onSaved={fetchData} />}
       {memoFormOpen && <MemoFormModal open={memoFormOpen} onClose={() => setMemoFormOpen(false)} onSaved={fetchData} />}
+      {wageFormOpen && <WageFormModal open={wageFormOpen} onClose={() => setWageFormOpen(false)} onSaved={fetchData} />}
+      {expenseFormOpen && <ExpenseFormModal open={expenseFormOpen} onClose={() => setExpenseFormOpen(false)} onSaved={fetchData} />}
+      {usageFormOpen && <UsageFormModal open={usageFormOpen} onClose={() => setUsageFormOpen(false)} onSaved={fetchData} />}
       {paymentOpen && paymentRecipient && (
         <PaymentModal open={paymentOpen} onClose={() => { setPaymentOpen(false); setPaymentRecipient(null) }} onSaved={fetchData} recipient={paymentRecipient} />
       )}
@@ -132,7 +139,7 @@ export function FinanceView() {
   )
 }
 
-function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen }: any) {
+function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen, onWageFormOpen, onExpenseFormOpen, onUsageFormOpen }: any) {
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -214,14 +221,26 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen 
         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={onPoFormOpen}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat PO Baru
         </Button>
+        <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={onWageFormOpen}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" /> Catat Upah
+        </Button>
+        <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={onExpenseFormOpen}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" /> Catat Biaya
+        </Button>
+        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={onUsageFormOpen}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" /> Catat Pemakaian
+        </Button>
         <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={onMemoFormOpen}>
-          <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat Memo Pengajuan
+          <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat Memo
         </Button>
         <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/monthly', '_blank')}>
           <FileText className="w-3.5 h-3.5 mr-1.5" /> Laporan Bulanan
         </Button>
         <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/annual', '_blank')}>
           <FileText className="w-3.5 h-3.5 mr-1.5" /> Laporan Tahunan
+        </Button>
+        <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/bundle-monthly', '_blank')}>
+          <FileStack className="w-3.5 h-3.5 mr-1.5" /> Bundle Bulanan
         </Button>
       </div>
     </>
