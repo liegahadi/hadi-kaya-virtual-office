@@ -220,10 +220,10 @@ export function FinanceView() {
         <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setMemoFormOpen(true)}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat Memo Pengajuan
         </Button>
-        <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
+        <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/monthly', '_blank')}>
           <FileText className="w-3.5 h-3.5 mr-1.5" /> Laporan Bulanan
         </Button>
-        <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
+        <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/annual', '_blank')}>
           <FileText className="w-3.5 h-3.5 mr-1.5" /> Laporan Tahunan
         </Button>
       </div>
