@@ -24,11 +24,12 @@ import { GlobalSearch } from './global-search'
 import { BulkPaymentModal } from './bulk-payment-modal'
 import { ProjectSettings } from './project-settings'
 import { CostPerUnit } from './cost-per-unit'
+import { ConstructionSchedule } from './construction-schedule'
 import { CashForecast } from './cash-forecast'
 import { ProjectDashboard } from './project-dashboard'
-import { Store, Settings, BarChart3, FileStack, Calculator, FolderKanban } from 'lucide-react'
+import { Store, Settings, BarChart3, FileStack, Calculator, FolderKanban, HardHat } from 'lucide-react'
 
-type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab' | 'suppliers' | 'cost' | 'forecast' | 'project' | 'settings'
+type SubTab = 'dashboard' | 'po' | 'wages' | 'expenses' | 'memos' | 'rab' | 'suppliers' | 'cost' | 'forecast' | 'project' | 'construction' | 'settings'
 
 interface DashboardData {
   kpi: { totalKeluarBlnIni: number; outstandingMaterial: number; outstandingUpah: number; outstandingOps: number; totalOutstanding: number }
@@ -83,6 +84,7 @@ export function FinanceView() {
     { id: 'rab', label: 'RAB vs Actual', icon: <TrendingDown className="w-3.5 h-3.5" /> },
     { id: 'suppliers', label: 'Supplier', icon: <Store className="w-3.5 h-3.5" /> },
     { id: 'cost', label: 'Cost per Unit', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+    { id: 'construction', label: 'Konstruksi', icon: <HardHat className="w-3.5 h-3.5" /> },
     { id: 'forecast', label: 'Cash Forecast', icon: <Calculator className="w-3.5 h-3.5" /> },
     { id: 'project', label: 'Project Dashboard', icon: <FolderKanban className="w-3.5 h-3.5" /> },
     { id: 'settings', label: 'Pengaturan', icon: <Settings className="w-3.5 h-3.5" /> },
@@ -133,6 +135,7 @@ export function FinanceView() {
       {subTab === 'rab' && <RabComparison />}
       {subTab === 'suppliers' && <SupplierManagement />}
       {subTab === 'cost' && <CostPerUnit />}
+      {subTab === 'construction' && <ConstructionSchedule />}
       {subTab === 'forecast' && <CashForecast />}
       {subTab === 'project' && <ProjectDashboard />}
       {subTab === 'settings' && <ProjectSettings />}
