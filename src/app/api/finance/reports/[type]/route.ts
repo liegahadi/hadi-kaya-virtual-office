@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateMonthlyReportPDF } from '@/lib/finance/pdf/report-monthly'
+import { generateAnnualReportPDF } from '@/lib/finance/pdf/report-annual'
+import { generateProjectReportPDF } from '@/lib/finance/pdf/report-project'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -197,14 +199,209 @@ async function generateMonthlyReport(monthParam: string | null, projectId: strin
 }
 
 async function generateAnnualReport(yearParam: string | null, projectId: string | null) {
-  // Simplified — return placeholder
-  return NextResponse.json({ success: false, error: 'Annual report not implemented yet. Use monthly for now.' }, { status: 501 })
+  const now = new Date()
+  const year = yearParam ? parseInt(yearParam) : now.getFullYear()
+  const startOfYear = new Date(year, 0, 1)
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59)
+
+  // Fetch all payments in year
+  const payments = await db.payment.findMany({
+    where: {
+      paidAt: { gte: startOfYear, lte: endOfYear },
+      voided: false,
+    },
+    include: {
+      purchaseOrder: { include: { supplier: true, project: true } },
+      wagePayment: { include: { project: true } },
+      otherExpense: { include: { project: true } },
+    },
+  })
+
+  // Monthly breakdown
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+  const monthlyMap = new Map<number, { material: number; upah: number; ops: number }>()
+  for (let m = 0; m < 12; m++) monthlyMap.set(m, { material: 0, upah: 0, ops: 0 })
+
+  let totalMaterial = 0, totalUpah = 0, totalOps = 0
+  const projectMap = new Map<string, { project: string; code: string | null; material: number; upah: number; ops: number; poCount: number }>()
+  const supplierMap = new Map<string, { supplier: string; poCount: number; total: number }>()
+  const categoryMap = new Map<string, number>()
+
+  for (const p of payments) {
+    const month = p.paidAt.getMonth()
+    const monthly = monthlyMap.get(month)!
+    if (p.poId && p.purchaseOrder) {
+      monthly.material += p.amount
+      totalMaterial += p.amount
+      // Project
+      const projKey = p.purchaseOrder.project?.id || 'unknown'
+      const proj = projectMap.get(projKey) || { project: p.purchaseOrder.project?.name || 'Unknown', code: p.purchaseOrder.project?.code || null, material: 0, upah: 0, ops: 0, poCount: 0 }
+      proj.material += p.amount
+      proj.poCount++
+      projectMap.set(projKey, proj)
+      // Supplier
+      const supKey = p.purchaseOrder.supplier?.name || 'Unknown'
+      const sup = supplierMap.get(supKey) || { supplier: supKey, poCount: 0, total: 0 }
+      sup.poCount++
+      sup.total += p.amount
+      supplierMap.set(supKey, sup)
+    } else if (p.wagePaymentId && p.wagePayment) {
+      monthly.upah += p.amount
+      totalUpah += p.amount
+      const projKey = p.wagePayment.project?.id || 'unknown'
+      const proj = projectMap.get(projKey) || { project: p.wagePayment.project?.name || 'Unknown', code: p.wagePayment.project?.code || null, material: 0, upah: 0, ops: 0, poCount: 0 }
+      proj.upah += p.amount
+      projectMap.set(projKey, proj)
+    } else if (p.expenseId && p.otherExpense) {
+      monthly.ops += p.amount
+      totalOps += p.amount
+      const cat = p.otherExpense.category || 'OTHER'
+      categoryMap.set(cat, (categoryMap.get(cat) || 0) + p.amount)
+      if (p.otherExpense.project) {
+        const projKey = p.otherExpense.project.id
+        const proj = projectMap.get(projKey) || { project: p.otherExpense.project.name, code: p.otherExpense.project.code, material: 0, upah: 0, ops: 0, poCount: 0 }
+        proj.ops += p.amount
+        projectMap.set(projKey, proj)
+      }
+    }
+  }
+
+  const monthlyBreakdown = Array.from(monthlyMap.entries()).map(([m, v]) => ({
+    month: monthNames[m],
+    material: v.material, upah: v.upah, ops: v.ops,
+    total: v.material + v.upah + v.ops,
+  }))
+
+  const perProject = Array.from(projectMap.values()).map(p => ({ ...p, total: p.material + p.upah + p.ops }))
+  const totalSupplier = Array.from(supplierMap.values()).reduce((s, x) => s + x.total, 0)
+  const perSupplier = Array.from(supplierMap.values()).map(s => ({ ...s, percentage: totalSupplier > 0 ? (s.total / totalSupplier) * 100 : 0 })).sort((a, b) => b.total - a.total)
+  const totalCategory = Array.from(categoryMap.values()).reduce((s, x) => s + x, 0)
+  const topCategories = Array.from(categoryMap.entries()).map(([category, amount]) => ({ category, amount, percentage: totalCategory > 0 ? (amount / totalCategory) * 100 : 0 })).sort((a, b) => b.amount - a.amount)
+
+  // Outstanding akhir tahun
+  const unpaidPos = await db.purchaseOrder.findMany({
+    where: { status: { in: ['UNPAID', 'PARTIAL_PAID'] }, poDate: { lte: endOfYear } },
+    include: { payments: { where: { voided: false, paidAt: { lte: endOfYear } } } },
+  })
+  const outstandingAkhir = unpaidPos.reduce((s, po) => {
+    const paid = po.payments.reduce((p, x) => p + x.amount, 0)
+    return s + Math.max(0, (po.actualTotal > 0 ? po.actualTotal : po.plannedTotal) - paid)
+  }, 0)
+
+  const data = {
+    year,
+    summary: { totalMaterial, totalUpah, totalOps, totalKeluar: totalMaterial + totalUpah + totalOps, outstandingAkhirTahun: outstandingAkhir },
+    monthlyBreakdown,
+    perProject,
+    perSupplier,
+    topCategories,
+  }
+
+  const pdfBuffer = await generateAnnualReportPDF(data)
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="Laporan-Tahunan-${year}.pdf"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
+  })
 }
 
 async function generateProjectReport(projectId: string | null) {
   if (!projectId) {
     return NextResponse.json({ success: false, error: 'projectId required for project report' }, { status: 400 })
   }
-  // Simplified — return placeholder
-  return NextResponse.json({ success: false, error: 'Project report not implemented yet. Use monthly for now.' }, { status: 501 })
+
+  const project = await db.project.findUnique({ where: { id: projectId }, include: { units: true } })
+  if (!project) return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 })
+
+  // Fetch all payments for this project (via PO, Wage, Expense)
+  const payments = await db.payment.findMany({
+    where: {
+      voided: false,
+      OR: [
+        { purchaseOrder: { projectId } },
+        { wagePayment: { projectId } },
+        { otherExpense: { projectId } },
+      ],
+    },
+    include: {
+      purchaseOrder: { include: { supplier: true } },
+      wagePayment: { include: { worker: true, unit: true } },
+      otherExpense: true,
+    },
+    orderBy: { paidAt: 'asc' },
+  })
+
+  // Material usages for this project
+  const usages = await db.materialUsage.findMany({
+    where: { projectId },
+    include: { items: { include: { material: true } }, unit: true },
+  })
+
+  // Compute per unit
+  const unitMap = new Map<string, { blockNumber: string; material: number; upah: number; ops: number }>()
+  for (const u of project.units) {
+    unitMap.set(u.id, { blockNumber: u.blockNumber, material: 0, upah: 0, ops: 0 })
+  }
+  // Material from usages
+  for (const u of usages) {
+    if (u.unitId) {
+      const unit = unitMap.get(u.unitId)
+      if (unit) unit.material += u.items.reduce((s, it) => s + it.subtotal, 0)
+    }
+  }
+  // Upah + Ops from payments
+  for (const p of payments) {
+    if (p.wagePayment?.unitId) {
+      const unit = unitMap.get(p.wagePayment.unitId)
+      if (unit) unit.upah += p.amount
+    } else if (p.otherExpense?.unitId) {
+      const unit = unitMap.get(p.otherExpense.unitId)
+      if (unit) unit.ops += p.amount
+    }
+  }
+
+  const perUnit = Array.from(unitMap.values()).map(u => ({ ...u, total: u.material + u.upah + u.ops })).sort((a, b) => b.total - a.total)
+
+  const totalMaterial = usages.reduce((s, u) => s + u.items.reduce((ss, it) => ss + it.subtotal, 0), 0)
+  const totalUpah = payments.filter(p => p.wagePaymentId).reduce((s, p) => s + p.amount, 0)
+  const totalOps = payments.filter(p => p.expenseId).reduce((s, p) => s + p.amount, 0)
+  const totalCost = totalMaterial + totalUpah + totalOps
+
+  // Outstanding
+  const unpaidPos = await db.purchaseOrder.findMany({
+    where: { projectId, status: { in: ['UNPAID', 'PARTIAL_PAID'] } },
+    include: { payments: { where: { voided: false } } },
+  })
+  const outstanding = unpaidPos.reduce((s, po) => {
+    const paid = po.payments.reduce((p, x) => p + x.amount, 0)
+    return s + Math.max(0, (po.actualTotal > 0 ? po.actualTotal : po.plannedTotal) - paid)
+  }, 0)
+
+  // Timeline (last 20 payments)
+  const timeline = payments.slice(-20).reverse().map(p => ({
+    date: p.paidAt,
+    amount: p.amount,
+    method: p.method,
+    recipient: p.purchaseOrder?.supplier?.name || p.wagePayment?.worker?.name || p.otherExpense?.recipientName || 'Unknown',
+  }))
+
+  const data = {
+    project: { name: project.name, code: project.code, type: 'Subsidi' },
+    summary: { totalMaterial, totalUpah, totalOps, totalCost, outstanding, unitCount: project.units.length },
+    perUnit,
+    timeline,
+  }
+
+  const pdfBuffer = await generateProjectReportPDF(data)
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="Laporan-Proyek-${project.code || project.name}.pdf"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
+  })
 }
