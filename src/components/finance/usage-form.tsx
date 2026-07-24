@@ -16,6 +16,7 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
   const [projects, setProjects] = useState<Project[]>([])
   const [units, setUnits] = useState<Unit[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
+  const [workItems, setWorkItems] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [projectId, setProjectId] = useState('')
   const [unitId, setUnitId] = useState('')
@@ -30,8 +31,10 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
   }, [open])
 
   useEffect(() => {
-    if (projectId) { fetch(`/api/units?projectId=${projectId}`).then(r => r.json()).then(d => { setUnits(d.units || d.data || []) }).catch(() => setUnits([])) }
-    else setUnits([])
+    if (projectId) { fetch(`/api/units?projectId=${projectId}`).then(r => r.json()).then(d => { setUnits(d.units || d.data || []) }).catch(() => setUnits([]))
+      // Fetch workItems from WageType (RAB Upah — 13 pekerjaan)
+      fetch(`/api/finance/wage-types?projectId=${projectId}`).then(r => r.json()).then(d => { if (d.success) setWorkItems(d.data.map((w: any) => w.name)) }).catch(() => setWorkItems([]))
+    } else { setUnits([]); setWorkItems([]) }
   }, [projectId])
 
   const fmtRibuan = (n: string) => { const num = parseInt(n.replace(/\./g, '')) || 0; return num ? num.toLocaleString('de-DE') : '' }
@@ -87,7 +90,9 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
                     <option value="">— Material —</option>{materials.map(m => <option key={m.id} value={m.id}>{m.name} (stok: {m.stock?.quantity || 0})</option>)}
                   </select>
                   <Input type="text" value={it.qty} onChange={e => updateItem(i, 'qty', fmtRibuan(e.target.value))} placeholder="Qty" className="col-span-2 bg-slate-900 border-slate-700 text-slate-100 text-[10px] h-7" />
-                  <Input type="text" value={it.workItem} onChange={e => updateItem(i, 'workItem', e.target.value)} placeholder="Pekerjaan" className="col-span-4 bg-slate-900 border-slate-700 text-slate-100 text-[10px] h-7" />
+                  <select value={it.workItem} onChange={e => updateItem(i, 'workItem', e.target.value)} className="col-span-4 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100">
+                    <option value="">— Pekerjaan —</option>{workItems.map(w => <option key={w} value={w}>{w}</option>)}
+                  </select>
                   <Button size="sm" variant="ghost" onClick={() => removeItem(i)} className="col-span-1 h-7 text-red-400 hover:bg-red-900/30 p-0"><Trash2 className="w-3 h-3" /></Button>
                 </div>
               ))}

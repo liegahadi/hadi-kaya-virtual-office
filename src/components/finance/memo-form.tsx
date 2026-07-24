@@ -108,7 +108,7 @@ export function MemoFormModal({ open, onClose, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-3xl max-h-[90vh] overflow-y-auto dark-scrollbar">
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-4xl max-h-[90vh] overflow-y-auto dark-scrollbar">
         <DialogHeader>
           <DialogTitle className="text-slate-100">Buat Memo Pengajuan Dana</DialogTitle>
         </DialogHeader>
