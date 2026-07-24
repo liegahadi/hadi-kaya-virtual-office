@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Download } from 'lucide-react'
+import { UnitCostDetailModal } from './unit-cost-detail-modal'
 
 const fmt = (n: number) => 'Rp ' + (n || 0).toLocaleString('id-ID')
 
@@ -14,6 +15,7 @@ export function CostPerUnit() {
   const [projects, setProjects] = useState<any[]>([])
   const [projectId, setProjectId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [detailUnitId, setDetailUnitId] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
@@ -47,7 +49,7 @@ export function CostPerUnit() {
           {data.length === 0 ? (
             <p className="text-xs text-slate-500 text-center py-6">Tidak ada data</p>
           ) : data.map((u, i) => (
-            <div key={u.id} className="flex items-center gap-2 p-2 bg-slate-800/50 rounded">
+            <div key={u.id} className="flex items-center gap-2 p-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800" onClick={() => setDetailUnitId(u.id)}>
               <span className="text-[10px] font-bold w-6 text-center text-slate-400">#{i + 1}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -88,6 +90,8 @@ export function CostPerUnit() {
           <Download className="w-3 h-3" /> Export Biaya Lain (CSV)
         </a>
       </div>
+
+      <UnitCostDetailModal unitId={detailUnitId} open={!!detailUnitId} onClose={() => setDetailUnitId(null)} />
     </div>
   )
 }

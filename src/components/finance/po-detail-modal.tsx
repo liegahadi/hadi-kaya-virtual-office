@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Download, FileStack } from 'lucide-react'
+import { Download, FileStack, Edit2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 const fmt = (n: number) => 'Rp ' + (n || 0).toLocaleString('id-ID')
 const statusColor: Record<string, string> = {
@@ -93,7 +94,7 @@ export function PoDetailModal({ poId, open, onClose }: { poId: string | null; op
             {data.notes && <div className="border-t border-slate-700 pt-2 text-xs"><span className="text-slate-400">Catatan:</span> <span className="text-slate-300">{data.notes}</span></div>}
 
             {/* Action buttons */}
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               <a href={`/api/finance/po/${data.id}/pdf`} target="_blank" rel="noopener noreferrer">
                 <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800 text-xs">
                   <Download className="w-3 h-3 mr-1" /> PO PDF
@@ -104,6 +105,29 @@ export function PoDetailModal({ poId, open, onClose }: { poId: string | null; op
                   <FileStack className="w-3 h-3 mr-1" /> Bundle Arsip
                 </Button>
               </a>
+              <Button size="sm" variant="outline" className="border-amber-600 text-amber-300 hover:bg-amber-900/30 text-xs"
+                onClick={() => { const n = prompt('Edit catatan PO:', data.notes || ''); if (n !== null) { fetch(`/api/finance/po/${data.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: n }) }).then(r => r.json()).then(d => { if (d.success) { toast.success('Catatan diupdate'); setData({ ...data, notes: n }) } }) } }}>
+                <Edit2 className="w-3 h-3 mr-1" /> Edit Catatan
+              </Button>
+              {/* Upload Nota */}
+              <div className="flex items-center gap-1">
+                <input type="text" placeholder="No. Nota" id={`nota-num-${data.id}`} className="w-20 bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100" />
+                <input type="number" placeholder="Total" id={`nota-total-${data.id}`} className="w-24 bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100" />
+                <Button size="sm" variant="outline" className="border-blue-600 text-blue-300 hover:bg-blue-900/30 text-xs h-7"
+                  onClick={async () => {
+                    const num = (document.getElementById(`nota-num-${data.id}`) as HTMLInputElement)?.value
+                    const total = parseFloat((document.getElementById(`nota-total-${data.id}`) as HTMLInputElement)?.value || '0')
+                    if (!total) { toast.error('Total nota wajib'); return }
+                    try {
+                      const res = await fetch(`/api/finance/po/${data.id}/notas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notaNumber: num, totalAmount: total }) })
+                      const d = await res.json()
+                      if (d.success) { toast.success('Nota tersimpan. PO terkunci.'); window.location.reload() }
+                      else throw new Error(d.error)
+                    } catch (err: any) { toast.error('Gagal: ' + (err?.message || 'unknown')) }
+                  }}>
+                  + Nota
+                </Button>
+              </div>
             </div>
           </div>
         ) : null}

@@ -205,7 +205,7 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen,
               <div key={i} className={`flex items-center justify-between p-2 bg-slate-800/50 rounded text-xs ${ageColor}`}>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-200 truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400">{p.type}{p.bankAccount ? ` • ${p.bankAccount}` : ''}{p.age !== undefined ? ` • ${p.age}h` : ''}</p>
+                  <p className="text-[10px] text-slate-400">{p.type}{p.bankAccount ? ` • ${p.bankAccount}` : ''}{p.unit ? ` • ${p.unit}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 ml-2">
                   <span className="font-bold text-red-300">{fmt(p.amount)}</span>
