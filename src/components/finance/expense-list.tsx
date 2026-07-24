@@ -35,6 +35,8 @@ export function ExpenseList() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [projects, setProjects] = useState<any[]>([])
+  const [projectFilter, setProjectFilter] = useState('')
 
   const categories = ['SALARY', 'FUEL', 'NOTARY', 'SLF', 'KWH', 'DP_REFUND', 'REIMBURSE', 'TAKSASI', 'RAP', 'MARKETING', 'OPERASIONAL_KANTOR', 'KOMISI', 'BIAYA_NOTARIS', 'HUTANG', 'KASBON', 'PBB', 'PPH', 'LAINNYA', 'OTHER']
 
@@ -44,6 +46,7 @@ export function ExpenseList() {
       const params = new URLSearchParams()
       if (statusFilter) params.set('status', statusFilter)
       if (categoryFilter) params.set('category', categoryFilter)
+      if (projectFilter) params.set('projectId', projectFilter)
       const res = await fetch(`/api/finance/expenses?${params}`)
       const d = await res.json()
       if (d.success) {
@@ -62,7 +65,10 @@ export function ExpenseList() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { fetchExpenses() }, [statusFilter, categoryFilter])
+  useEffect(() => { fetchExpenses() }, [statusFilter, categoryFilter, projectFilter])
+  useEffect(() => {
+    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+  }, [])
   useEffect(() => { const t = setTimeout(fetchExpenses, 300); return () => clearTimeout(t) }, [search])
 
   return (
@@ -85,6 +91,11 @@ export function ExpenseList() {
           <option value="">Semua Kategori</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
+          <option value="">Semua Project</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+        </select>
       </div>
 
       <Card className="overflow-hidden bg-slate-900/50 border-slate-800">
@@ -94,8 +105,8 @@ export function ExpenseList() {
               <tr>
                 <th className="text-left p-2 text-slate-300">Tanggal</th>
                 <th className="text-left p-2 text-slate-300">Kategori</th>
-                <th className="text-left p-2 text-slate-300">Penerima</th>
-                <th className="text-left p-2 text-slate-300">Description</th>
+                <th className="text-left p-2 text-slate-300">Unit/Blok</th>
+                <th className="text-left p-2 text-slate-300">Deskripsi</th>
                 <th className="text-right p-2 text-slate-300">Amount</th>
                 <th className="text-right p-2 text-slate-300">Dibayar</th>
                 <th className="text-center p-2 text-slate-300">Status</th>
@@ -110,7 +121,7 @@ export function ExpenseList() {
                 <tr key={e.id} className="border-b border-slate-800 hover:bg-slate-800/40">
                   <td className="p-2 text-slate-400">{new Date(e.expenseDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</td>
                   <td className="p-2"><Badge variant="outline" className="text-[9px] border-slate-600 text-slate-400">{e.category}</Badge></td>
-                  <td className="p-2 text-slate-200">{e.recipientName}</td>
+                  <td className="p-2 text-slate-400">{e.project?.code || '-'}</td>
                   <td className="p-2 text-slate-300 max-w-48 truncate">{e.description}</td>
                   <td className="p-2 text-right font-mono text-slate-200">{fmt(e.amount)}</td>
                   <td className="p-2 text-right font-mono text-emerald-400">{fmt(e.totalPaid)}</td>

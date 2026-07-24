@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Search, Download, Eye, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Search, Download, Eye, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { PoFormModal } from './po-form'
 import { PoDetailModal } from './po-detail-modal'
 
@@ -155,6 +155,10 @@ export function PoList() {
                       className="inline-flex items-center justify-center w-6 h-6 text-blue-400 hover:bg-blue-900/30 rounded" title="Download PDF">
                       <Download className="w-3 h-3" />
                     </a>
+                    <button onClick={async () => { if (!confirm('Hapus PO ini?')) return; try { await fetch(`/api/finance/po/${po.id}`, { method: 'DELETE' }); toast.success('PO dihapus'); fetchPos(); } catch { toast.error('Gagal hapus'); } }}
+                      className="inline-flex items-center justify-center w-6 h-6 text-red-400 hover:bg-red-900/30 rounded ml-1" title="Hapus PO">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </td>
                 </tr>
               ))}
