@@ -6,7 +6,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Search } from 'lucide-react'
+import { Search, Trash2, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { WageFormModal } from './wage-form'
 
 interface Wage {
   id: string
@@ -36,6 +38,7 @@ export function WageList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [wageFormOpen, setWageFormOpen] = useState(false)
 
   const fetchWages = async () => {
     setLoading(true)
@@ -93,13 +96,14 @@ export function WageList() {
                 <th className="text-right p-2 text-slate-300">Budget</th>
                 <th className="text-right p-2 text-slate-300">Dibayar</th>
                 <th className="text-center p-2 text-slate-300">Status</th>
+                <th className="text-center p-2 text-slate-300">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-8"><Skeleton className="h-6 mx-auto w-32" /></td></tr>
+                <tr><td colSpan={9} className="text-center py-8"><Skeleton className="h-6 mx-auto w-32" /></td></tr>
               ) : wages.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-8 text-slate-500">Tidak ada upah</td></tr>
+                <tr><td colSpan={9} className="text-center py-8 text-slate-500">Tidak ada upah</td></tr>
               ) : wages.map(w => (
                 <tr key={w.id} className="border-b border-slate-800 hover:bg-slate-800/40">
                   <td className="p-2 text-slate-400">{new Date(w.wageDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</td>
@@ -112,6 +116,12 @@ export function WageList() {
                   <td className="p-2 text-center">
                     <Badge variant="outline" className={`text-[9px] ${statusColor[w.status] || 'bg-slate-700'}`}>{w.status}</Badge>
                   </td>
+                  <td className="p-2 text-center">
+                    <button onClick={async () => { if (!confirm('Hapus upah ini?')) return; try { await fetch(`/api/finance/wages/${w.id}`, { method: 'DELETE' }); toast.success('Upah dihapus'); fetchWages(); } catch { toast.error('Gagal hapus'); } }}
+                      className="text-red-400 hover:bg-red-900/30 rounded p-1" title="Hapus">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -119,6 +129,7 @@ export function WageList() {
         </div>
       </Card>
       <p className="text-[10px] text-slate-500">{wages.length} upah ditampilkan (max 50)</p>
+      {wageFormOpen && <WageFormModal open={wageFormOpen} onClose={() => setWageFormOpen(false)} onSaved={fetchWages} />}
     </div>
   )
 }
