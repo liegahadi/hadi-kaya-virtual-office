@@ -79,6 +79,45 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
 
   const plannedTotal = items.reduce((s, it) => s + (parseInt(parseRibuan(it.qty)) || 0) * (parseInt(parseRibuan(it.price)) || 0), 0)
 
+  // Import material dari RAB
+  const [rabWorkItems, setRabWorkItems] = useState<string[]>([])
+  const [selectedWorkItem, setSelectedWorkItem] = useState('')
+
+  useEffect(() => {
+    if (projectId) {
+      // Fetch RAB workItems untuk project ini
+      fetch(`/api/finance/reports/rab-comparison?projectId=${projectId}`).then(r => r.json()).then(d => {
+        if (d.success && d.data?.material?.rows) {
+          const workItems = [...new Set(d.data.material.rows.map((r: any) => r.workItem))]
+          setRabWorkItems(workItems)
+        }
+      }).catch(() => setRabWorkItems([]))
+    } else { setRabWorkItems([]) }
+  }, [projectId])
+
+  const handleImportRAB = async () => {
+    if (!selectedWorkItem || !projectId) { toast.error('Pilih pekerjaan dulu'); return }
+    try {
+      const res = await fetch(`/api/finance/auto-generate-po`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, unitId, workItems: [selectedWorkItem] }),
+      })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error)
+      // Map RAB materials to PO items
+      const newItems = d.data.materials.filter((m: any) => m.materialId).map((m: any) => ({
+        materialId: m.materialId,
+        qty: String(m.totalQty),
+        price: String(m.avgPrice),
+        directUse: false,
+      }))
+      if (newItems.length === 0) { toast.error('Tidak ada material match di RAB untuk pekerjaan ini'); return }
+      setItems([...items.filter(it => it.materialId || it.qty || it.price), ...newItems])
+      toast.success(`Imported ${newItems.length} items dari RAB: ${selectedWorkItem}`)
+      setSelectedWorkItem('')
+    } catch (err: any) { toast.error('Gagal import: ' + (err?.message || 'unknown')) }
+  }
+
   const handleSave = async () => {
     if (!supplierId || !projectId) {
       toast.error('Supplier + Project wajib')
@@ -165,6 +204,24 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
                 className="mt-1 bg-slate-800 border-slate-700 text-slate-100 text-xs" />
             </div>
           </div>
+
+          {/* Import dari RAB */}
+          {rabWorkItems.length > 0 && (
+            <div className="flex items-end gap-2 p-2 bg-violet-950/30 border border-violet-800/50 rounded">
+              <div className="flex-1">
+                <Label className="text-violet-300 text-xs">Import Material dari RAB</Label>
+                <select value={selectedWorkItem} onChange={e => setSelectedWorkItem(e.target.value)}
+                  className="w-full mt-1 bg-slate-800 border border-violet-700 rounded px-2 py-1.5 text-xs text-slate-100">
+                  <option value="">— Pilih Pekerjaan —</option>
+                  {rabWorkItems.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
+              <Button size="sm" variant="outline" onClick={handleImportRAB} disabled={!selectedWorkItem}
+                className="border-violet-600 text-violet-300 hover:bg-violet-900/30 text-xs h-7">
+                Import dari RAB
+              </Button>
+            </div>
+          )}
 
           {/* Items */}
           <div className="border-t border-slate-700 pt-3">
