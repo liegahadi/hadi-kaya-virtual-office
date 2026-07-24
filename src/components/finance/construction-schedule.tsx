@@ -22,6 +22,7 @@ export function ConstructionSchedule() {
   const [data, setData] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [projectId, setProjectId] = useState('')
+  const [blokFilter, setBlokFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
 
@@ -38,14 +39,22 @@ export function ConstructionSchedule() {
 
   if (loading) return <Skeleton className="h-64" />
 
+  const filteredData = blokFilter ? data.filter((d: any) => d.blockNumber?.charAt(0) === blokFilter) : data
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-slate-400">Project:</span>
         <select value={projectId} onChange={e => setProjectId(e.target.value)}
           className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
           <option value="">Semua Project</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+        </select>
+        <span className="text-xs text-slate-400 ml-2">Blok:</span>
+        <select value={blokFilter} onChange={e => setBlokFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
+          <option value="">Semua Blok</option>
+          {[...new Set(data.map((d: any) => d.blockNumber?.charAt(0)))].sort().map(b => <option key={b} value={b}>Blok {b}</option>)}
         </select>
       </div>
 
@@ -53,25 +62,25 @@ export function ConstructionSchedule() {
       <div className="grid grid-cols-4 gap-2">
         <Card className="p-2 bg-slate-900/50 border-slate-800 text-center">
           <p className="text-[9px] text-slate-400">Total Unit</p>
-          <p className="text-lg font-bold text-slate-200">{data.length}</p>
+          <p className="text-lg font-bold text-slate-200">{filteredData.length}</p>
         </Card>
         <Card className="p-2 bg-emerald-950/40 border-emerald-800/50 text-center">
           <p className="text-[9px] text-emerald-300">Selesai 100%</p>
-          <p className="text-lg font-bold text-emerald-200">{data.filter(d => d.completionPercent === 100).length}</p>
+          <p className="text-lg font-bold text-emerald-200">{filteredData.filter(d => d.completionPercent === 100).length}</p>
         </Card>
         <Card className="p-2 bg-amber-950/40 border-amber-800/50 text-center">
           <p className="text-[9px] text-amber-300">Sedang Berjalan</p>
-          <p className="text-lg font-bold text-amber-200">{data.filter(d => d.completionPercent > 0 && d.completionPercent < 100).length}</p>
+          <p className="text-lg font-bold text-amber-200">{filteredData.filter(d => d.completionPercent > 0 && d.completionPercent < 100).length}</p>
         </Card>
         <Card className="p-2 bg-slate-800/50 border-slate-700 text-center">
           <p className="text-[9px] text-slate-400">Belum Mulai</p>
-          <p className="text-lg font-bold text-slate-500">{data.filter(d => d.completionPercent === 0).length}</p>
+          <p className="text-lg font-bold text-slate-500">{filteredData.filter(d => d.completionPercent === 0).length}</p>
         </Card>
       </div>
 
       {/* Gantt per unit */}
       <div className="space-y-2">
-        {data.map((unit) => (
+        {filteredData.map((unit) => (
           <Card key={unit.unitId} className="bg-slate-900/50 border-slate-800 overflow-hidden">
             {/* Unit header */}
             <button
@@ -121,7 +130,7 @@ export function ConstructionSchedule() {
             )}
           </Card>
         ))}
-        {data.length === 0 && <p className="text-center text-slate-500 text-sm py-8">Tidak ada data</p>}
+        {filteredData.length === 0 && <p className="text-center text-slate-500 text-sm py-8">Tidak ada data</p>}
       </div>
     </div>
   )
