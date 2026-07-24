@@ -4292,3 +4292,69 @@ Plus 27 fitur dari iterasi 2-5 = **55+ fitur total** dalam sistem.
 **Total: 50+ API endpoints**
 
 ---
+
+### 30.16 Owner Feedback Iterasi 7 — Bug Fixes + UX Improvements (23 Juli 2026)
+
+#### CRITICAL BUGS:
+1. **Customer data hilang di tab Berkas** — kemungkinan karena schema migration
+2. **Double values di Outstanding per Penerima** — item muncul 2x (e.g., "Servis Odong odong" x2)
+3. **Performance lambat** — setiap tab load lama
+
+#### PO FORMAT CHANGE:
+4. Format berubah: PO/A16/E4/001/0726 → PO/A16/E4/0726/001 (swap seq dan MMYY)
+
+#### PO LIST:
+5. Tambah delete PO button
+6. Tambah edit PO + history edit
+7. Tambah upload nota + bukti transfer di PO detail
+8. Bundle arsip: "file PO" + "nota" + "bukti kas keluar" + "bukti transfer"
+
+#### OUTSTANDING DETAIL:
+9. Format: [Nama] [Jenis] - [Blok/Unit] (e.g., "Komisi - E-1")
+
+#### PO FORM:
+10. Tambah kemampuan create new Project + Unit dari PO form
+11. Import material dari RAB ke PO form (pilih workItem → auto-fill material list)
+
+#### EXPENSE FORM:
+12. Bulk entry — multiple expenses sekaligus (seperti PO form multi-item)
+
+#### USAGE FORM:
+13. Pindah ke tab Material
+14. WorkItem pakai dropdown (dari RAB) bukan text input
+15. Bikin lebih mudah update harian (bottleneck utama owner)
+
+#### MEMO:
+16. Modal lebih gedang (show 15 items per kategori)
+17. Tambah PO ke memo (sekarang cuma UNPAID POs, tapi ga bisa pilih manual)
+18. View memo detail — click memo → lihat semua items
+
+#### WAGE:
+19. Auto-fill amount dari WageType.price saat pilih pekerjaan
+20. Bulk wage entry — multiple items sekaligus
+21. Delete wage dari wage list
+
+#### EXPENSE LIST:
+22. Filter per project + per unit/blok
+23. Kolom: Tanggal | Kategori | Unit/Blok | Deskripsi | Amount | Dibayar | Status
+
+#### RAB:
+24. RAB editor — edit RAB per project
+25. RAB per unit check
+26. **PENTING**: RAB Upah vs RAB Material adalah 2 hal BERBEDA:
+    - RAB Upah = 13 pekerjaan untuk bayar tukang (Pondasi, Pasang Bata, Atap, dll)
+    - RAB Material = keperluan beli material per pekerjaan
+    - Keduanya saling berkaitan tapi dipisah
+
+#### COST PER UNIT:
+27. Click unit → detail (RAB vs actual per material per workItem, foto, expenses)
+
+#### CONSTRUCTION TAB:
+28. Filter per project + per blok
+29. Fix duplicate workItems — RAB Upah (13) vs RAB Material (separate)
+30. Progress report: tambah overview foto per item pekerjaan
+
+#### PROJECT DASHBOARD:
+31. Owner ga tau apa ini — perlu dijelasin atau dihapus
+
+---

@@ -32,11 +32,11 @@ export async function generatePoNumber(
   const monthYear = `${String(poDate.getMonth() + 1).padStart(2, '0')}${String(year).slice(-2)}`
 
   // Find max seq for this {projectCode, unitSegment, year} from existing PO numbers
-  // PO number pattern: PO-{projectCode}-{unitSegment}-{seq}-{MMYY}
-  const prefix = `PO-${projectCode}-${unitSegment}-`
-  const suffix = `-${monthYear}`
+  // NEW FORMAT: PO-{projectCode}-{unitSegment}-{MMYY}-{seq}
+  // e.g., PO-A16-E4-0726-001
+  const prefix = `PO-${projectCode}-${unitSegment}-${monthYear}-`
 
-  // Get all PO numbers matching this prefix+suffix
+  // Get all PO numbers matching this prefix
   const existingPOs = await db.purchaseOrder.findMany({
     where: {
       poNumber: { startsWith: prefix },
@@ -50,8 +50,8 @@ export async function generatePoNumber(
 
   let maxSeq = 0
   for (const po of existingPOs) {
-    // po.poNumber format: PO-A16-A12-001-0726
-    const match = po.poNumber.match(new RegExp(`^${prefix}(\\d+)${suffix}$`))
+    // po.poNumber format: PO-A16-E4-0726-001
+    const match = po.poNumber.match(new RegExp(`^${prefix}(\\d+)$`))
     if (match) {
       const seq = parseInt(match[1], 10)
       if (seq > maxSeq) maxSeq = seq
@@ -60,7 +60,7 @@ export async function generatePoNumber(
 
   const nextSeq = maxSeq + 1
   const seqPadded = String(nextSeq).padStart(3, '0')
-  return `${prefix}${seqPadded}${suffix}`
+  return `${prefix}${seqPadded}`
 }
 
 /**
