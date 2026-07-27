@@ -4523,3 +4523,41 @@ Owner test dashboard dan nemu banyak issue fundamental. Owner request DISKUSI se
 - JUGA: owner bisa input PO manual tanpa import (pilih toko + ketik items sendiri)
 
 ---
+
+### 30.20 Owner Diskusi Final — RAB Structure (27 Juli 2026)
+
+#### RAB Upah vs RAB Material — DEFINITIVE SEPARATION:
+- **RAB Upah (WageType)**: 13 pekerjaan untuk bayar tukang. Urutan LOCKED:
+  1. Pondasi, 2. Pasang Bata, 3. Atap, 4. Plester, 5. Plafon,
+  6. Subsitank, 7. Keramik, 8. Pintu, 9. Listrik, 10. Meja Dapur,
+  11. Pengecatan, 12. Serah Terima, 13. Retensi
+- **RAB Material (RABLine)**: Material per tahapan, BISA BERBEDA urutan dengan RAB Upah
+  - 1 pekerjaan Upah bisa relate ke multiple tahapan Material
+  - Contoh: "Pemasangan Keramik" (Upah) → material beli saat "Pemasangan Keramik" + "Kamar Mandi" (Material)
+  - Tahapan Material lebih granular daripada Upah
+
+#### Material-Supplier Mapping:
+- Abaikan nama toko di kurung (di PDF) untuk sekarang
+- Owner assign toko manual per material di Pengaturan
+- Biasanya setelah Pemasangan Bata, semua material ada di 1 toko
+- Tapi tidak menutup kemungkinan 1 tahapan material beli di multiple toko
+
+#### Re-seed RAB Material:
+- Ya, re-seed dengan data lengkap dari PDF (lebih banyak dari 26 lines)
+- Total 1 rumah: Rp 23.511.214
+
+#### Per-Project RAB:
+- Setiap project punya RAB Upah + RAB Material sendiri
+- Project baru = RAB kosong, owner input via Pengaturan
+- RAB Upah Editor + RAB Material Editor di sub-tab Pengaturan
+
+#### PENGATURAN Sub-tabs (FINAL):
+1. Project Management — add/edit project
+2. Unit Management — add/edit unit
+3. Worker Management — add/edit worker
+4. WageType Editor — add/edit RAB Upah per project
+5. RAB Material Editor — add/edit RAB Material per project
+6. Material-Supplier Mapping — assign toko per material
+7. Project Code Editor — edit kode (sudah ada)
+
+---
