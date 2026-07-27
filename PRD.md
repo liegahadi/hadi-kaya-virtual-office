@@ -4358,3 +4358,62 @@ Plus 27 fitur dari iterasi 2-5 = **55+ fitur total** dalam sistem.
 31. Owner ga tau apa ini — perlu dijelasin atau dihapus
 
 ---
+
+### 30.17 Owner Feedback Iterasi 8 — Major UX Issues (23 Juli 2026)
+
+Owner test dashboard dan nemu banyak issue fundamental. Owner request DISKUSI sebelum lanjut coding.
+
+#### CRITICAL:
+1. Tab Berkas masih belum ter-recover (customer data issue)
+
+#### DASHBOARD:
+2. PO form: pilih item pekerjaan dari RAB → auto-fill material per toko (perlu diskusi: item per toko)
+3. Wage form: per baris input unit rumah (bukan 1 modal 1 unit). Modal dibesarin.
+4. Expense form: sama — per baris input unit rumah. Modal dibesarin.
+5. Usage form: per baris input unit + per hari (tanggal-bulan-tahun). Multi-date entry.
+6. Memo: Upah ga ada deskripsi pekerjaan + unit. Ga ada memo untuk PO.
+7. Bulk Bayar: tombol ga bisa dipencet
+8. Laporan (bulanan/tahunan/bundle): perlu perbaiki habis-habisan (defer sampai finance fix)
+
+#### PO:
+9. Edit item per PO (qty + harga bisa diubah setelah create)
+10. Hapus status DRAFT — cuma PAID/UNPAID
+11. Filter per toko/supplier
+
+#### UPAH TUKANG:
+12. Per unit rumah, dipisah per project + per blok (filter)
+13. Detail per unit: foto pekerjaan per item (seperti SS owner)
+
+#### BIAYA LAIN:
+14. Kolom Unit/Blok: isi harusnya unit rumah (E5, B2), bukan project code (A16)
+
+#### MEMO PENGAJUAN:
+15. Modal terlalu kecil
+16. Format memo Upah: grouped per tukang → per unit → per item pekerjaan
+17. Format memo PO: grouped per toko → per PO → dengan unit rumah
+18. Format memo Expense: grouped per kategori → per item
+19. Memo harus include PO (bukan cuma UNPAID, tapi pilih manual)
+
+#### RAB VS ACTUAL:
+20. Owner ga paham kegunaannya — perlu explain
+
+#### COST PER UNIT:
+21. Loading lama
+
+#### KONSTRUKSI:
+22. Loading lama
+23. Urutan per unit: jangan sort abjad, tapi per proses (urutan pekerjaan)
+24. Filter blok: harus per project (jangan campur), bukan huruf awalan
+
+#### CASH FORECAST:
+25. "Jauh dari harapan" — perlu redesign
+
+#### PROJECT DASHBOARD:
+26. "Apa ini? list project aja ga ada" — perlu fix atau hapus
+
+#### PENGATURAN:
+27. Tidak ada sub-setting
+
+#### OWNER DECISION: "Kayaknya lebih baik kita diskusi aja deh"
+
+---
