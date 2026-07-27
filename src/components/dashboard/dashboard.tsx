@@ -245,7 +245,7 @@ export default function Dashboard() {
           {activeTab === 'pipeline' && <PipelineView stats={stats} />}
           {activeTab === 'siteplan' && <SitePlanView stats={stats} />}
           {activeTab === 'knowledge' && <KnowledgeView stats={stats} />}
-          {activeTab === 'berkas' && <BerkasViewV2 projectId={stats.projects[0]?.id || ''} />}
+          {activeTab === 'berkas' && <BerkasViewV2 projectId={stats.projects.find((p: any) => p.code === 'A16')?.id || stats.projects[0]?.id || ''} />}
           {activeTab === 'finance' && <FinanceView />}
           {activeTab === 'material' && <MaterialView />}
           {activeTab === 'memory' && <MemoryTab />}

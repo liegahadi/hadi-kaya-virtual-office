@@ -4417,3 +4417,81 @@ Owner test dashboard dan nemu banyak issue fundamental. Owner request DISKUSI se
 #### OWNER DECISION: "Kayaknya lebih baik kita diskusi aja deh"
 
 ---
+
+### 30.18 Owner Diskusi Iterasi 8 — Jawaban (23 Juli 2026)
+
+#### Diskusi 1: Tab Berkas
+- **Jawaban**: Customer list-nya kosong di Berkas tab (A)
+- **Action**: Cek kenapa customer list kosong di Berkas tab padahal di DB ada 4 customers
+
+#### Diskusi 2: PO Form — Import dari RAB per Toko
+- RAB Material harus punya info "beli di toko mana" → perlu setting di Pengaturan
+- Sistem auto-create PO per toko saat owner pilih item pekerjaan
+- 1 PO = 1 toko (1 supplier) — confirmed
+- Flow: pilih pekerjaan → sistem split material per toko → auto-create PO per toko
+- JUGA: owner mau bisa input PO manual (pilih toko sendiri, tanpa RAB import)
+- **New Feature Needed**: Material-Supplier mapping di Pengaturan (set material X beli di toko Y)
+
+#### Diskusi 3: Wage/Expense/Usage — Per Baris Input Unit
+- **Confirmed**: Multiple tanggal sekaligus dalam 1 modal (untuk Usage)
+- Wage: per baris input unit rumah
+- Expense: per baris input unit rumah
+- Usage: per baris input unit + per tanggal (multi-date)
+- Modal dibesarin
+
+#### Diskusi 4: Memo Format
+- Wage + PO format: confirmed (grouped per tukang/toko → per unit → per item)
+- Expense format (simplified):
+  ```
+  SLF                 Total: Rp 750.000
+    SLF E3            Rp 250.000
+    SLF E4            Rp 250.000
+    SLF E5            Rp 250.000
+  Listrik             Total: Rp 1.450.000
+    KWH E4            Rp 1.450.000
+  ```
+- **Pertanyaan**: Ini format display atau pilihan items? → Belum dijawab, asumsi: keduanya
+
+#### Diskusi 5: RAB vs Actual
+- **Format change**: RAB vs Actual per UNIT RUMAH (bukan per project, bukan per material)
+- Owner mau lihat: Unit E1 → RAB vs actual per item pekerjaan
+- Bukan: Project Anjayo 16 → RAB vs actual per material
+
+#### Diskusi 6: Konstruksi — Sort + Filter
+- **Urutan pekerjaan** (13, LOCKED):
+  1. Pondasi
+  2. Pasang Bata
+  3. Atap
+  4. Plester
+  5. Plafon
+  6. Subsitank dan Urukan
+  7. Keramik
+  8. Pintu
+  9. Listrik
+  10. Meja Dapur
+  11. Pengecatan
+  12. Serah Terima
+  13. Retensi
+- **Filter**: per project → per blok (hierarchical, bukan campur)
+
+#### Diskusi 7: Cash Forecast
+- **Masalah**: WorkItems list salah (terlalu banyak/tercampur)
+- **Masalah**: Langsung hitung keseluruhan project, ga nanya unit berapa + blok apa
+- **Yang dibutuhkan**:
+  - Pilih unit + blok spesifik
+  - Pilih range pekerjaan (pondasi sampai atap)
+  - Detail material per pekerjaan (lengkap)
+  - Detail wages per pekerjaan
+  - Total kas needed untuk unit+blok yang dipilih
+
+#### Diskusi 8: Project Dashboard + Pengaturan
+- **Project Dashboard**: Dropdown project ada, tapi setelah pilih → kosong (ga ada data project yang berjalan)
+- **Pengaturan**: Perlu sub-settings:
+  - Material-Supplier mapping (material X → toko Y)
+  - Add/edit project
+  - Add/edit unit
+  - Add/edit supplier
+  - Add/edit material
+  - Add/edit worker
+
+---

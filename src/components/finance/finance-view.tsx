@@ -119,7 +119,7 @@ export function FinanceView() {
 
       {/* Sub-tab content */}
       {subTab === 'dashboard' && data && (
-        <DashboardTab data={data} loading={loading} onPayClick={handlePayClick} onPoFormOpen={() => setPoFormOpen(true)} onMemoFormOpen={() => setMemoFormOpen(true)} onWageFormOpen={() => setWageFormOpen(true)} onExpenseFormOpen={() => setExpenseFormOpen(true)} onUsageFormOpen={() => setUsageFormOpen(true)} />
+        <DashboardTab data={data} loading={loading} onPayClick={handlePayClick} onPoFormOpen={() => setPoFormOpen(true)} onMemoFormOpen={() => setMemoFormOpen(true)} onWageFormOpen={() => setWageFormOpen(true)} onExpenseFormOpen={() => setExpenseFormOpen(true)} onUsageFormOpen={() => setUsageFormOpen(true)} onBulkPayOpen={() => setBulkPayOpen(true)} />
       )}
       {subTab === 'dashboard' && loading && (
         <>
@@ -153,7 +153,7 @@ export function FinanceView() {
   )
 }
 
-function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen, onWageFormOpen, onExpenseFormOpen, onUsageFormOpen }: any) {
+function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen, onWageFormOpen, onExpenseFormOpen, onUsageFormOpen, onBulkPayOpen }: any) {
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -251,7 +251,7 @@ function DashboardTab({ data, loading, onPayClick, onPoFormOpen, onMemoFormOpen,
         <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={onMemoFormOpen}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Buat Memo
         </Button>
-        <Button size="sm" variant="outline" className="border-emerald-700 text-emerald-300 hover:bg-emerald-900/30" onClick={() => setBulkPayOpen(true)}>
+        <Button size="sm" variant="outline" className="border-emerald-700 text-emerald-300 hover:bg-emerald-900/30" onClick={onBulkPayOpen}>
           <Zap className="w-3.5 h-3.5 mr-1.5" /> Bulk Bayar
         </Button>
         <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => window.open('/api/finance/reports/monthly', '_blank')}>
