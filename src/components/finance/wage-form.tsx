@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface WageItem { workerId: string; wageTypeId: string; amount: string; workDescription: string }
+interface WageItem { workerId: string; wageTypeId: string; unitId: string; amount: string; workDescription: string }
 
 export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const [projects, setProjects] = useState<any[]>([])
@@ -19,7 +19,7 @@ export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClo
   const [projectId, setProjectId] = useState('')
   const [unitId, setUnitId] = useState('')
   const [wageDate, setWageDate] = useState(new Date().toISOString().slice(0, 10))
-  const [items, setItems] = useState<WageItem[]>([{ workerId: '', wageTypeId: '', amount: '', workDescription: '' }])
+  const [items, setItems] = useState<WageItem[]>([{ workerId: '', wageTypeId: '', unitId: '', amount: '', workDescription: '' }])
 
   useEffect(() => {
     if (open) {
@@ -38,7 +38,7 @@ export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClo
   const fmtRibuan = (n: string) => { const num = parseInt(n.replace(/\./g, '')) || 0; return num ? num.toLocaleString('id-ID') : '' }
   const parseRibuan = (s: string) => parseInt(s.replace(/\./g, '')) || 0
 
-  const addItem = () => setItems([...items, { workerId: '', wageTypeId: '', amount: '', workDescription: '' }])
+  const addItem = () => setItems([...items, { workerId: '', wageTypeId: '', unitId: '', amount: '', workDescription: '' }])
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
   const updateItem = (i: number, field: keyof WageItem, val: string) => {
     const u = [...items]; u[i] = { ...u[i], [field]: val }
@@ -65,7 +65,7 @@ export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClo
       try {
         const res = await fetch('/api/finance/wages', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ workerId: it.workerId, wageTypeId: it.wageTypeId, projectId, unitId: unitId || null, amount: amountNum, workDescription: it.workDescription, wageDate }),
+          body: JSON.stringify({ workerId: it.workerId, wageTypeId: it.wageTypeId, projectId, unitId: it.unitId || null, amount: amountNum, workDescription: it.workDescription, wageDate }),
         })
         const d = await res.json()
         if (d.success) successCount++
@@ -79,7 +79,7 @@ export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClo
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-2xl max-h-[90vh] overflow-y-auto dark-scrollbar">
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-4xl max-h-[90vh] overflow-y-auto dark-scrollbar">
         <DialogHeader><DialogTitle className="text-slate-100">Catat Upah Tukang (Bulk Entry)</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="grid grid-cols-3 gap-2">
@@ -101,11 +101,14 @@ export function WageFormModal({ open, onClose, onSaved }: { open: boolean; onClo
             <div className="space-y-1.5 max-h-48 overflow-y-auto dark-scrollbar">
               {items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-1 items-center bg-slate-800/50 p-1.5 rounded">
-                  <select value={it.workerId} onChange={e => updateItem(i, 'workerId', e.target.value)} className="col-span-3 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100">
+                  <select value={it.workerId} onChange={e => updateItem(i, 'workerId', e.target.value)} className="col-span-2 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100">
                     <option value="">— Tukang —</option>{workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                   </select>
-                  <select value={it.wageTypeId} onChange={e => updateItem(i, 'wageTypeId', e.target.value)} disabled={!projectId} className="col-span-4 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100 disabled:opacity-50">
-                    <option value="">— Pekerjaan —</option>{wageTypes.map(w => <option key={w.id} value={w.id}>{w.name.substring(0, 25)} (Rp {w.price.toLocaleString('id-ID')})</option>)}
+                  <select value={it.unitId} onChange={e => updateItem(i, 'unitId', e.target.value)} disabled={!projectId} className="col-span-2 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100 disabled:opacity-50">
+                    <option value="">— Unit —</option>{units.map(u => <option key={u.id} value={u.id}>{u.blockNumber}</option>)}
+                  </select>
+                  <select value={it.wageTypeId} onChange={e => updateItem(i, 'wageTypeId', e.target.value)} disabled={!projectId} className="col-span-3 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100 disabled:opacity-50">
+                    <option value="">— Pekerjaan —</option>{wageTypes.map(w => <option key={w.id} value={w.id}>{w.name.substring(0, 25)}</option>)}
                   </select>
                   <Input type="text" value={it.amount} onChange={e => updateItem(i, 'amount', fmtRibuan(e.target.value))} placeholder="Rp" className="col-span-2 bg-slate-900 border-slate-700 text-slate-100 text-[10px] h-7" />
                   <Input value={it.workDescription} onChange={e => updateItem(i, 'workDescription', e.target.value)} placeholder="Deskripsi" className="col-span-2 bg-slate-900 border-slate-700 text-slate-100 text-[10px] h-7" />
