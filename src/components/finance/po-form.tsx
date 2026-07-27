@@ -79,16 +79,16 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
 
   const plannedTotal = items.reduce((s, it) => s + (parseInt(parseRibuan(it.qty)) || 0) * (parseInt(parseRibuan(it.price)) || 0), 0)
 
-  // Import material dari RAB
+  // Import material dari RAB per toko (filter by supplier-material mapping)
   const [rabWorkItems, setRabWorkItems] = useState<string[]>([])
   const [selectedWorkItem, setSelectedWorkItem] = useState('')
 
   useEffect(() => {
     if (projectId) {
-      // Fetch RAB workItems untuk project ini
-      fetch(`/api/finance/reports/rab-comparison?projectId=${projectId}`).then(r => r.json()).then(d => {
-        if (d.success && d.data?.material?.rows) {
-          const workItems = [...new Set(d.data.material.rows.map((r: any) => r.workItem))]
+      // Fetch RAB Material workItems untuk project ini
+      fetch(`/api/finance/rab-editor?projectId=${projectId}&type=material`).then(r => r.json()).then(d => {
+        if (d.success && d.data[0]?.lines) {
+          const workItems = [...new Set(d.data[0].lines.map((l: any) => l.workItem))]
           setRabWorkItems(workItems)
         }
       }).catch(() => setRabWorkItems([]))
@@ -97,21 +97,42 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
 
   const handleImportRAB = async () => {
     if (!selectedWorkItem || !projectId) { toast.error('Pilih pekerjaan dulu'); return }
+    if (!supplierId) { toast.error('Pilih toko/supplier dulu'); return }
     try {
-      const res = await fetch(`/api/finance/auto-generate-po`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, unitId, workItems: [selectedWorkItem] }),
-      })
-      const d = await res.json()
-      if (!d.success) throw new Error(d.error)
-      // Map RAB materials to PO items
-      const newItems = d.data.materials.filter((m: any) => m.materialId).map((m: any) => ({
-        materialId: m.materialId,
-        qty: String(m.totalQty),
-        price: String(m.avgPrice),
-        directUse: false,
-      }))
-      if (newItems.length === 0) { toast.error('Tidak ada material match di RAB untuk pekerjaan ini'); return }
+      // Get RAB lines for this workItem
+      const rabRes = await fetch(`/api/finance/rab-editor?projectId=${projectId}&type=material`)
+      const rabData = await rabRes.json()
+      if (!rabData.success || !rabData.data[0]?.lines) throw new Error('RAB tidak ditemukan')
+
+      // Get supplier-material mapping for this supplier
+      const mapRes = await fetch('/api/finance/supplier-material')
+      const mapData = await mapRes.json()
+      const supplierMappings = mapData.success ? mapData.data.filter((m: any) => m.supplierId === supplierId) : []
+
+      // Filter RAB lines: only materials that are mapped to this supplier
+      const rabLines = rabData.data[0].lines.filter((l: any) => l.workItem === selectedWorkItem)
+      let newItems: any[] = []
+
+      if (supplierMappings.length > 0) {
+        // Filter: only materials in supplier mapping
+        newItems = rabLines.filter((l: any) => {
+          const material = materials.find(m => m.name.toLowerCase().includes(l.materialName.toLowerCase()) || l.materialName.toLowerCase().includes(m.name.toLowerCase()))
+          if (!material) return false
+          return supplierMappings.some((sm: any) => sm.materialId === material.id)
+        }).map((l: any) => {
+          const material = materials.find(m => m.name.toLowerCase().includes(l.materialName.toLowerCase()) || l.materialName.toLowerCase().includes(m.name.toLowerCase()))
+          const mapping = supplierMappings.find((sm: any) => sm.materialId === material?.id)
+          return { materialId: material?.id || '', qty: String(l.quantity), price: String(mapping?.defaultPrice || l.unitPrice), directUse: false }
+        })
+      } else {
+        // No mapping yet — import all, owner selects which to keep
+        newItems = rabLines.map((l: any) => {
+          const material = materials.find(m => m.name.toLowerCase().includes(l.materialName.toLowerCase()) || l.materialName.toLowerCase().includes(m.name.toLowerCase()))
+          return { materialId: material?.id || '', qty: String(l.quantity), price: String(l.unitPrice), directUse: false }
+        }).filter((it: any) => it.materialId)
+      }
+
+      if (newItems.length === 0) { toast.error('Tidak ada material match di RAB untuk toko ini'); return }
       setItems([...items.filter(it => it.materialId || it.qty || it.price), ...newItems])
       toast.success(`Imported ${newItems.length} items dari RAB: ${selectedWorkItem}`)
       setSelectedWorkItem('')
@@ -209,15 +230,15 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
           {rabWorkItems.length > 0 && (
             <div className="flex items-end gap-2 p-2 bg-violet-950/30 border border-violet-800/50 rounded">
               <div className="flex-1">
-                <Label className="text-violet-300 text-xs">Import Material dari RAB</Label>
-                <select value={selectedWorkItem} onChange={e => setSelectedWorkItem(e.target.value)}
-                  className="w-full mt-1 bg-slate-800 border border-violet-700 rounded px-2 py-1.5 text-xs text-slate-100">
+                <Label className="text-violet-300 text-xs">Import Material dari RAB {!supplierId && <span className="text-red-400">(pilih toko dulu!)</span>}</Label>
+                <select value={selectedWorkItem} onChange={e => setSelectedWorkItem(e.target.value)} disabled={!supplierId}
+                  className="w-full mt-1 bg-slate-800 border border-violet-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
                   <option value="">— Pilih Pekerjaan —</option>
                   {rabWorkItems.map(w => <option key={w} value={w}>{w}</option>)}
                 </select>
               </div>
-              <Button size="sm" variant="outline" onClick={handleImportRAB} disabled={!selectedWorkItem}
-                className="border-violet-600 text-violet-300 hover:bg-violet-900/30 text-xs h-7">
+              <Button size="sm" variant="outline" onClick={handleImportRAB} disabled={!selectedWorkItem || !supplierId}
+                className="border-violet-600 text-violet-300 hover:bg-violet-900/30 text-xs h-7 disabled:opacity-30">
                 Import dari RAB
               </Button>
             </div>
