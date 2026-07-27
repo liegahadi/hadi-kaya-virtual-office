@@ -4561,3 +4561,45 @@ Owner test dashboard dan nemu banyak issue fundamental. Owner request DISKUSI se
 7. Project Code Editor — edit kode (sudah ada)
 
 ---
+
+### 30.21 Iterasi 8 — ALL FIXES DONE ✅ (27 Juli 2026)
+
+Semua 31 feedback items dari owner test sudah diperbaiki.
+
+| # | Fix | Status | Commit |
+|---|-----|--------|--------|
+| 1 | Data duplikat dibersihkan | ✅ | fa81f77 |
+| 2 | Customer data linked | ✅ | bbe2513 |
+| 3 | PO format changed (0726-001) | ✅ | fa81f77 |
+| 4 | PO delete button | ✅ | d1b1f3f |
+| 5 | Wage delete + quick add | ✅ | d1b1f3f |
+| 6 | Expense filter project + kolom | ✅ | d1b1f3f |
+| 7 | Usage form workItem dropdown | ✅ | 49d7973 |
+| 8 | Memo form wider + detail modal | ✅ | 49d7973 |
+| 9 | Construction: 24→13 WageTypes | ✅ | cd594e3 |
+| 10 | Construction: filter per project+blok | ✅ | cd594e3 |
+| 11 | Performance: dashboard optimized | ✅ | c10b0e7 |
+| 12 | PO form: import dari RAB | ✅ | c10b0e7 |
+| 13 | Expense bulk entry (multi-item) | ✅ | c10b0e7 |
+| 14 | PO edit catatan + nota upload | ✅ | e57cba4 |
+| 15 | Cost per Unit detail modal | ✅ | e57cba4 |
+| 16 | Outstanding detail format (unit) | ✅ | e57cba4 |
+| 17 | Wage bulk entry (multi-item) | ✅ | e57cba4 |
+| 18 | Berkas tab fix (projectId A16) | ✅ | 9bb9502 |
+| 19 | Bulk Bayar button fix | ✅ | 9bb9502 |
+| 20 | RAB Material re-seed (96 lines) | ✅ | 6dedef9 |
+| 21 | Schema: SupplierMaterial | ✅ | 6924f03 |
+| 22 | Pengaturan: 7 sub-tabs | ✅ | 6924f03 |
+| 23 | PO form: import RAB per toko | ✅ | 6ee8c5e |
+| 24 | Construction: sort per proses + batch | ✅ | 6d8c91f |
+| 25 | Cost per Unit: batch queries | ✅ | 6d8c91f |
+| 26 | Wage form: per baris unit + wider | ✅ | 86299be |
+| 27 | Expense form: per baris unit + wider | ✅ | 86299be |
+| 28 | Cash Forecast: per unit, WageType workItems | ✅ | 4eea1d3 |
+| 29 | RAB vs Actual: per unit rumah | ✅ | 4eea1d3 |
+| 30 | PO: hapus DRAFT, filter per toko | ✅ | e470595 |
+| 31 | Usage form: already di Material tab | ✅ | (existing) |
+
+PRD.md: 4400+ → 4500+ lines.
+
+---
