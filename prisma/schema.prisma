@@ -555,6 +555,7 @@ model Supplier {
 
   purchaseOrders PurchaseOrder[]
   payments       Payment[] // payments utk PO dari supplier ini (denormalized via supplierId)
+  supplierMaterials SupplierMaterial[]
 
   @@unique([name])
 }
@@ -843,6 +844,7 @@ model Material {
   adjustments StockAdjustment[]
   poItems     POItem[]
   usageItems  MaterialUsageItem[]
+  supplierMaterials SupplierMaterial[]
 
   @@unique([name])
 }
@@ -1237,4 +1239,25 @@ model BankPipeline {
 
   @@unique([customerId, bankName])
   @@index([customerId])
+}
+
+// ============================================================
+// SUPPLIER-MATERIAL MAPPING
+// ============================================================
+
+model SupplierMaterial {
+  id            String   @id @default(cuid())
+  supplierId    String
+  materialId    String
+  defaultPrice  Float?   // harga default di toko ini
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, materialId])
+  @@index([supplierId])
+  @@index([materialId])
 }

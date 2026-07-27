@@ -1,0 +1,5 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+export const dynamic = 'force-dynamic'
+export async function GET(req: NextRequest) { try { const { searchParams } = new URL(req.url); const projectId = searchParams.get('projectId'); const units = await db.unit.findMany({ where: projectId ? { projectId } : {}, include: { project: { select: { name: true, code: true } } }, orderBy: { blockNumber: 'asc' } }); return NextResponse.json({ success: true, data: units }) } catch (err: any) { return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 }) } }
+export async function POST(req: NextRequest) { try { const { projectId, blockNumber } = await req.json(); const unit = await db.unit.create({ data: { projectId, blockNumber, unitType: '36', landSize: 84, buildingSize: 36 } }); return NextResponse.json({ success: true, data: unit }) } catch (err: any) { return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 }) } }

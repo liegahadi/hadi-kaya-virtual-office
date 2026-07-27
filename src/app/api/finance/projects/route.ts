@@ -1,0 +1,5 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+export const dynamic = 'force-dynamic'
+export async function GET() { try { const projects = await db.project.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, brandName: true, status: true } }); return NextResponse.json({ success: true, data: projects }) } catch (err: any) { return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 }) } }
+export async function POST(req: NextRequest) { try { const { name, code, brandName } = await req.json(); const project = await db.project.create({ data: { name, code: code?.toUpperCase() || null, brandName: brandName || name.split(' ')[0], location: 'Pangkalpinang', status: 'ACTIVE' } }); return NextResponse.json({ success: true, data: project }) } catch (err: any) { return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 }) } }
