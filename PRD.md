@@ -4495,3 +4495,31 @@ Owner test dashboard dan nemu banyak issue fundamental. Owner request DISKUSI se
   - Add/edit worker
 
 ---
+
+### 30.19 Owner Diskusi Iterasi 8 — Jawaban Lanjutan (23 Juli 2026)
+
+#### A. Material-Supplier Mapping — CLARIFIED
+- BUKAN 1 material = 1 toko
+- Mapping: Toko → Material[] (toko X menyediakan material A, B, C)
+- 1 toko bisa punya banyak material
+- 1 material bisa tersedia di multiple toko
+- Di Pengaturan: per toko, set material apa yang tersedia
+- Saat import RAB ke PO: pilih toko dulu → pilih pekerjaan → sistem filter material dari RAB yang ada di mapping toko tersebut
+
+#### B. Memo Format — CONFIRMED
+- Keduanya: display (lihat memo setelah dibuat) + pilihan items (saat bikin memo)
+- Grouped format untuk keduanya
+
+#### C. PO Auto-Create — CONFIRMED
+- 1 tombol "Import dari RAB" di PO form
+- Flow:
+  1. Owner pilih toko/supplier dulu
+  2. Klik "Import dari RAB"
+  3. Pilih item pekerjaan (e.g., "Pondasi")
+  4. Sistem filter: dari RAB "Pondasi", material mana yang tersedia di toko ini (dari mapping)
+  5. Auto-fill items ke PO
+  6. Owner edit qty/price kalau perlu
+  7. Simpan
+- JUGA: owner bisa input PO manual tanpa import (pilih toko + ketik items sendiri)
+
+---
