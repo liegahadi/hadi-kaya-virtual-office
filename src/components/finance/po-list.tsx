@@ -42,7 +42,9 @@ export function PoList() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [projectFilter, setProjectFilter] = useState('')
+  const [supplierFilter, setSupplierFilter] = useState('')
   const [projects, setProjects] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [poFormOpen, setPoFormOpen] = useState(false)
@@ -55,6 +57,7 @@ export function PoList() {
       const params = new URLSearchParams()
       if (statusFilter) params.set('status', statusFilter)
       if (projectFilter) params.set('projectId', projectFilter)
+      if (supplierFilter) params.set('supplierId', supplierFilter)
       const res = await fetch(`/api/finance/po?${params}`)
       const d = await res.json()
       if (d.success) {
@@ -78,12 +81,11 @@ export function PoList() {
   }
 
   useEffect(() => {
-    fetch('/api/dashboard/stats').then(r => r.json()).then(d => {
-      if (d.success) setProjects(d.projects || [])
-    }).catch(() => {})
+    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+    fetch('/api/finance/suppliers').then(r => r.json()).then(d => { if (d.success) setSuppliers(d.data) }).catch(() => {})
   }, [])
 
-  useEffect(() => { fetchPos() }, [statusFilter, projectFilter, page])
+  useEffect(() => { fetchPos() }, [statusFilter, projectFilter, supplierFilter, page])
   useEffect(() => { setPage(1); fetchPos() }, [search])
 
   const totalPages = Math.ceil(total / perPage)
@@ -100,7 +102,6 @@ export function PoList() {
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
           <option value="">Semua Status</option>
-          <option value="DRAFT">Draft</option>
           <option value="UNPAID">Unpaid</option>
           <option value="PARTIAL_PAID">Partial Paid</option>
           <option value="PAID">Paid</option>
@@ -110,6 +111,11 @@ export function PoList() {
           className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
           <option value="">Semua Project</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+        </select>
+        <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
+          <option value="">Semua Toko</option>
+          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-[10px]" onClick={() => setPoFormOpen(true)}>
           <Plus className="w-3 h-3 mr-1" /> PO Baru

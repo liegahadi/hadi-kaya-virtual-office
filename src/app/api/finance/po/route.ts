@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         supplierId,
         projectId,
         unitId: unitId || null,
-        status: 'DRAFT',
+        status: 'UNPAID',
         plannedTotal,
         actualTotal: plannedTotal, // initial: actual = planned
         poDate: poDateObj,
