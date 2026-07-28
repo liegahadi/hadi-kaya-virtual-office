@@ -1120,3 +1120,42 @@ Stage Summary:
 - All 9 issues documented in worklog for future memory
 - Next: implement all fixes in single batch, then user will iterate per-tab
 - Files to touch: po-form.tsx, wage-form.tsx, expense-form.tsx, memo-form.tsx, usage-form.tsx, po-detail-modal.tsx, project-settings.tsx, po-list.tsx, project-dashboard.tsx, cost-per-unit.tsx, expense-list.tsx, construction-schedule.tsx
+
+---
+Task ID: ITERASI-9-DONE
+Agent: Main (GLM)
+Task: Implement all 9 fixes from iteration 9 user feedback
+
+Work Log:
+- Fixed root-cause bug: `d.projects` → `d.data.projects` across 9 files (po-form, wage-form, expense-form, usage-form, po-list, project-dashboard, cost-per-unit, expense-list, construction-schedule)
+- Rewrote PO form: split Blok + Unit dropdowns (parse "A1" → blok="A" + unit="1")
+  - 3 modes: GDG / Akumulasi Blok X (notes prefix "[Akumulasi Blok X]") / specific unit
+  - Added destination indicator bar
+  - Modal: max-w-3xl → max-w-6xl
+- Rewrote Wage form: split Blok + Unit (consistency with PO form), max-w-4xl → max-w-6xl
+- Rewrote Expense form: split Blok + Unit, max-w-4xl → max-w-6xl
+- Rewrote Usage form: split Blok + Unit, max-w-2xl → max-w-5xl
+- Rewrote Memo form: ALWAYS show PO/Wage/Expense sections (even when 0), summary count cards at top, max-w-4xl → max-w-6xl
+- Rewrote RAB Material editor in project-settings.tsx:
+  - Grouped display per workItem (kategori) with subtotal per group
+  - Single delete per row (Trash2 + confirm)
+  - Bulk delete: checkbox per row + per-group select-all + "Hapus Pilihan" button
+  - Grand total at bottom
+- Added DELETE method to /api/finance/rab-editor/route.ts (supports {id} and {ids[]})
+- Rewrote PO Detail modal:
+  - max-w-2xl → max-w-5xl
+  - 4-col info grid (was 2-col)
+  - Added Notas section (was missing)
+  - Added inline Catat Pembayaran form (amount/method/date/notes — auto-fills remaining)
+  - Added Void PO button
+  - Detects "[Akumulasi Blok X]" notes prefix for display
+- Build: ✓ Compiled successfully in 46s
+- Lint: pre-existing warnings only (setState-in-effect pattern), no NEW errors introduced
+- Commit: 07b087a (14 files, +694 / -179 lines)
+
+Stage Summary:
+- All 9 issues from iteration 9 user feedback addressed in single commit
+- Files touched: 14 (8 finance components + 1 API route + worklog)
+- Memory preserved in worklog ITERASI-9-MEMORY-PRESERVE entry (9 issues documented)
+- User indicated will discuss per-tab in next iteration — worklog is ready for context handoff
+- Build clean ✓ — ready for Vercel auto-deploy
