@@ -1,5 +1,6 @@
 'use client'
 // Memo Form Modal — pilih items UNPAID, buat memo pengajuan
+// Always show PO/Wage/Expense sections (even when 0) so user sees ALL options
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -23,9 +24,11 @@ export function MemoFormModal({ open, onClose, onSaved }: Props) {
   const [search, setSearch] = useState('')
   const [memoType, setMemoType] = useState<'W' | 'D'>('W')
   const [loading, setLoading] = useState(false)
+  const [dataLoaded, setDataLoaded] = useState(false)
 
   useEffect(() => {
     if (open) {
+      setDataLoaded(false)
       Promise.all([
         fetch('/api/finance/po?status=UNPAID').then(r => r.json()).catch(() => ({ success: false, data: [] })),
         fetch('/api/finance/po?status=PARTIAL_PAID').then(r => r.json()).catch(() => ({ success: false, data: [] })),
@@ -40,6 +43,7 @@ export function MemoFormModal({ open, onClose, onSaved }: Props) {
         setUnpaidPOs(pos)
         setUnpaidWages(wages)
         setUnpaidExpenses(expenses)
+        setDataLoaded(true)
       })
     } else {
       setSelected(new Set())
@@ -108,83 +112,113 @@ export function MemoFormModal({ open, onClose, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-4xl max-h-[90vh] overflow-y-auto dark-scrollbar">
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-6xl max-h-[92vh] overflow-y-auto dark-scrollbar">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Buat Memo Pengajuan Dana</DialogTitle>
+          <DialogTitle className="text-slate-100 text-lg">Buat Memo Pengajuan Dana</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
           <div className="flex gap-2 items-center">
-            <Label className="text-slate-300 text-xs">Tipe:</Label>
+            <Label className="text-slate-300 text-xs whitespace-nowrap">Tipe:</Label>
             <select value={memoType} onChange={e => setMemoType(e.target.value as 'W' | 'D')}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
               <option value="W">Mingguan (W)</option>
               <option value="D">Harian (D)</option>
             </select>
             <div className="flex-1 relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
               <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari item..."
-                className="pl-7 bg-slate-800 border-slate-700 text-slate-100 text-xs h-7" />
+                className="pl-7 bg-slate-800 border-slate-700 text-slate-100 text-xs h-8" />
             </div>
-            <Button size="sm" variant="outline" onClick={selectAll} className="h-7 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-800">
+            <Button size="sm" variant="outline" onClick={selectAll} className="h-8 text-xs border-slate-600 text-slate-300 hover:bg-slate-800">
               Pilih Semua
             </Button>
-            <Button size="sm" variant="outline" onClick={clearAll} className="h-7 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-800">
+            <Button size="sm" variant="outline" onClick={clearAll} className="h-8 text-xs border-slate-600 text-slate-300 hover:bg-slate-800">
               Clear
             </Button>
           </div>
 
-          {/* UNPAID POs */}
-          {unpaidPOs.length > 0 && (
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Purchase Orders ({unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).length})</p>
-              <div className="space-y-1 max-h-32 overflow-y-auto dark-scrollbar">
-                {unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).map(po => (
-                  <label key={po.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
-                    <Checkbox checked={selected.has(po.id)} onCheckedChange={() => toggleSelect(po.id)} className="border-slate-600" />
-                    <span className="flex-1 text-xs text-slate-200">{po.poNumber.replace(/-/g, '/')} — {po.supplier?.name}</span>
-                    <span className="text-xs font-mono text-red-300">{fmt(po.remaining || 0)}</span>
-                  </label>
-                ))}
-              </div>
+          {/* Summary header */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="px-3 py-2 bg-blue-950/30 border border-blue-800/50 rounded text-center">
+              <p className="text-[10px] text-blue-300 uppercase">Purchase Orders</p>
+              <p className="text-lg font-bold text-blue-200">{unpaidPOs.length}</p>
             </div>
-          )}
-
-          {/* UNPAID Wages */}
-          {unpaidWages.length > 0 && (
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Upah Tukang ({unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).length})</p>
-              <div className="space-y-1 max-h-32 overflow-y-auto dark-scrollbar">
-                {unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).map(w => (
-                  <label key={w.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
-                    <Checkbox checked={selected.has(w.id)} onCheckedChange={() => toggleSelect(w.id)} className="border-slate-600" />
-                    <span className="flex-1 text-xs text-slate-200">{w.worker?.name} — {w.workDescription || 'Upah'}</span>
-                    <span className="text-xs font-mono text-red-300">{fmt(w.remaining || w.amount || 0)}</span>
-                  </label>
-                ))}
-              </div>
+            <div className="px-3 py-2 bg-purple-950/30 border border-purple-800/50 rounded text-center">
+              <p className="text-[10px] text-purple-300 uppercase">Upah Tukang</p>
+              <p className="text-lg font-bold text-purple-200">{unpaidWages.length}</p>
             </div>
-          )}
-
-          {/* UNPAID Expenses */}
-          {unpaidExpenses.length > 0 && (
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Biaya Lain ({unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).length})</p>
-              <div className="space-y-1 max-h-32 overflow-y-auto dark-scrollbar">
-                {unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).map(e => (
-                  <label key={e.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
-                    <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleSelect(e.id)} className="border-slate-600" />
-                    <span className="flex-1 text-xs text-slate-200">{e.category} — {e.recipientName}</span>
-                    <span className="text-xs font-mono text-red-300">{fmt(e.remaining || e.amount || 0)}</span>
-                  </label>
-                ))}
-              </div>
+            <div className="px-3 py-2 bg-amber-950/30 border border-amber-800/50 rounded text-center">
+              <p className="text-[10px] text-amber-300 uppercase">Biaya Lain</p>
+              <p className="text-lg font-bold text-amber-200">{unpaidExpenses.length}</p>
             </div>
-          )}
+          </div>
 
-          {unpaidPOs.length + unpaidWages.length + unpaidExpenses.length === 0 && (
-            <p className="text-center text-slate-500 text-xs py-6">Tidak ada item UNPAID 🎉</p>
-          )}
+          {/* UNPAID POs — ALWAYS visible */}
+          <div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">
+              Purchase Orders ({unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).length}{unpaidPOs.length !== unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).length ? ` dari ${unpaidPOs.length}` : ''})
+            </p>
+            <div className="space-y-1 max-h-40 overflow-y-auto dark-scrollbar">
+              {unpaidPOs.length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">
+                  {dataLoaded ? 'Tidak ada PO unpaid 🎉' : 'Memuat...'}
+                </p>
+              ) : unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">Tidak ada match untuk "{search}"</p>
+              ) : unpaidPOs.filter(p => matchesSearch(p.poNumber + p.supplier?.name)).map(po => (
+                <label key={po.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
+                  <Checkbox checked={selected.has(po.id)} onCheckedChange={() => toggleSelect(po.id)} className="border-slate-600" />
+                  <span className="flex-1 text-xs text-slate-200">{po.poNumber.replace(/-/g, '/')} — {po.supplier?.name}</span>
+                  <span className="text-xs font-mono text-red-300">{fmt(po.remaining || 0)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* UNPAID Wages — ALWAYS visible */}
+          <div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">
+              Upah Tukang ({unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).length}{unpaidWages.length !== unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).length ? ` dari ${unpaidWages.length}` : ''})
+            </p>
+            <div className="space-y-1 max-h-40 overflow-y-auto dark-scrollbar">
+              {unpaidWages.length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">
+                  {dataLoaded ? 'Tidak ada upah unpaid 🎉' : 'Memuat...'}
+                </p>
+              ) : unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">Tidak ada match untuk "{search}"</p>
+              ) : unpaidWages.filter(w => matchesSearch(w.worker?.name + w.workDescription)).map(w => (
+                <label key={w.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
+                  <Checkbox checked={selected.has(w.id)} onCheckedChange={() => toggleSelect(w.id)} className="border-slate-600" />
+                  <span className="flex-1 text-xs text-slate-200">{w.worker?.name} — {w.workDescription || 'Upah'}</span>
+                  <span className="text-xs font-mono text-red-300">{fmt(w.remaining || w.amount || 0)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* UNPAID Expenses — ALWAYS visible */}
+          <div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">
+              Biaya Lain ({unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).length}{unpaidExpenses.length !== unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).length ? ` dari ${unpaidExpenses.length}` : ''})
+            </p>
+            <div className="space-y-1 max-h-40 overflow-y-auto dark-scrollbar">
+              {unpaidExpenses.length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">
+                  {dataLoaded ? 'Tidak ada biaya unpaid 🎉' : 'Memuat...'}
+                </p>
+              ) : unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).length === 0 ? (
+                <p className="text-center text-slate-500 text-xs py-3 bg-slate-800/30 rounded">Tidak ada match untuk "{search}"</p>
+              ) : unpaidExpenses.filter(e => matchesSearch(e.description + e.recipientName + e.category)).map(e => (
+                <label key={e.id} className="flex items-center gap-2 p-1.5 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800">
+                  <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleSelect(e.id)} className="border-slate-600" />
+                  <span className="flex-1 text-xs text-slate-200">{e.category} — {e.recipientName}</span>
+                  <span className="text-xs font-mono text-red-300">{fmt(e.remaining || e.amount || 0)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           <div className="border-t border-slate-700 pt-2 flex justify-between items-center">
             <span className="text-xs text-slate-400">{selected.size} item dipilih</span>

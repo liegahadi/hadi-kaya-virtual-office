@@ -1051,3 +1051,72 @@ Files Modified (5):
 - .gitignore (added /download/, /tool-results/, *.legacy-v2.bak)
 
 Commit: 7d27021 (pushed to origin main)
+
+---
+Task ID: ITERASI-9-MEMORY-PRESERVE
+Agent: Main (GLM)
+Task: User feedback iteration 9 — preserve all issues to memory before fixing (user worried about memory loss)
+
+Work Log:
+- User reported 9 critical issues in finance module after iteration 8
+
+Issues Captured (must all be addressed):
+
+1. **PO Dropdown Bug (ROOT CAUSE FOUND)**:
+   - PO form project dropdown still shows "-Pilih Project-" even though projects exist
+   - Root cause: forms read `d.projects` from /api/dashboard/stats response
+   - But actual response shape is `{ success, data: { projects, units, ... } }` — projects is nested under `data`!
+   - Correct pattern: `d.data.projects` (used correctly in cash-forecast.tsx + rab-comparison.tsx)
+   - Affected files (8): po-form, wage-form, expense-form, usage-form, po-list, project-dashboard, cost-per-unit, expense-list, construction-schedule
+   - FIX: change `d.projects` → `d.data.projects` everywhere
+
+2. **PO Form: Blok + Unit Split**:
+   - User wants Blok dropdown and Unit dropdown SEPARATED (currently combined in unit dropdown showing "A1", "B12", etc.)
+   - Behavior:
+     * Neither selected → GDG (stok gudang) — already works
+     * Blok selected, no unit → "akumulasi blok X" (PO untuk satu blok penuh, bukan unit spesifik)
+     * Both selected → unitId set as before
+   - Implementation: parse blockNumber "A1" → blok="A", unit="1"; for "akumulasi blok" case, keep unitId=null + prefix notes with "[Blok X]"
+
+3. **PO Modal too small**:
+   - Current: max-w-3xl
+   - User wants much bigger — change to max-w-6xl or max-w-7xl
+
+4. **Catat Upah Modal too small** (user mentioned 5x already!):
+   - Current: max-w-4xl
+   - Change to max-w-6xl
+
+5. **Catat Biaya Modal too small**:
+   - Current: max-w-4xl
+   - Change to max-w-6xl
+
+6. **Memo Pengajuan Dana: no PO option + too small**:
+   - User reports "no PO option" but code DOES show unpaid POs section (line 138 memo-form.tsx)
+   - Likely cause: user has 0 unpaid POs so section hidden, OR modal too small to see it
+   - Fix: ALWAYS show PO section header (even when 0 — show "0 POs tersedia"), enlarge modal to max-w-6xl
+   - Current: max-w-4xl
+
+7. **Catat Pemakaian Modal too small**:
+   - Current: max-w-2xl (smallest!)
+   - Change to max-w-5xl
+
+8. **PO Detail Modal — not matching discussed design**:
+   - Current: max-w-2xl (too small) + basic info only
+   - Missing: Notas list section, Catat Pembayaran button, Void PO button, edit items
+   - Will add: Notas section, payment button (link to existing payment-modal), void button
+   - Enlarge to max-w-5xl
+
+9. **RAB Material Settings — items salah semua + no delete**:
+   - User: "kamu salah semua dari item pekerjaan dan isi materialnya"
+   - User wants: per-kategori (workItem) grouped display + single delete + bulk delete with checkbox
+   - Current state (project-settings.tsx RABMaterialEditor): flat table, no delete at all
+   - FIX: group by workItem, add Trash2 per row, add checkbox column + "Hapus Pilihan" button
+
+User's Plan Going Forward:
+- "abis ini kita bahas per 1 tab aja deh dulu" — discuss one tab at a time after this batch
+- User worried about memory loss — this worklog entry preserves all 9 issues
+
+Stage Summary:
+- All 9 issues documented in worklog for future memory
+- Next: implement all fixes in single batch, then user will iterate per-tab
+- Files to touch: po-form.tsx, wage-form.tsx, expense-form.tsx, memo-form.tsx, usage-form.tsx, po-detail-modal.tsx, project-settings.tsx, po-list.tsx, project-dashboard.tsx, cost-per-unit.tsx, expense-list.tsx, construction-schedule.tsx

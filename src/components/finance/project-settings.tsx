@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { Plus, Trash2, Save } from 'lucide-react'
 
@@ -158,10 +159,58 @@ function WageTypeEditor() {
 function RABMaterialEditor() {
   const [projects, setProjects] = useState<any[]>([]); const [projectId, setProjectId] = useState(''); const [rabLines, setRabLines] = useState<any[]>([]); const [loading, setLoading] = useState(false)
   const [workItem, setWorkItem] = useState(''); const [materialName, setMaterialName] = useState(''); const [qty, setQty] = useState(''); const [unitMeasure, setUnitMeasure] = useState('Pcs'); const [unitPrice, setUnitPrice] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())  // bulk delete checkboxes
+  const [deleting, setDeleting] = useState(false)
   useEffect(() => { fetch('/api/finance/projects').then(r => r.json()).then(d => { if (d.success) setProjects(d.data) }).catch(() => {}) }, [])
-  useEffect(() => { if (projectId) { setLoading(true); fetch(`/api/finance/rab-editor?projectId=${projectId}&type=material`).then(r => r.json()).then(d => { if (d.success && d.data[0]?.lines) setRabLines(d.data[0].lines) }).catch(() => {}).finally(() => setLoading(false)) } else { setRabLines([]) } }, [projectId])
+  const fetchLines = () => {
+    if (!projectId) { setRabLines([]); return }
+    setLoading(true)
+    fetch(`/api/finance/rab-editor?projectId=${projectId}&type=material`).then(r => r.json()).then(d => { if (d.success && d.data[0]?.lines) setRabLines(d.data[0].lines); else setRabLines([]) }).catch(() => setRabLines([])).finally(() => setLoading(false))
+  }
+  useEffect(() => { fetchLines(); setSelected(new Set()) }, [projectId])
   const fmt = (n: string) => { const num = parseInt(n.replace(/\./g, '')) || 0; return num ? num.toLocaleString('id-ID') : '' }; const parse = (s: string) => parseInt(s.replace(/\./g, '')) || 0
-  const handleAdd = async () => { if (!workItem || !materialName || !projectId) { toast.error('Tahapan + Material wajib'); return }; try { const res = await fetch('/api/finance/rab-editor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'rabline', projectId, workItem, materialName, quantity: parseFloat(qty) || 0, unitMeasure, unitPrice: parse(unitPrice) }) }); const d = await res.json(); if (!d.success) throw new Error(d.error); toast.success('Material ditambah'); setWorkItem(''); setMaterialName(''); setQty(''); setUnitPrice(''); fetch(`/api/finance/rab-editor?projectId=${projectId}&type=material`).then(r => r.json()).then(d => { if (d.success && d.data[0]?.lines) setRabLines(d.data[0].lines) }) } catch (e: any) { toast.error('Gagal: ' + e.message) } }
+  const handleAdd = async () => { if (!workItem || !materialName || !projectId) { toast.error('Tahapan + Material wajib'); return }; try { const res = await fetch('/api/finance/rab-editor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'rabline', projectId, workItem, materialName, quantity: parseFloat(qty) || 0, unitMeasure, unitPrice: parse(unitPrice) }) }); const d = await res.json(); if (!d.success) throw new Error(d.error); toast.success('Material ditambah'); setWorkItem(''); setMaterialName(''); setQty(''); setUnitPrice(''); fetchLines() } catch (e: any) { toast.error('Gagal: ' + e.message) } }
+
+  // Single delete
+  const handleDeleteOne = async (id: string) => {
+    if (!confirm('Hapus material ini?')) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/finance/rab-editor', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error)
+      toast.success('Material dihapus')
+      // remove from selection if it was there
+      const next = new Set(selected); next.delete(id); setSelected(next)
+      fetchLines()
+    } catch (e: any) { toast.error('Gagal hapus: ' + e.message) } finally { setDeleting(false) }
+  }
+
+  // Bulk delete
+  const handleDeleteBulk = async () => {
+    if (selected.size === 0) { toast.error('Pilih minimal 1 material dengan checkbox'); return }
+    if (!confirm(`Hapus ${selected.size} material terpilih?`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/finance/rab-editor', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: Array.from(selected) }) })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error)
+      toast.success(`${d.deleted} material dihapus`)
+      setSelected(new Set())
+      fetchLines()
+    } catch (e: any) { toast.error('Gagal hapus bulk: ' + e.message) } finally { setDeleting(false) }
+  }
+
+  const toggleSelect = (id: string) => { const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id); setSelected(next) }
+  const selectAllInGroup = (ids: string[]) => { const next = new Set(selected); const allSelected = ids.every(id => next.has(id)); if (allSelected) ids.forEach(id => next.delete(id)); else ids.forEach(id => next.add(id)); setSelected(next) }
+  const selectAll = () => { const all = new Set<string>(); rabLines.forEach(l => all.add(l.id)); setSelected(all) }
+  const clearAll = () => setSelected(new Set())
+
+  // Group lines by workItem
+  const grouped: Record<string, any[]> = rabLines.reduce((acc, l) => { if (!acc[l.workItem]) acc[l.workItem] = []; acc[l.workItem].push(l); return acc }, {} as Record<string, any[]>)
+  const workItems = Object.keys(grouped).sort()
+  const grandTotal = rabLines.reduce((s, l) => s + (l.totalPrice || 0), 0)
+
   return (
     <div className="space-y-3">
       <div className="flex gap-2 items-center"><span className="text-xs text-slate-400">Project:</span><select value={projectId} onChange={e => setProjectId(e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100"><option value="">— Pilih —</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
@@ -170,7 +219,7 @@ function RABMaterialEditor() {
           <Card className="p-3 bg-slate-900/50 border-slate-800">
             <h3 className="text-sm font-bold text-slate-200 mb-2">Tambah Material (RAB Material)</h3>
             <div className="grid grid-cols-5 gap-1">
-              <Input value={workItem} onChange={e => setWorkItem(e.target.value)} placeholder="Tahapan" className="bg-slate-800 border-slate-700 text-slate-100 text-[10px]" />
+              <Input value={workItem} onChange={e => setWorkItem(e.target.value)} placeholder="Tahapan / Kategori" className="bg-slate-800 border-slate-700 text-slate-100 text-[10px]" />
               <Input value={materialName} onChange={e => setMaterialName(e.target.value)} placeholder="Material" className="bg-slate-800 border-slate-700 text-slate-100 text-[10px]" />
               <Input type="text" value={qty} onChange={e => setQty(e.target.value)} placeholder="Qty" className="bg-slate-800 border-slate-700 text-slate-100 text-[10px]" />
               <Input value={unitMeasure} onChange={e => setUnitMeasure(e.target.value)} placeholder="Satuan" className="bg-slate-800 border-slate-700 text-slate-100 text-[10px]" />
@@ -178,11 +227,76 @@ function RABMaterialEditor() {
             </div>
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 mt-2 text-xs" onClick={handleAdd}><Plus className="w-3 h-3 mr-1" />Tambah</Button>
           </Card>
-          <Card className="bg-slate-900/50 border-slate-800 overflow-hidden max-h-96 overflow-y-auto dark-scrollbar">
-            <table className="w-full text-xs"><thead className="bg-slate-800/80 sticky top-0"><tr><th className="text-left p-2 text-slate-300">Tahapan</th><th className="text-left p-2 text-slate-300">Material</th><th className="text-right p-2 text-slate-300">Qty</th><th className="text-right p-2 text-slate-300">Total</th></tr></thead>
-            <tbody>{loading ? <tr><td colSpan={4} className="text-center py-4"><Skeleton className="h-6 mx-auto w-32" /></td></tr> : rabLines.map(l => <tr key={l.id} className="border-b border-slate-800"><td className="p-2 text-slate-300">{l.workItem}</td><td className="p-2 text-slate-200">{l.materialName}</td><td className="p-2 text-right text-slate-400">{l.quantity} {l.unitMeasure}</td><td className="p-2 text-right font-mono text-slate-300">Rp {l.totalPrice.toLocaleString('id-ID')}</td></tr>)}</tbody>
-            </table>
-          </Card>
+
+          {/* Bulk action bar */}
+          {rabLines.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 border border-slate-800 rounded">
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-slate-400">{selected.size} dipilih dari {rabLines.length} material</span>
+                <Button size="sm" variant="outline" onClick={selectAll} className="h-6 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-800">Pilih Semua</Button>
+                <Button size="sm" variant="outline" onClick={clearAll} className="h-6 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-800">Clear</Button>
+              </div>
+              <Button size="sm" variant="destructive" onClick={handleDeleteBulk} disabled={deleting || selected.size === 0} className="h-6 text-[10px] bg-red-700 hover:bg-red-800">
+                <Trash2 className="w-3 h-3 mr-1" />Hapus {selected.size > 0 ? `(${selected.size})` : 'Pilihan'}
+              </Button>
+            </div>
+          )}
+
+          {/* Grouped display by workItem */}
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto dark-scrollbar pr-1">
+            {loading ? <Skeleton className="h-32" /> : workItems.length === 0 ? (
+              <Card className="p-6 bg-slate-900/50 border-slate-800 text-center">
+                <p className="text-xs text-slate-400">Belum ada material di RAB. Tambahkan lewat form di atas.</p>
+              </Card>
+            ) : workItems.map(wi => {
+              const lines = grouped[wi]
+              const subtotal = lines.reduce((s: number, l: any) => s + (l.totalPrice || 0), 0)
+              const ids = lines.map((l: any) => l.id)
+              const allSelected = ids.every((id: string) => selected.has(id))
+              return (
+                <Card key={wi} className="bg-slate-900/50 border-slate-800 overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-800/80 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={allSelected} onCheckedChange={() => selectAllInGroup(ids)} className="border-slate-500" />
+                      <span className="text-sm font-bold text-emerald-400">{wi}</span>
+                      <span className="text-[10px] text-slate-400">({lines.length} material)</span>
+                    </div>
+                    <span className="text-xs font-mono text-slate-300">Subtotal: Rp {subtotal.toLocaleString('id-ID')}</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-800/30"><tr>
+                      <th className="text-left p-2 text-slate-400 w-8"></th>
+                      <th className="text-left p-2 text-slate-400">Material</th>
+                      <th className="text-right p-2 text-slate-400">Qty</th>
+                      <th className="text-right p-2 text-slate-400">Harga</th>
+                      <th className="text-right p-2 text-slate-400">Total</th>
+                      <th className="text-center p-2 text-slate-400 w-12">Aksi</th>
+                    </tr></thead>
+                    <tbody>
+                      {lines.map((l: any) => (
+                        <tr key={l.id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                          <td className="p-2"><Checkbox checked={selected.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} className="border-slate-500" /></td>
+                          <td className="p-2 text-slate-200">{l.materialName}</td>
+                          <td className="p-2 text-right text-slate-400">{l.quantity} {l.unitMeasure}</td>
+                          <td className="p-2 text-right font-mono text-slate-400">Rp {l.unitPrice?.toLocaleString('id-ID') || 0}</td>
+                          <td className="p-2 text-right font-mono text-slate-300">Rp {l.totalPrice?.toLocaleString('id-ID') || 0}</td>
+                          <td className="p-2 text-center"><button onClick={() => handleDeleteOne(l.id)} disabled={deleting} className="text-red-400 hover:bg-red-900/30 rounded p-1 disabled:opacity-30"><Trash2 className="w-3 h-3" /></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Grand total */}
+          {rabLines.length > 0 && (
+            <Card className="p-3 bg-slate-900/50 border-slate-800 flex justify-between items-center">
+              <span className="text-xs text-slate-400 font-bold">Grand Total ({workItems.length} kategori, {rabLines.length} material)</span>
+              <span className="text-lg font-bold text-emerald-400">Rp {grandTotal.toLocaleString('id-ID')}</span>
+            </Card>
+          )}
         </>
       )}
     </div>

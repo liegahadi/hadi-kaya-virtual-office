@@ -1,6 +1,7 @@
 'use client'
-// Material Usage Form — catat pemakaian material (auto-decrement stock + AVCO snapshot)
-import { useState, useEffect } from 'react'
+// Material Usage Form — catat pemakian material (auto-decrement stock + AVCO snapshot)
+// Blok + Unit split (sama seperti PO form)
+import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,12 @@ interface Material { id: string; name: string; unitMeasure: string; stock?: { qu
 interface Project { id: string; name: string; code: string | null }
 interface Unit { id: string; blockNumber: string }
 
+function parseBlokUnit(blockNumber: string): { blok: string; unitNum: string } {
+  const m = blockNumber.match(/^([A-Za-z]+)(\d+)$/)
+  if (!m) return { blok: blockNumber, unitNum: '' }
+  return { blok: m[1].toUpperCase(), unitNum: m[2] }
+}
+
 export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [units, setUnits] = useState<Unit[]>([])
@@ -19,23 +26,36 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
   const [workItems, setWorkItems] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [projectId, setProjectId] = useState('')
+  const [blok, setBlok] = useState('')
   const [unitId, setUnitId] = useState('')
   const [usedAt, setUsedAt] = useState(new Date().toISOString().slice(0, 10))
   const [items, setItems] = useState<Array<{ materialId: string; qty: string; workItem: string }>>([{ materialId: '', qty: '', workItem: '' }])
 
   useEffect(() => {
     if (open) {
-      fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+      fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.data?.projects || d.projects || []) }).catch(() => {})
       fetch('/api/finance/material').then(r => r.json()).then(d => { if (d.success) setMaterials(d.data) }).catch(() => {})
     }
   }, [open])
 
   useEffect(() => {
-    if (projectId) { fetch(`/api/units?projectId=${projectId}`).then(r => r.json()).then(d => { setUnits(d.units || d.data || []) }).catch(() => setUnits([]))
+    if (projectId) {
+      fetch(`/api/units?projectId=${projectId}`).then(r => r.json()).then(d => { setUnits(d.units || d.data || []) }).catch(() => setUnits([]))
       // Fetch workItems from WageType (RAB Upah — 13 pekerjaan)
       fetch(`/api/finance/wage-types?projectId=${projectId}`).then(r => r.json()).then(d => { if (d.success) setWorkItems(d.data.map((w: any) => w.name)) }).catch(() => setWorkItems([]))
     } else { setUnits([]); setWorkItems([]) }
+    setBlok(''); setUnitId('')
   }, [projectId])
+
+  const blokList = useMemo(() => {
+    const set = new Set<string>()
+    units.forEach(u => { const b = parseBlokUnit(u.blockNumber).blok; if (b) set.add(b) })
+    return Array.from(set).sort()
+  }, [units])
+  const unitsInBlok = useMemo(() => {
+    if (!blok) return []
+    return units.filter(u => parseBlokUnit(u.blockNumber).blok === blok)
+  }, [units, blok])
 
   const fmtRibuan = (n: string) => { const num = parseInt(n.replace(/\./g, '')) || 0; return num ? num.toLocaleString('de-DE') : '' }
   const parseRibuan = (s: string) => s.replace(/\./g, '')
@@ -58,24 +78,28 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
       if (!d.success) throw new Error(d.error)
       toast.success('Pemakaian material tercatat')
       onSaved(); onClose()
-      setItems([{ materialId: '', qty: '', workItem: '' }]); setUnitId('')
+      setItems([{ materialId: '', qty: '', workItem: '' }]); setBlok(''); setUnitId('')
     } catch (err: any) { toast.error('Gagal: ' + (err?.message || 'unknown')) }
     finally { setLoading(false) }
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-2xl max-h-[90vh] overflow-y-auto dark-scrollbar">
-        <DialogHeader><DialogTitle className="text-slate-100">Catat Pemakaian Material</DialogTitle></DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-5xl max-h-[92vh] overflow-y-auto dark-scrollbar">
+        <DialogHeader><DialogTitle className="text-slate-100 text-lg">Catat Pemakaian Material</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div><Label className="text-slate-300 text-xs">Project *</Label>
               <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100">
                 <option value="">— Pilih —</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select></div>
+            <div><Label className="text-slate-300 text-xs">Blok (opsional)</Label>
+              <select value={blok} onChange={e => { setBlok(e.target.value); setUnitId('') }} disabled={!projectId} className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
+                <option value="">— GDG —</option>{blokList.map(b => <option key={b} value={b}>Blok {b}</option>)}
+              </select></div>
             <div><Label className="text-slate-300 text-xs">Unit</Label>
-              <select value={unitId} onChange={e => setUnitId(e.target.value)} disabled={!projectId} className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
-                <option value="">— GDG —</option>{units.map(u => <option key={u.id} value={u.id}>{u.blockNumber}</option>)}
+              <select value={unitId} onChange={e => setUnitId(e.target.value)} disabled={!blok} className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
+                <option value="">— GDG —</option>{unitsInBlok.map(u => <option key={u.id} value={u.id}>{u.blockNumber}</option>)}
               </select></div>
             <div><Label className="text-slate-300 text-xs">Tanggal</Label>
               <Input type="date" value={usedAt} onChange={e => setUsedAt(e.target.value)} className="mt-1 bg-slate-800 border-slate-700 text-slate-100 text-xs" /></div>
@@ -83,7 +107,7 @@ export function UsageFormModal({ open, onClose, onSaved }: { open: boolean; onCl
           <div className="border-t border-slate-700 pt-3">
             <div className="flex items-center justify-between mb-2"><Label className="text-slate-300 text-xs font-bold">Items</Label>
               <Button size="sm" variant="outline" onClick={addItem} className="h-6 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-800"><Plus className="w-3 h-3 mr-1" />Tambah</Button></div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto dark-scrollbar">
+            <div className="space-y-1.5 max-h-[45vh] overflow-y-auto dark-scrollbar">
               {items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-1 items-center bg-slate-800/50 p-1.5 rounded">
                   <select value={it.materialId} onChange={e => updateItem(i, 'materialId', e.target.value)} className="col-span-5 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-100">

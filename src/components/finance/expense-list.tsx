@@ -67,7 +67,7 @@ export function ExpenseList() {
 
   useEffect(() => { fetchExpenses() }, [statusFilter, categoryFilter, projectFilter])
   useEffect(() => {
-    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.data?.projects || d.projects || []) }).catch(() => {})
   }, [])
   useEffect(() => { const t = setTimeout(fetchExpenses, 300); return () => clearTimeout(t) }, [search])
 

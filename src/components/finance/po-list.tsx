@@ -81,7 +81,7 @@ export function PoList() {
   }
 
   useEffect(() => {
-    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.data?.projects || d.projects || []) }).catch(() => {})
     fetch('/api/finance/suppliers').then(r => r.json()).then(d => { if (d.success) setSuppliers(d.data) }).catch(() => {})
   }, [])
 

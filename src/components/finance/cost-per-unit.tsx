@@ -18,7 +18,7 @@ export function CostPerUnit() {
   const [detailUnitId, setDetailUnitId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.projects || []) }).catch(() => {})
+    fetch('/api/dashboard/stats').then(r => r.json()).then(d => { if (d.success) setProjects(d.data?.projects || d.projects || []) }).catch(() => {})
   }, [])
 
   useEffect(() => {

@@ -17,3 +17,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Invalid type' }, { status: 400 })
   } catch (err: any) { return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 }) }
 }
+
+// DELETE — single rabline or bulk
+// Body: { id: "..." }            → hapus 1 line
+// Body: { ids: ["a","b","c"] }   → hapus banyak line (bulk)
+// Body: { wageTypeId: "..." }    → hapus wage type
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = await req.json()
+
+    // Bulk delete rablines
+    if (Array.isArray(body.ids) && body.ids.length > 0) {
+      const r = await db.rABLine.deleteMany({ where: { id: { in: body.ids } } })
+      return NextResponse.json({ success: true, deleted: r.count })
+    }
+
+    // Single rabline delete
+    if (body.id) {
+      await db.rABLine.delete({ where: { id: body.id } })
+      return NextResponse.json({ success: true, deleted: 1 })
+    }
+
+    // WageType delete
+    if (body.wageTypeId) {
+      await db.wageType.delete({ where: { id: body.wageTypeId } })
+      return NextResponse.json({ success: true, deleted: 1 })
+    }
+
+    return NextResponse.json({ success: false, error: 'id or ids required' }, { status: 400 })
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: String(err?.message || err).substring(0, 500) }, { status: 500 })
+  }
+}

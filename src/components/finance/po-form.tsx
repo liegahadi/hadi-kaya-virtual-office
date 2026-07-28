@@ -1,6 +1,9 @@
 'use client'
 // PO Form Modal — dark theme, multi-item, directUse checkbox
-import { useState, useEffect } from 'react'
+// Blok + Unit split: jika blok dipilih tanpa unit → "akumulasi blok X" (unitId=null + notes prefix)
+// Jika blok+unit dipilih → unitId = selected
+// Jika tidak ada blok/unit → GDG (stok gudang)
+import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +16,13 @@ interface Material { id: string; name: string; unitMeasure: string }
 interface Supplier { id: string; name: string }
 interface Project { id: string; name: string; code: string | null }
 interface Unit { id: string; blockNumber: string }
+
+// Parse "A1" → { blok: "A", unitNum: "1" }; "B12" → { blok: "B", unitNum: "12" }
+function parseBlokUnit(blockNumber: string): { blok: string; unitNum: string } {
+  const m = blockNumber.match(/^([A-Za-z]+)(\d+)$/)
+  if (!m) return { blok: blockNumber, unitNum: '' }
+  return { blok: m[1].toUpperCase(), unitNum: m[2] }
+}
 
 interface Props {
   open: boolean
@@ -29,7 +39,8 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
 
   const [supplierId, setSupplierId] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [unitId, setUnitId] = useState('')
+  const [blok, setBlok] = useState('')           // "" = GDG, "A" = akumulasi blok A
+  const [unitId, setUnitId] = useState('')        // "" = akumulasi blok / GDG
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10))
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState<Array<{ materialId: string; qty: string; price: string; directUse: boolean }>>([
@@ -45,7 +56,7 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
       ]).then(([sup, stats, mat]) => {
         if (sup.success) setSuppliers(sup.data)
         if (stats.success) {
-          setProjects(stats.projects || [])
+          setProjects(stats.data?.projects || stats.projects || [])
         }
         if (mat.success) setMaterials(mat.data)
       }).catch(console.error)
@@ -61,7 +72,32 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
     } else {
       setUnits([])
     }
+    setBlok(''); setUnitId('')
   }, [projectId])
+
+  // Derived: unique blok list sorted
+  const blokList = useMemo(() => {
+    const set = new Set<string>()
+    units.forEach(u => {
+      const { blok: b } = parseBlokUnit(u.blockNumber)
+      if (b) set.add(b)
+    })
+    return Array.from(set).sort()
+  }, [units])
+
+  // Derived: units filtered by selected blok
+  const unitsInBlok = useMemo(() => {
+    if (!blok) return []
+    return units.filter(u => parseBlokUnit(u.blockNumber).blok === blok)
+  }, [units, blok])
+
+  // Destination label for clarity
+  const destinationLabel = useMemo(() => {
+    if (!blok) return 'GDG (Stok Gudang)'
+    if (!unitId) return `Akumulasi Blok ${blok} (semua unit di blok ${blok})`
+    const u = units.find(x => x.id === unitId)
+    return u ? `Unit ${u.blockNumber}` : `Blok ${blok}`
+  }, [blok, unitId, units])
 
   const formatRibuan = (n: string) => {
     const num = parseInt(n.replace(/\./g, '')) || 0
@@ -150,6 +186,12 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
       return
     }
 
+    // Build notes: prefix with "[Blok X]" if akumulasi blok
+    let finalNotes = notes
+    if (blok && !unitId) {
+      finalNotes = `[Akumulasi Blok ${blok}]${notes ? ' ' + notes : ''}`
+    }
+
     setLoading(true)
     try {
       const res = await fetch('/api/finance/po', {
@@ -160,7 +202,7 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
           projectId,
           unitId: unitId || null,
           poDate,
-          notes,
+          notes: finalNotes,
           items: validItems.map(it => ({
             materialId: it.materialId,
             qty: parseInt(parseRibuan(it.qty)) || 0,
@@ -176,7 +218,7 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
       onSaved()
       onClose()
       // Reset form
-      setSupplierId(''); setProjectId(''); setUnitId(''); setNotes('')
+      setSupplierId(''); setProjectId(''); setBlok(''); setUnitId(''); setNotes('')
       setItems([{ materialId: '', qty: '', price: '', directUse: false }])
     } catch (err: any) {
       toast.error('Gagal: ' + (err?.message || 'unknown'))
@@ -187,14 +229,14 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-3xl max-h-[90vh] overflow-y-auto dark-scrollbar">
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 max-w-6xl max-h-[92vh] overflow-y-auto dark-scrollbar">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Buat Purchase Order Baru</DialogTitle>
+          <DialogTitle className="text-slate-100 text-lg">Buat Purchase Order Baru</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          {/* Top row: supplier, project, unit, date */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Top row: supplier, project, blok, unit, date — 5 cols */}
+          <div className="grid grid-cols-5 gap-3">
             <div>
               <Label className="text-slate-300 text-xs">Supplier *</Label>
               <select value={supplierId} onChange={e => setSupplierId(e.target.value)}
@@ -212,11 +254,19 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
               </select>
             </div>
             <div>
-              <Label className="text-slate-300 text-xs">Unit (kosongkan = GDG/stok gudang)</Label>
-              <select value={unitId} onChange={e => setUnitId(e.target.value)} disabled={!projectId}
+              <Label className="text-slate-300 text-xs">Blok (opsional)</Label>
+              <select value={blok} onChange={e => { setBlok(e.target.value); setUnitId('') }} disabled={!projectId}
                 className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
-                <option value="">— GDG (stok gudang) —</option>
-                {units.map(u => <option key={u.id} value={u.id}>{u.blockNumber}</option>)}
+                <option value="">— GDG (gudang) —</option>
+                {blokList.map(b => <option key={b} value={b}>Blok {b}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label className="text-slate-300 text-xs">Unit (opsional)</Label>
+              <select value={unitId} onChange={e => setUnitId(e.target.value)} disabled={!blok}
+                className="w-full mt-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-100 disabled:opacity-50">
+                <option value="">— Akumulasi Blok {blok || '...'} —</option>
+                {unitsInBlok.map(u => <option key={u.id} value={u.id}>Unit {u.blockNumber}</option>)}
               </select>
             </div>
             <div>
@@ -224,6 +274,14 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
               <Input type="date" value={poDate} onChange={e => setPoDate(e.target.value)}
                 className="mt-1 bg-slate-800 border-slate-700 text-slate-100 text-xs" />
             </div>
+          </div>
+
+          {/* Destination indicator */}
+          <div className="px-3 py-1.5 bg-blue-950/30 border border-blue-800/50 rounded text-xs text-blue-200">
+            <span className="font-bold">Tujuan PO:</span> {destinationLabel}
+            {blok && !unitId && (
+              <span className="ml-2 text-amber-300">— material akan masuk stok gudang tapi ditandai untuk blok {blok}</span>
+            )}
           </div>
 
           {/* Import dari RAB */}
@@ -253,7 +311,7 @@ export function PoFormModal({ open, onClose, onSaved }: Props) {
               </Button>
             </div>
 
-            <div className="space-y-1.5 max-h-60 overflow-y-auto dark-scrollbar">
+            <div className="space-y-1.5 max-h-[40vh] overflow-y-auto dark-scrollbar">
               {items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-1 items-center bg-slate-800/50 p-1.5 rounded">
                   <select value={it.materialId} onChange={e => updateItem(i, 'materialId', e.target.value)}
