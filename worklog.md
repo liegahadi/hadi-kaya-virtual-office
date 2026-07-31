@@ -2187,3 +2187,86 @@ Fase 7 (terakhir, jarang terjadi):
   - Separate ORDER vs PAYMENT status (Pain 7)
 
 LOCKED. DO NOT CHANGE WITHOUT USER APPROVAL.
+
+---
+Task ID: FASE-1-PO-PLAN-LOCKED
+Agent: Main (GLM)
+Task: Lock Fase 1 PO plan before execution
+
+====================================================================
+FASE 1 PO — WHAT TO BUILD (locked):
+====================================================================
+
+A. PO FORM SIMPLIFIED to 5 fields (per user's verbatim demand):
+   1. Nama toko (supplier dropdown)
+   2. Blok + unit rumah (split dropdowns — keep from Iterasi 9)
+   3. Deskripsi (free text input — what is this PO for)
+   4. Material list:
+      - Material name (dropdown from master Material)
+      - Qty per item (formatted ribuan)
+      - Harga satuan per material (formatted ribuan)
+      - NEW: Item Pekerjaan per line (dropdown from WageType / RAB Upah or free text)
+        Purpose: laporan group by (unit, work_item) → analisa vs RAB
+   5. Total (auto-sum qty × price, displayed clearly)
+
+   REMOVE from PO form (per user's pain "gajah di kardus"):
+   - directUse checkbox (too complex, can come back later if needed)
+   - Import from RAB (move to Fase 3 Quick PO from Text)
+   - plannedTotal vs actualTotal display (just planned; actual comes from nota)
+   - "Akumulasi Blok" complexity (keep simple: blok+unit OR GDG)
+
+   MODAL SIZE (per user explicit demand):
+   - w-[90vw] max-w-[1600px] max-h-[90vh] p-6 (already done in Iterasi 10)
+   - text-sm (14px) minimum
+   - 2-column form, table-style items
+
+B. PASTE IMAGE UPLOAD COMPONENT (<PasteImageUpload />)
+   Spec:
+   - Listen for 'paste' event on the upload area (textarea-style div)
+   - Accept clipboard image (Ctrl+V from WA web right-click → Copy Image)
+   - Convert to File object (PNG/JPEG blob)
+   - Show thumbnail preview after paste
+   - Allow multiple pastes (stack thumbnails)
+   - "Hapus" button per thumbnail
+   - Submit: send files[] to parent handler (reuse existing upload API)
+
+   Use EVERYWHERE file upload needed:
+   - Bukti transfer (Payment form)
+   - Nota upload (PO Detail modal)
+   - Bukti Kas Keluar (auto-generated, but proof can be attached)
+   - Any future file upload
+
+   Implementation:
+   - New file: src/components/ui/paste-image-upload.tsx
+   - Props: { onChange: (files: File[]) => void, label?: string, max?: number }
+   - Reusable, can drop into any form
+
+C. UPDATE PO DETAIL MODAL:
+   - Add paste-image-upload to "Upload Nota" section
+   - Add paste-image-upload to "Catat Pembayaran" form (bukti transfer)
+   - Keep existing manual file upload as fallback (don't break)
+
+====================================================================
+WHAT NOT TO BUILD IN FASE 1 (locked — defer to later fase):
+====================================================================
+- Duplicate detection (Fase 2)
+- Redirect to PRIBADI_BOS project (Fase 2)
+- Quick PO from Text parser (Fase 3)
+- NotaLine allocation many-to-many (Fase 4)
+- Item status + split PO (Fase 5)
+- Delivery tracking (Fase 6)
+- Separate ORDER vs PAYMENT status (Fase 7)
+- Drive auto-save with overwrite (separate task, not in 7 fase list)
+- Bukti Kas Keluar auto-gen (already exists, just polish later)
+
+====================================================================
+EXECUTION ORDER (locked):
+====================================================================
+1. Create <PasteImageUpload /> component first (reusable, no dependency)
+2. Simplify PO form to 5 fields + add workItem per line
+3. Add PasteImageUpload to PO Detail (nota upload)
+4. Add PasteImageUpload to PO Detail (payment bukti transfer)
+5. Build + verify
+6. Commit + push
+
+DO NOT add features outside this scope. User explicitly said "gas bantu saya bikin sistem PO yang terbaik" — focus PO only.
