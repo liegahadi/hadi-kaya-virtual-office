@@ -2270,3 +2270,64 @@ EXECUTION ORDER (locked):
 6. Commit + push
 
 DO NOT add features outside this scope. User explicitly said "gas bantu saya bikin sistem PO yang terbaik" — focus PO only.
+
+---
+Task ID: FASE-1-PO-DONE
+Agent: Main (GLM)
+Task: Fase 1 PO implementation complete + pushed
+
+Work Log:
+- Created src/components/ui/paste-image-upload.tsx (reusable component)
+  * Listens for 'paste' event (Ctrl+V)
+  * Accepts clipboard image from WA web (right-click → Copy Image)
+  * Multiple paste support (stack thumbnails)
+  * Click-to-browse + drag-drop fallback
+  * Auto-renames "image.png" to "paste-{timestamp}-{idx}.{ext}"
+  * Hapus per thumbnail + Hapus Semua
+
+- Created src/app/api/finance/po/[id]/upload/route.ts
+  * POST multipart/form-data: files[] + category
+  * Categories: nota | bukti-transfer | bkk | lainnya
+  * Saves to /uploads/po/[poId]/[category]/[filename]
+  * GET: list files for PO (optional category filter)
+
+- Simplified src/components/finance/po-form.tsx to 5 fields:
+  1. Nama toko (supplier dropdown)
+  2. Blok + Unit (split dropdowns)
+  3. Deskripsi (NEW — free text input, replaces notes)
+  4. Material list:
+     - Material (dropdown)
+     - Item Pekerjaan (NEW — dropdown from WageType + free text fallback)
+     - Qty + Harga Satuan
+  5. Total (auto-sum)
+  * REMOVED: directUse checkbox, Import from RAB, planned vs actual
+  * Added: Subtotal per line (NEW — readable)
+  * Modal: w-[90vw] max-w-[1600px] max-h-[90vh] p-6
+  * text-sm, 2-col form, table-style items
+
+- Rewrote src/components/finance/po-detail-modal.tsx:
+  * Replaced tiny inline +Nota inputs with proper "Upload Nota" button + form
+  * Upload Nota form: nota number + total + PasteImageUpload
+  * Catat Pembayaran form: amount + method + date + PasteImageUpload
+  * Modal: max-w-[1400px]
+  * Items section shows item pekerjaan tag if exists (from POItem.note field)
+
+Build: ✓ Compiled successfully in 42s
+Commit: c15375e (pushed to origin/main)
+
+Stage Summary:
+- Fase 1 SOLVES:
+  * Pain 3 (copy-paste image for bukti transfer AND nota) — DONE
+  * Pain 2 (PO per item × toko × unit) — DONE via Item Pekerjaan field per line
+- Fase 1 DEFERS (locked, do not start without user approval):
+  * Pain 1 (WA campur aduk) → Fase 3 Quick PO from Text
+  * Pain 3 dupes (pengawas lupa) → Fase 2 duplicate detection
+  * Pain 4 (bos redirect) → Fase 2 redirect-to-project
+  * Pain 5 (partial delivery) → Fase 6
+  * Pain 6 (multi-toko chaos) → Fase 5
+  * Pain 7 (deliver before pay) → Fase 7
+  * Pain 8 (1 nota N PO) → Fase 4 NotaLine
+  * Pain 9 (nota material not unit) → Fase 4 NotaLine allocation
+
+Next step: Wait for user to test Fase 1 (PO form + paste image upload).
+Do NOT proceed to Fase 2 until user confirms Fase 1 works.
