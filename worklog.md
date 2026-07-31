@@ -1397,3 +1397,57 @@ Stage Summary:
 - Build success ≠ deployed. Must push to trigger Vercel auto-deploy.
 - User was right — they saw zero changes because zero was deployed
 - Added to future-session checklist: PUSH after commit, don't just commit
+
+---
+Task ID: ITERASI-10-PO-FORM-REBUILD
+Agent: Main (GLM)
+Task: User said "start from scratch" — rebuild PO form with explicit specs from user
+
+CRITICAL SPECS LOCKED (from user direct answer):
+1. **Modal dimension: 90% lebar layar** — `w-[90vw] max-w-[1600px] max-h-[90vh]`
+   - Previous max-w-6xl (1152px) was only ~60% on 1920px screen — felt small
+   - User explicitly confirmed: "90% lebar layar? BTUL"
+2. **Layout: LEGA, not padat**
+   - Previous: text-[10px], 12-col grid, p-2 padding (gajah di kardus)
+   - New: text-sm (14px), max 2-col form, p-6 padding, table-style items with header row
+3. **Project dropdown: pakai /api/finance/projects langsung** (bukan /api/dashboard/stats)
+   - Cleaner endpoint, returns {success: true, data: projects}
+   - No more nested d.data.projects confusion
+4. **Blok + Unit split**: GDG / Akumulasi Blok X / Specific unit
+5. **Import RAB**: more prominent, show clear message if RAB empty or supplier not selected
+
+USER FEEDBACK PATTERNS (recurring, CRITICAL to remember):
+- User said "capek... udh berkali" kasih tau tapi nggak ada perubahan"
+- User explicitly said "start from scratch"
+- User says "kamu sok ngerti tapi ga ngerti" — AI must use EXACT specs not assumptions
+- User cannot rely on AI to read screenshots — image attachments DO NOT REACH AI
+- User says "harusnya itu jadi tugas kamu" — AI must take responsibility, not push back
+
+WHAT WAS MISSING (admitted honestly to user):
+- "Plan lama yang kita diskusikan" — NOT IN MEMORY
+- Only CONVERSATION_EXPORT_22-23_JULI_2026.txt exists in /home/z/my-project/download/
+- That export only covers Iterations 1-4 (22-23 July 2026)
+- Iterations 5-9 design discussions were NEVER saved to file
+- AI must admit this honestly and ask user to re-specify
+
+PATTERN GOING FORWARD (locked):
+- Use w-[90vw] max-w-[1600px] for ALL finance modals (PO, Wage, Expense, Memo, Usage, Detail)
+- Use text-sm (14px) minimum for inputs/labels
+- Use p-6 padding for modal content
+- Use max 2-column form layout
+- Use direct API endpoints, not nested dashboard/stats
+- Always show clear "missing data" warnings (e.g., "Belum ada supplier. Tambah di Pengaturan → Supplier.")
+
+Work Log:
+- Rewrote src/components/finance/po-form.tsx completely with new specs
+- Changed endpoints: /api/finance/projects (direct) instead of /api/dashboard/stats
+- Added "missing data" warning text under dropdowns if arrays empty
+- Added RAB empty state messaging
+- Build + push next
+
+Stage Summary:
+- PO form is now 90vw, text-sm, p-6, 2-column form layout, table-style items
+- ALL other finance forms still need same treatment (wage, expense, memo, usage, detail)
+- Will do those in next commits after user verifies PO form
+- CRITICAL LESSON: do NOT use /api/dashboard/stats for project list — use /api/finance/projects directly
+- CRITICAL LESSON: never push back on user with "find it yourself" — admit memory gap honestly
