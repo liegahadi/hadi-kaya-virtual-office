@@ -1159,3 +1159,222 @@ Stage Summary:
 - Memory preserved in worklog ITERASI-9-MEMORY-PRESERVE entry (9 issues documented)
 - User indicated will discuss per-tab in next iteration — worklog is ready for context handoff
 - Build clean ✓ — ready for Vercel auto-deploy
+
+---
+Task ID: SESSION-CONTEXT-PRESERVE-FULL
+Agent: Main (GLM)
+Task: Save full conversation context — user worried about losing memory across sessions
+
+Work Log:
+- User explicitly asked: "tolong save semua chat kita dong, biar kita nggak hilang konteks"
+- This entry captures the FULL working context of the current iteration (Iterasi 9) so any future session can pick up where we left off
+
+====================================================================
+FULL CONTEXT SUMMARY — Iterasi 9 (latest, still active)
+====================================================================
+
+PROJECT: Hadi Kaya Virtual Office — PT. Marlindo Bangun Persada
+- Developer properti "Anjayo 16" Pangkalpinang
+- Sistem finance + KPR document generation (BTN, Mandiri, BSB Syariah) + BPHTB + Notaris
+- Tech: Next.js 16, TypeScript, Prisma + Neon PostgreSQL, shadcn/ui dark theme
+- Live: https://hadi-kaya-virtual-office.vercel.app/
+- Repo: https://github.com/liegahadi/hadi-kaya-virtual-office
+
+CURRENT STATE (after Iterasi 9 commit 07b087a):
+- Build ✓ Compiled successfully in 46s
+- All 9 issues from Iterasi 9 user feedback addressed
+- Memory preserved in worklog entries:
+  * ITERASI-9-MEMORY-PRESERVE (issues list)
+  * ITERASI-9-DONE (implementation summary)
+  * SESSION-CONTEXT-PRESERVE-FULL (this entry)
+
+====================================================================
+USER FEEDBACK PATTERNS (recurring — important to remember)
+====================================================================
+
+1. **User is frustrated with modal sizes** — said "5x chat kamu tapi masi belom diubah" for Catat Upah modal.
+   Rule of thumb: ALL finance modals should be max-w-5xl or larger. Never max-w-2xl/3xl.
+
+2. **User wants dropdowns SPLIT, not combined**:
+   - Blok and Unit must be separate dropdowns (was combined as "A1", "B12")
+   - Parse convention: "A1" → blok="A", unitNum="1"
+   - If user selects Blok only (no unit) → "Akumulasi Blok X" (notes prefix)
+   - If user selects nothing → GDG (stok gudang)
+
+3. **User wants sections ALWAYS visible, not hidden when empty**:
+   - Memo form previously hid PO section when 0 unpaid POs — user thought "no PO option"
+   - Fix: always show section header with "(0)" count + "Tidak ada unpaid 🎉" message
+
+4. **User worried about memory loss**:
+   - "tapi saya takutnya kamu kehilangan memory kamu"
+   - Always preserve full context in worklog before ending session
+   - Future sessions: READ /home/z/my-project/worklog.md FIRST (especially ITERASI-9-* entries)
+
+5. **User wants per-tab discussion going forward**:
+   - "abis ini kita bahas per 1 tab aja deh dulu" — said after Iterasi 9 batch
+   - Next session: ask which tab to focus on (PO / Upah / Biaya / Memo / Pemakaian / Pengaturan)
+
+6. **User says "kamu salah semua" for RAB Material items**:
+   - The auto-seeded RAB Material items (from scripts/seed-rab-material-lengkap.ts) are wrong
+   - User wants to manually input kategori (workItem) + materials themselves
+   - Grouped display per kategori was implemented — user can add/delete per item
+   - Bulk delete with checkbox added
+
+====================================================================
+ROOT-CAUSE BUGS FOUND & FIXED IN ITERASI 9
+====================================================================
+
+Bug 1 (MOST CRITICAL): Project dropdown empty
+- Symptom: PO form project dropdown shows "-Pilih Project-" even though projects exist
+- Root cause: 9 finance forms read `d.projects` from /api/dashboard/stats response
+  But actual response shape is `{ success: true, data: { projects, units, ... } }`
+  Projects is NESTED under `data`, not at top level!
+- Fix: `setProjects(d.data?.projects || d.projects || [])` (defensive both shapes)
+- Affected files (9): po-form, wage-form, expense-form, usage-form, po-list,
+  project-dashboard, cost-per-unit, expense-list, construction-schedule
+
+Bug 2: Modals too small
+- PO form was max-w-3xl, Usage was max-w-2xl (smallest!), PO Detail was max-w-2xl
+- All enlarged to max-w-5xl or max-w-6xl
+
+Bug 3: Memo "no PO option"
+- PO/Wage/Expense sections were wrapped in `{unpaidPOs.length > 0 && ...}`
+- So when 0 unpaid, section vanished — user thought feature missing
+- Fix: always render section, show "Tidak ada unpaid 🎉" message when 0
+
+====================================================================
+FILES MODIFIED IN ITERASI 9 (commit 07b087a, 14 files, +694 / -179)
+====================================================================
+
+Frontend (12):
+- src/components/finance/po-form.tsx          — full rewrite (Blok/Unit split + max-w-6xl)
+- src/components/finance/wage-form.tsx        — full rewrite (Blok/Unit split + max-w-6xl)
+- src/components/finance/expense-form.tsx     — full rewrite (Blok/Unit split + max-w-6xl)
+- src/components/finance/usage-form.tsx       — full rewrite (Blok/Unit split + max-w-5xl)
+- src/components/finance/memo-form.tsx        — full rewrite (always-show sections + max-w-6xl)
+- src/components/finance/po-detail-modal.tsx  — full rewrite (Notas + Pay form + Void + max-w-5xl)
+- src/components/finance/project-settings.tsx — RABMaterialEditor rewritten (grouped + delete + bulk)
+- src/components/finance/po-list.tsx          — bug fix only (d.projects → d.data.projects)
+- src/components/finance/project-dashboard.tsx — bug fix only
+- src/components/finance/cost-per-unit.tsx    — bug fix only
+- src/components/finance/expense-list.tsx     — bug fix only
+- src/components/finance/construction-schedule.tsx — bug fix only
+
+Backend (1):
+- src/app/api/finance/rab-editor/route.ts     — added DELETE method (single + bulk)
+
+Worklog (1):
+- worklog.md (this file)
+
+====================================================================
+KEY ARCHITECTURAL DECISIONS (locked, don't revert)
+====================================================================
+
+1. **PO destination logic** (3 modes):
+   - GDG: blok="" + unitId=null → stok gudang
+   - Akumulasi Blok: blok="X" + unitId=null → stok gudang with notes prefix "[Akumulasi Blok X]"
+   - Specific Unit: blok="X" + unitId="..." → unitId set, material goes to that unit
+
+2. **PO locking**:
+   - PO is locked after first Nota is added
+   - Locked PO: items cannot be edited, only notes
+   - Status flow: DRAFT → UNPAID → PARTIAL_PAID → PAID (auto-recomputed from Nota + Payment)
+   - VOIDED: terminal state, manual only
+
+3. **Blok parsing convention**:
+   - blockNumber "A1" → blok="A", unitNum="1"
+   - blockNumber "B12" → blok="B", unitNum="12"
+   - Non-matching → blok=blockNumber, unitNum="" (fallback)
+
+4. **RAB Material structure**:
+   - One RAB per project (RAB.name = "RAB Material", totalBudget=0 unused)
+   - RABLine: { workItem (kategori), materialName, quantity, unitMeasure, unitPrice, totalPrice }
+   - workItem is FREE TEXT (not FK to WageType) — user can type any kategori
+   - Grouping in UI: group by workItem, sort alphabetically
+
+5. **Bulk delete pattern**:
+   - Checkbox per row + per-group select-all + global "Pilih Semua" + "Clear"
+   - DELETE /api/finance/rab-editor accepts both `{id}` (single) and `{ids:[]}` (bulk)
+   - Always confirm before delete (window.confirm)
+
+====================================================================
+KNOWN PRE-EXISTING ISSUES (NOT FIXED YET — for future iterations)
+====================================================================
+
+1. **Lint warnings**: setState-in-effect pattern in many files
+   - Error: "Calling setState synchronously within an effect"
+   - Affects: wage-form, expense-form, unit-cost-detail-modal, category-tracking, etc.
+   - Status: PRE-EXISTING (not introduced by Iterasi 9), build still passes
+   - Fix: would need major refactor to use react-hooks patterns properly
+
+2. **wa-bot React Hook errors**: 4 files in /wa-bot/* use useMultiFileAuthState outside React
+   - Pre-existing, not related to finance work
+   - wa-bot is separate Node.js process, lint config shouldn't apply but does
+
+3. **Auto-seeded RAB Material items are wrong**:
+   - User said: "kamu salah semua dari item pekerjaan dan isi materialnya"
+   - scripts/seed-rab-material-lengkap.ts has incorrect data
+   - User will manually re-input via the new grouped editor
+   - Future: maybe ask user for correct seed data, or just leave for manual entry
+
+4. **PO Detail "discussed design"**:
+   - User mentioned "detail window modalnya masih belom kamu buat seperti yang udah kita diskusikan"
+   - We don't have the discussed design in worklog — assumed what they wanted based on context
+   - If still wrong, need user to specify exactly what fields/sections they expect
+
+====================================================================
+USER'S NEXT-STEP INDICATION
+====================================================================
+
+User said: "abis ini kita bahas per 1 tab aja deh dulu"
+Translation: "after this let's discuss one tab at a time"
+
+So next session, AI should:
+1. Read this worklog entry first
+2. Acknowledge the per-tab discussion plan
+3. Ask user: "Mulai dari tab mana dulu? PO / Upah / Biaya / Memo / Pemakaian / Pengaturan?"
+4. Wait for user's choice before doing anything
+
+Tabs in finance-view.tsx (in order):
+1. Dashboard
+2. Purchase Order (PO)
+3. Upah Tukang
+4. Biaya Lain
+5. Memo Pengajuan
+6. Pemakaian Material
+7. Stok Material
+8. Pengaturan (7 sub-tabs: Project, Unit, Tukang, RAB Upah, RAB Material, Material-Toko, Kode Project)
+9. RAB vs Actual
+10. Cost Per Unit
+11. Cash Forecast
+12. Construction Schedule
+13. Global Search
+
+====================================================================
+IMPORTANT FILES FOR REFERENCE
+====================================================================
+
+- src/components/finance/finance-view.tsx — main container, all tabs wired here
+- src/components/finance/po-form.tsx — PO creation (Iterasi 9 reference impl)
+- src/components/finance/po-detail-modal.tsx — PO detail with payment + void + notas
+- src/components/finance/project-settings.tsx — 7 sub-tabs for Pengaturan
+- src/app/api/finance/rab-editor/route.ts — RAB Material/WageType CRUD + bulk delete
+- src/app/api/dashboard/stats/route.ts — returns {success, data: {projects, ...}}
+- prisma/schema.prisma — Unit.blockNumber format: "A1", "B12" etc.
+
+====================================================================
+COMMUNICATION STYLE WITH USER
+====================================================================
+
+- User communicates in casual Indonesian ("aku", "kamu", "dong", "weh", "lo", "wkwwk")
+- User is technical (knows what dropdown, checkbox, modal mean)
+- User gets frustrated when same issue reported multiple times without fix
+- User appreciates when fixes come in batches but wants per-tab focus going forward
+- User's fear: AI losing memory between sessions → always preserve context in worklog
+- Response style: casual Indonesian, concise, no corporate jargon
+
+Stage Summary:
+- Full session context preserved in this single worklog entry
+- Future sessions can read this entry + ITERASI-9-MEMORY-PRESERVE + ITERASI-9-DONE for full context
+- No code changes in this commit — worklog-only preservation
+- Ready for next session: ask user which tab to focus on first
