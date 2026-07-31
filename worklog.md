@@ -1378,3 +1378,22 @@ Stage Summary:
 - Future sessions can read this entry + ITERASI-9-MEMORY-PRESERVE + ITERASI-9-DONE for full context
 - No code changes in this commit — worklog-only preservation
 - Ready for next session: ask user which tab to focus on first
+
+---
+Task ID: ITERASI-9-PUSH-FIX
+Agent: Main (GLM)
+Task: User reported "nothing changed" — discovered commits never pushed to GitHub
+
+Work Log:
+- User feedback: "i think nothing changes sebenernya... window modalnya masih kecil, import dari item / materialnya juga ga ada yang berubah, -pi;ih project- juga masih gitu gitu aja"
+- ROOT CAUSE: All 3 Iterasi 9 commits (07b087a, 12995f7, 89588a1) were committed locally but NEVER PUSHED to origin/main
+- Remote HEAD was still at 79b5b48 (Iterasi 8) — Vercel had nothing new to deploy
+- FIX: git push origin main → 79b5b48..89588a1 (3 commits pushed)
+- Verified: local HEAD = remote HEAD = 89588a1
+- Vercel auto-deploy should kick in within 2-3 minutes
+
+Stage Summary:
+- LESSON LEARNED: After every commit batch, ALWAYS run `git push origin main` and verify remote HEAD matches local
+- Build success ≠ deployed. Must push to trigger Vercel auto-deploy.
+- User was right — they saw zero changes because zero was deployed
+- Added to future-session checklist: PUSH after commit, don't just commit
