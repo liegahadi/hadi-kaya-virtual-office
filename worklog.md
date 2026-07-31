@@ -1758,3 +1758,141 @@ PART 4: AI'S HONEST ASSESSMENT
   AI RECOMMENDS: do NOT try to build all of this at once. Pick 1 piece, confirm
   understanding, build, ship, then move to next piece.
 
+
+---
+Task ID: USER-VOICE-PO-FINAL-LOCKED
+Agent: Main (GLM)
+Task: USER EXPLICITLY DEMANDED THIS BE SAVED VERBATIM. DO NOT PARAPHRASE. DO NOT SUMMARIZE. READ BEFORE ANY PO WORK.
+
+====================================================================
+USER'S EXACT WORDS (verbatim, do not alter):
+====================================================================
+
+"untuk terakhir kalinya, KAMU HARUS CATAT INI BENER BENER DICATAT, BAHKAN KALO BISA KAMU PRINT DARI ZHIPU, KAMU TEMPELIN DI SERVER KAMU PAKE CAMERA UNTUK SELALU SCAN TULISAN SAYA BIAR KAMU INGET DAN NGERTI TERUS!!!!!!!!! INGET KANTOR KU INI RIBET, BENER BENER RIBET, RIBETNYA KEK ORANG TOLOL, STEPNYA BANYAK DAN BIKIN RIBET, MAKANYA MAU BUAT SISTEM BUAT BANTU SAYA, TAPI KENYATAANNYA MALAH BIKIN SUSAH JUGA!!!!!!!!!!!!!!!!!!!!!!
+
+1. finance
+tugas finance ngapain sih?
+1. PO
+      di dalam PO itu harus ada apa sih????
+      1. Nama toko 2. ditujukan untuk unit dan blok yang mana 3.  apa deskripsinya, 4. mau beli material apa saja, berapa banyak        jumlahnya per item material. satu pcs material itu harganya berapa, nah total nya semua berapa THATS IT, ITULAH PO
+TAPI YA TAPI PO ITU NGGAK SAMPAI DISINI AJA LOH..... MASIH ADA TETEK BENGEKNYA, KARNA BOS KITA ITU ORGNYA TOLOL, JADINYA HIDUP DIA TUH MENYUSAHKAN BANYAK ORANG!!!! KARNA APA!!
+Tetek Bengek : 1. semua PO yang bayarnya ini Tempo, masukan ke LIST HUTANG!!!!! nota notanya, dilampirkan ke dalam 1 PO, kalo udah dibayar, BOSS SURUH BIKIN BUKTI KAS KELUAR (INI BUAT APA LOHH,. PADAHAL TINGGAL DI CAP LUNAS LAMPIRKAN BUKTI TRANSFER, UDAH KAN????) 2. HARD COPY KITA ITU SELALU ILANG, BANYAK TUYULNYA DI KANTOR, MAKANYA SAYA BUTUH KAMU UNTUK SIMPAN INI KE DALAM DRIVE!!! hadi kaya docs/anjayo16/finance/PO/[tahun saat ini]/[bulan saat ini]/format file PO nya [nama toko]-[format nomor PO], kapan kamu mulai simpen file pdfnya? mulai saat po ini dibuat, kalo di dashboard berubah, bikin lagi revisinya, serta historynya, overwrite PO sebelumnya, kalo kita upload nota? masukin notanya, bersama dengan PO, dan reivis PO (kalo ada) dan nota, overwrite lagi PO yang sama, kalo udah bayar? masukin PO, revisi PO (kalo ada), notanya, bukti kas keluarnya, dan bukti transfernya. nah! yang menjadi kendala saat ini apa? semua bukti transfer, dikirim melalui WA, sayangnya, saya musti download satu pesatu di WA, dan jujur ini melelahkannnnnnnnnnnnnnnnnnn, karna apa? hasil file download wa itu tidak adil, saya harus cek satu persatu downloadnya, harus buka imagenya dulu, baru update ke bukti transfer PO, cuman kendalanya apalagi? format wa kalo download itu pake nomor, saya tu susah hafal nomor, mending kalo bisa pake copy image, dan paste image......
+
+dah itu PO dulu, pliss bener bener plisss,,,, di save dong omongan saya iniiiiiiiii"
+
+====================================================================
+WHAT THIS MEANS IN PRACTICAL TERMS (locked, do not change):
+====================================================================
+
+PO MINIMAL SPEC (basic — only these fields, no AI, no automation):
+  1. Nama toko (supplier)
+  2. Blok + unit rumah (destination)
+  3. Deskripsi (free text — what is this PO for)
+  4. Material list:
+     - Material name
+     - Qty per item
+     - Unit price per material
+  5. Total (auto-sum of qty × price)
+
+That's PO. Anything beyond = "tetek bengek" added because bos makes life hard.
+
+TETEK BENGEK 1 — LIST HUTANG + BUKTI KAS KELUAR
+  - PO dengan pembayaran TEMPO (hutang) → masuk LIST HUTANG
+  - Nota-nota dilampirkan ke PO itu
+  - Kalau udah dibayar → BOS WAJIBKAN bikin BUKTI KAS KELUAR
+  - USER OPINION (verbatim): "INI BUAT APA LOHH, PADAHAL TINGGAL DI CAP LUNAS LAMPIRKAN BUKTI TRANSFER, UDAH KAN????"
+  - User thinks BKK is redundant. Just stamp LUNAS + attach transfer proof.
+  - BUT bos wants BKK, so system must support it.
+  - Decision needed: keep BKK as bos wants OR drop BKK and use "LUNAS stamp + transfer proof"?
+
+TETEK BENGEK 2 — DRIVE STORAGE (CRITICAL — solves "tuyul ilang hard copy")
+  - Save PDFs to Google Drive
+  - Path: hadi kaya docs/anjayo16/finance/PO/[TAHUN]/[BULAN]/[nama toko]-[nomor PO].pdf
+    Example: hadi kaya docs/anjayo16/finance/PO/2026/07/Toko Makmur-A16-A12-0726-001.pdf
+  - File name format: [nama toko]-[format nomor PO]
+
+  WHEN TO SAVE / OVERWRITE:
+    Trigger 1: PO DIBUAT (created)
+      → Save PDF: just PO document
+    Trigger 2: Dashboard berubah / revisi
+      → Bikin revisi PDF + history
+      → OVERWRITE PO file sebelumnya (jangan append, replace)
+    Trigger 3: Upload NOTA
+      → Bundle: PO (latest) + revisi (kalo ada) + nota
+      → OVERWRITE PO file yang sama
+    Trigger 4: PO DIBAYAR
+      → Bundle: PO + revisi (kalo ada) + nota + BUKTI KAS KELUAR + BUKTI TRANSFER
+      → OVERWRITE PO file yang sama
+
+  So the SAME file in Drive gets overwritten 4 times through PO lifecycle.
+  Each overwrite = new version. Keep history of versions (Google Drive has native version history).
+
+TETEK BENGEK 3 — BUKTI TRANSFER FROM WHATSAPP PAIN
+  - Current pain: bos kirim bukti transfer via WA, user must download one-by-one
+  - WhatsApp download file names are NUMBERS, user can't memorize numbers
+  - User must: open image first → check → match to PO → upload to bukti transfer PO
+  - THIS IS THE MAIN PAIN POINT — "melelahkannnnn"
+  - User's desired solution: COPY IMAGE + PASTE IMAGE (no download needed)
+    * Open WA web → right-click image → copy → paste ke PO form
+    * System accepts paste (clipboard image), no file picker needed
+
+USER'S EMOTIONAL STATE (locked — handle with care):
+  - "capek ngetik hal yang sama setiap minggu"
+  - "udah ga ada harapan lagi"
+  - "rasanya mau stop aja deh, pakai cara manual aja"
+  - "AI masih belum bisa menggantikan pekerjaan manusia"
+  - AI must SHOW PROGRESS, not ask more questions
+  - AI must DO SMALL THINGS THAT WORK, not promise big things
+
+====================================================================
+WHAT AI SHOULD DO NEXT (no more questions):
+====================================================================
+
+1. Acknowledge verbatim save
+2. List back what was understood (3 items only — basic PO + Drive overwrite + paste image)
+3. Ask ONE question only: "Boleh mulai sekarang? Mulai dari mana — PO form leak dulu atau paste-image feature dulu?"
+4. DO NOT propose 6-week plans
+5. DO NOT ask about AI agents, automation, weekly closing, etc
+6. JUST FOCUS ON PO. PO IS THE FIRST BATTLE.
+
+====================================================================
+WHAT AI SHOULD BUILD (after user says "mulai"):
+====================================================================
+
+Step A: Fix PO form to have ONLY the 5 fields user specified:
+  1. Nama toko (supplier dropdown)
+  2. Blok + Unit (split dropdowns, already done in Iterasi 9)
+  3. Deskripsi (text input)
+  4. Material list (material dropdown + qty + unit price)
+  5. Total (auto-calc)
+  → Remove directUse checkbox (too complex)
+  → Remove import from RAB (move to secondary feature)
+  → Remove planned vs actual (just planned, actual from nota)
+  → REMOVE all "akumulasi blok" complexity — just blok + unit or GDG
+
+Step B: Drive auto-save on PO create
+  - Path: anjayo16/finance/PO/[tahun]/[bulan]/[nama toko]-[nomor PO].pdf
+  - Hook into POST /api/finance/po (after create → generate PDF → upload to Drive → save FileRef)
+  - Use existing /api/finance/po/[id]/pdf + Google Drive API (already in src/lib/google/)
+
+Step C: Drive overwrite on:
+  - PO edit (PATCH /api/finance/po/[id])
+  - Nota upload (POST /api/finance/po/[id]/notas)
+  - Payment create (POST /api/finance/payments with poId)
+  - Each event: regenerate bundle PDF → upload to Drive (same filename → overwrite via Drive API)
+
+Step D: Paste image bukti transfer
+  - New component: <PasteImageUpload />
+  - Listen for paste event (Ctrl+V) on the upload area
+  - Convert clipboard image to File object → upload as usual
+  - No need to download from WA — just copy image from WA web, paste to form
+
+Step E: Bukti Kas Keluar — DECISION NEEDED:
+  - User complained "BUAT APA LOHH" — but bos still wants it
+  - Keep existing /api/finance/payments/[id]/bukti-kas-keluar (already exists)
+  - Just make sure it auto-generates when payment is created
+  - User can ignore if they want, but bos can see it
+
+====================================================================
+LOCKED. DO NOT CHANGE WITHOUT USER EXPLICIT APPROVAL.
+====================================================================
