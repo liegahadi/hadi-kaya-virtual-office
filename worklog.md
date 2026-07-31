@@ -1451,3 +1451,310 @@ Stage Summary:
 - Will do those in next commits after user verifies PO form
 - CRITICAL LESSON: do NOT use /api/dashboard/stats for project list — use /api/finance/projects directly
 - CRITICAL LESSON: never push back on user with "find it yourself" — admit memory gap honestly
+
+---
+Task ID: ITERASI-11-BIG-PICTURE-DESIGN
+Agent: Main (GLM)
+Task: User said "start from scratch" with a long design story — first do code run-through, then summarize back to user
+
+====================================================================
+PART 1: CODE RUN-THROUGH RESULTS (current state in GitHub + Vercel)
+====================================================================
+
+A. PRISMA SCHEMA — 50+ models total, finance+material relevant ones:
+
+  Cross-domain models (foundation):
+  - Project (id, name, brandName, code UNIQUE, location, status)
+  - Unit (id, projectId, blockNumber e.g. "A1", @@unique([projectId, blockNumber]))
+  - Supplier (id, name, whatsappNumber, bank fields, totalDebt cached)
+  - Worker (id, name, bank fields, isCashOnly boolean ← CASH-ONLY flag EXISTS)
+
+  Finance models:
+  - PurchaseOrder (poNumber, supplierId, projectId, unitId NULLABLE, status,
+    plannedTotal, actualTotal, locked, notes)
+    * unitId null = GDG (gudang)
+    * status: DRAFT|ORDERED|RECEIVED|PARTIAL_PAID|PAID|VOIDED
+  - POItem (poId, materialId, qty, price, totalPrice, directUse, deliveredQty, block, note)
+    * directUse=true → skip stok, auto-Usage ke unit
+    * deliveredQty filled from Nota
+  - Nota (poId, notaNumber, totalAmount, notaDate) ← NOTA tracking EXISTS
+  - Payment (poId|wagePaymentId|expenseId, amount, method, bank fields, voided)
+    * Polymorphic — 1 Payment = 1 termin
+  - WageType (projectId, name, price, unitMeasure) — RAB Upah benchmark
+  - WagePayment (projectId, unitId, workerId, wageTypeId, fullTaskBudget, amount,
+    workDescription, status, weekClosing, wageDate)
+    * weekClosing e.g. "2026-W25" ← WEEKLY CLOSING EXISTS
+  - OtherExpense (projectId NULLABLE, unitId NULLABLE, category, recipientName,
+    amount, description, paymentCycle, isCash, status, expenseDate)
+    * 19 categories: SALARY|FUEL|NOTARY|SLF|KWH|DP_REFUND|REIMBURSE|TAKSASI|RAP|
+      MARKETING|OPERASIONAL_KANTOR|KOMISI|BIAYA_NOTARIS|HUTANG|KASBON|PBB|PPH|LAINNYA|OTHER
+  - Memo (memoNumber, memoDate, status)
+  - MemoLine (memoId, kind PO|WAGE|EXPENSE, itemId, proposedAmount, status PROPOSED|PAID|SKIPPED,
+    dueDate, paidAt, carriedOverFromMemoLineId ← carry-over tracking EXISTS)
+
+  Material models:
+  - RAB (projectId, name, version, totalBudget)
+  - RABLine (rabId, projectId, workItem, materialName, quantity, unitMeasure, unitPrice, totalPrice,
+    supplierSuggestion)
+    * workItem = nama item pekerjaan (e.g. "Pondasi")
+  - Category, Material (id, name, categoryId, unitMeasure, minStock, lastPrice)
+  - Stock (1:1 ke Material, quantity, avgPrice AVCO)
+  - StockAdjustment (audit log, type INITIAL|PO_RECEIVED|USAGE_OUT|DIRECT_USE_SKIP|OPNAME|RETURN_TO_STOCK)
+  - MaterialUsage (unitId NULLABLE, projectId, poId NULLABLE, source
+    WAREHOUSE_DISTRIBUTION|DIRECT_USE|STOCK_OPNAME|RETURN_TO_STOCK, reportedBy, usedAt)
+  - MaterialUsageItem (usageId, materialId, qty, price AVCO snapshot, workItem, subtotal)
+  - ProgressPhoto (unitId, workItem, photoUrl, weekClosing, takenAt) ← PHOTO BUKTI EXISTS
+  - FileRef (kind PO_DOC|NOTA|TRANSFER_PROOF|WAGE_EVIDENCE|EXPENSE_PROOF|REPORT|BUNDLE_MONTHLY|BUNDLE_ENTITY, refId, driveFileId)
+  - SupplierMaterial (supplierId, materialId, defaultPrice) ← supplier-material mapping EXISTS
+
+B. PO NUMBER FORMAT (current):
+   - DB/filename: PO-{projectCode}-{unitSegment|GDG}-{MMYY}-{seq}
+   - e.g. PO-A16-A12-0726-001
+   - Display: replace - with / → PO/A16/A12/0726/001
+   - User WANTS new format: PO/PT.MBP/AR16/E/1/073126/001
+     = PO/{PT singkat}/{Proyek singkat}/{Blok}/{Unit}/{MMDDYY}/{seq}
+     = need PT short code (NEW — not in Project table)
+     = need Proyek short code (use Project.code "A16"? or "AR16"? user said AR16)
+     = need Blok letter separate (e.g. "E")
+     = need Unit number separate (e.g. "1")
+     = CURRENT: blok+unit combined in unitSegment (e.g. "E1")
+     → CHANGE: parse "E1" → blok="E" + unitNum="1"
+
+C. AI AGENTS (existing):
+   - RINA = Finance AI (chat API exists: /api/rina/chat)
+   - MITRA = Material AI (chat API exists: /api/mitra/chat)
+   - DINA = Customer/Berkas AI
+   - All use generic handleAgentChat (no function calling yet for RINA/MITRA)
+   - System prompts are basic persona, NO workflow automation
+   - NO Material Request flow
+   - NO cross-agent communication (Material AI → Finance AI)
+   - NO HITL (Human-in-the-Loop) action system
+   - NO WhatsApp action buttons
+
+D. WHAT'S MISSING vs user's vision:
+   1. Material Request entity (does not exist)
+   2. Material Request → PO → Nota → Bundle workflow (does not exist)
+   3. Price comparison "old vs new" (does not exist)
+   4. PO revision tracking (boss minta tambah/kurang item — does not exist)
+   5. Cross-agent: Material AI asking Finance AI to create PO (does not exist)
+   6. HITL action buttons in WhatsApp (does not exist)
+   7. PO bundle PDF = MR + PO + revision + notas (FileRef BUNDLE_ENTITY exists but not used for this)
+   8. Wage weekly closing automation (weekClosing field exists but no auto-trigger)
+   9. Friday 11:00 cutoff logic (does not exist — manual)
+   10. Photo upload by pengawas (ProgressPhoto model exists, no UI flow)
+   11. Pengawas photo guidelines (does not exist)
+   12. Pengajuan dana auto-generated 16:00 daily (does not exist — manual Memo form)
+   13. Pengajuan dana 4-kategori format (Upah/Material/Expense/Operasional) — partial, current Memo form is free-form
+   14. Monthly report as "buku" (multi-section PDF with photo evidence) — exists basic, not "buku" style
+   15. PO format change: PO/PT.MBP/AR16/E/1/073126/001 (need schema + generator change)
+   16. Cash-only supplier flow (Worker.isCashOnly exists, Supplier does NOT have isCashOnly — need add)
+   17. Multi-blok expense (e.g. "jalan untuk blok A dan B") — no schema support, only single unitId
+   18. Non-project expense (rumah mertua bos, nyuup pemerintah) — OtherExpense.projectId NULLABLE supports this
+   19. Multi-year project expense (proyek lama) — supported if project status set to COMPLETED not deleted
+
+====================================================================
+PART 2: USER'S STORY SUMMARY (verbatim from chat)
+====================================================================
+
+USER WANTS THIS FLOW (PO/Material Request):
+
+  [Pengawas] → minta material ke Material AI (MITRA)
+    Format WAJIB: [nama item pekerjaan] + [blok + unit rumah]
+    Contoh: "Pondasi, blok E unit 1"
+
+  [Material AI / MITRA] cek dulu:
+    Apakah [item pekerjaan] di [blok+unit] sudah pernah dipesan?
+    - SUDAH: cek material mana yg sudah dipesan, info ke pengawas
+      "item A B C sudah sesuai RAB, belum dipesan: E F G dengan qty..."
+    - BELUM: lanjut request PO ke Finance AI (RINA)
+
+  [Material AI] buat Material Request → setujui pengawas (HITL via WhatsApp action button)
+
+  [Finance AI / RINA] sebelum pesan:
+    Tanya harga ke toko, bandingkan dengan harga lama
+    Jika ada perbedaan harga → kasih PDF: halaman 1 = PO, halaman 2 = perbandingan harga
+    → ACC boss (HITL)
+
+  Setelah ACC:
+    Finance AI kirim file foto PO ke pemilik toko
+    Info pengawas: material sudah dipesan
+
+  Toko bilang ambil sendiri? → Finance AI info pengawas untuk ambil
+  Sudah diambil? → Finance AI minta nota ke pengawas
+
+  Setelah nota masuk:
+    Finance AI gabung: Material Request + PO + revisi PO + nota-nota → 1 PDF
+    Masuk ke list UNPAID PO
+
+PO FORMAT YANG DIBUTUHKAN:
+  PO/{PT singkat}/{Proyek singkat}/{Blok}/{Unit}/{MMDDYY}/{seq}
+  Contoh: PO/PT.MBP/AR16/E/1/073126/001
+  (current format beda — perlu ubah generator + schema)
+
+PERTANYAAN USER TENTANG PO (need answers/decisions):
+  Q1: Kalau list material sudah pernah dipesan, gimana cara komunikasi ke pengawas?
+      (status: belum di-design)
+  Q2: 1 item pekerjaan bisa dibeli dari >1 toko (item A B C toko A, E F G toko B, H I J toko C)
+      → 1 Material Request bisa pecah jadi >1 PO. Need design: 1 MR → N POs.
+  Q3: 1-2 toko mewajibkan CASH (no hutang). Flow:
+      MR → finance minta harga → create PO → minta pembayaran boss → kasih tau toko
+      "sudah dibayar" → minta nota → finance buatin bundle PDF
+      (Worker.isCashOnly exists; Supplier.isCashOnly perlu ditambah)
+
+UPAH TUKANG FLOW (user's vision):
+
+  Setiap Jumat 11:00 — Material AI minta info pengawas untuk request pembayaran upah
+  Kendala: 1 proyek bisa >2 rumah, >2 tukang. 1 tukang bisa kerja 2-3 rumah.
+  1 rumah bisa >1 item pekerjaan. Bos minta akumulasi + detail + foto bukti.
+
+  Materi yang harus dikirim pengawas: list + foto bukti
+
+  Material AI kirim list detail ke Finance AI → masuk pengajuan mingguan
+
+PERTANYAAN UPAH (need decisions):
+  Q1: Aturan kantor: pekerjaan dinilai Jumat 11:01 - Jumat depan 11:00.
+      Tapi tukang sering minta "Sabtu pasti selesai" → violates SOP.
+      Gimana handle? (user merepotkan kalo manual)
+  Q2: Pengawas kirim foto bejibun tanpa info, sering blur, 1 item bisa >1 foto.
+      Butuh guideline pengawas. (need design: photo upload UI + guidelines)
+
+FINANCE AI INDIVIDUAL JOB (pengajuan dana 16:00 daily, 4 kategori):
+
+  1. UPAH TUKANG (format hierarchical):
+     Nama Mandor/Tukang A [total nominal]
+       Blok/Unit A (total combined)
+         Item pekerjaan 1 + nilai
+         Item pekerjaan 2 + nilai
+       Blok/Unit B (kalo ambil >1 unit)
+         Item pekerjaan 1 + nilai
+         ...
+     Nama Mandor/Tukang B [total]
+       ...
+     TOTAL KESELURUHAN
+
+  2. MATERIAL (dari Unpaid PO):
+     Toko A (total hutang)
+       Blok/Unit A (total)
+         Deskripsi PO 1 + nominal
+         Deskripsi PO 2 + nominal
+       Blok/Unit B (total)
+         ...
+     Toko B (total)
+       ...
+     ATAU format alternatif (user's old format):
+     Toko A (total)
+       Unit dan Blok: Deskripsi PO 1, nominal
+       Unit dan Blok: Deskripsi PO 2, nominal
+
+     Q: 1 PO untuk >1 unit? gimana?
+     Q: 1 PO untuk 1 blok (akumulasi blok)? gimana?
+
+  3. EXPENSE (per kategori per unit):
+     PPH, PBB, notaris, KWH, plat KPR, dll — biaya untuk 1 unit rumah
+     Q: Kalo expense 1 kategori tapi bukan untuk proyek unit rumah, gimana?
+     Q: Biaya untuk proyek (urukan, pematangan tanah untuk blok selanjutnya)?
+     Q: Biaya pribadi bos (dimasukkan pengeluaran perusahaan)?
+     Q: Biaya untuk beberapa blok (jalan untuk blok A dan B)?
+     Q: Biaya penting tidak terkategori, untuk blok tertentu (tiang listrik untuk 2-3 blok)?
+     Q: PO material di luar proyek (rumah mertua, rumah pribadi bos)?
+     Q: Upah tukang untuk keperluan di luar proyek?
+     Q: Biaya proyek sudah selesai beberapa tahun lalu?
+     Q: Biaya suap instansi pemerintah?
+
+  4. OPERASIONAL (di luar proyek/unit):
+     Listrik kantor, perbaikan kantor, dll
+     Sama seperti material format
+
+LAPORAN BULANAN (Finance AI buat sendiri):
+  - Boss tidak mau share pendapatan → pengeluaran aja
+  - Kategori: Overview, Upah Tukang, Material, Expense, Operasional
+  - Material: per toko total, lalu per unit dalam toko itu
+  - "Dibuat seperti buku" — overview di depan, lalu detail per kategori dengan foto bukti
+  - Upah: nama proyek + blok + unit + item pekerjaan + foto bukti
+  - Material: toko + PO + nota + bukti bayar
+  - 1 PDF atau buku-style multi-section
+
+====================================================================
+PART 3: WHAT AI NEEDS TO CONFIRM/ASK USER BEFORE CODING
+====================================================================
+
+  1. Confirm understanding of PO/MR flow:
+     Pengawas → MITRA → (cek RAB history) → RINA → (tanya harga + compare) →
+     Boss ACC (HITL) → kirim PO ke toko → pengawas ambil → nota → bundle PDF → UNPAID list
+
+  2. PO format change confirmation:
+     OLD: PO-A16-A12-0726-001 (DB) / PO/A16/A12/0726/001 (display)
+     NEW: PO/PT.MBP/AR16/E/1/073126/001
+     - PT singkat = "PT.MBP" (hardcode or CompanySetting field?)
+     - Proyek singkat = "AR16" (need new field Project.shortCode? or use Project.code="A16" + brandName="Anjayo" → "AR16"?)
+     - Blok + Unit split (E + 1, not E1)
+     - MMDDYY (not MMYY) — adds day
+     - seq per (project, unit, day) instead of (project, unit, month-year)?
+
+  3. "Revisi PO" design question:
+     Boss minta tambah/kurang item setelah PO dibuat tapi sebelum nota.
+     Options:
+     a) Edit POItem (add version field, track changes)
+     b) Create PORevision entity (1 PO → N revisions, snapshot each)
+     c) Just edit + log in notes (simplest, no audit)
+     Which one user wants?
+
+  4. Cash-only supplier flow:
+     - Add Supplier.isCashOnly boolean? (mirror Worker.isCashOnly)
+     - Cash-only flow: skip "input UNPAID list", go straight to "bayar dulu, baru nota"
+
+  5. Multi-blok/multi-unit expense:
+     - OtherExpense currently has 1 unitId field
+     - Need: expense bisa untuk >1 blok (e.g. "jalan untuk blok A dan B")
+     - Options:
+       a) Add ExpenseAllocation child table (1 expense → N (unitId, percentage) splits)
+       b) Just use notes + project-level (no per-unit allocation)
+       c) Allow multiple unitIds via comma-separated (hacky)
+     Which?
+
+  6. Non-project expense categories:
+     - "Rumah mertua bos", "rumah pribadi bos" — need new pseudo-project "PRIBADI_BOS"?
+     - "Suap pemerintah" — current category LAINNYA could work, but maybe new category "SUAP" or "BYPASS"?
+     - "Proyek lama" — just keep project alive with status COMPLETED
+
+  7. Wage weekly closing:
+     - Jumat 11:00 cutoff — implement as cron/trigger?
+     - "Sabtu pasti selesai" exception — manual override by bos?
+     - Vercel Cron (free tier: 1 cron) bisa dipake untuk Jumat 11:00 trigger
+
+  8. Pengawas photo guidelines:
+     - Need design: format photo upload (1 item pekerjaan = 1 album? min N foto? caption wajib?)
+     - Enforce via UI (reject blur? check caption?)
+
+  9. Pengajuan dana hierarchical format:
+     - Hierarchical: Tukang → Blok/Unit → Item pekerjaan
+     - Need new PDF template (new src/lib/finance/pdf/pengajuan-dana.ts)
+     - Material: Toko → Blok/Unit → PO descriptions
+     - Alternative format (old): Toko → "Unit dan Blok: desc"
+     - Which format user wants? (he listed both)
+
+  10. Multi-section "buku" monthly report:
+      - Currently report-monthly.ts exists (single PDF, basic)
+      - User wants "buku" style: overview + detail per kategori + foto bukti
+      - Need restructure: report-monthly-book.ts with sections
+
+====================================================================
+PART 4: AI'S HONEST ASSESSMENT
+====================================================================
+
+  - This is a MASSIVE design undertaking — easily 4-6 weeks of full work
+  - Current code covers ~30% of the vision (basic CRUD exists, no workflow automation)
+  - Missing 70%: Material Request entity, cross-agent HITL, WhatsApp action buttons,
+    PO revision tracking, price comparison, pengawas photo flow, auto-trigger cron,
+    hierarchical pengajuan dana, "buku" report
+  - RINA + MITRA agents exist but as chat-only — no actual workflow integration
+  - Need to build: action button system (WhatsApp), HITL queue, cross-agent message bus,
+    Material Request model + flow, PO revision model, pengawas guidelines + photo UI,
+    cron triggers for Friday 11:00 (wages) and 16:00 daily (pengajuan)
+  - Should propose: phased approach, start with highest-value simplest piece first
+    (likely: PO format change + hierarchical pengajuan dana PDF, since user already
+    struggling with current PO form)
+
+  AI RECOMMENDS: do NOT try to build all of this at once. Pick 1 piece, confirm
+  understanding, build, ship, then move to next piece.
+
