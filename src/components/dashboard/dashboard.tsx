@@ -158,7 +158,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+      <main className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <nav className="sticky top-[72px] z-30 bg-card/80 backdrop-blur-md border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">
           <div className="flex gap-1 overflow-x-auto py-2">
             <TabButton
@@ -263,7 +263,7 @@ export default function Dashboard() {
 function Header({ stats, onRefresh }: { stats: StatsData; onRefresh?: () => void }) {
   return (
     <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-[72px]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -280,6 +280,20 @@ function Header({ stats, onRefresh }: { stats: StatsData; onRefresh?: () => void
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <a
+              href="/worklog"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex"
+                title="Lihat Worklog (catatan development verbatim)"
+              >
+                <FileText className="w-3.5 h-3.5" />
+              </Button>
+            </a>
             <Button
               variant="outline"
               size="sm"
@@ -1075,7 +1089,7 @@ function DashboardSkeleton() {
   return (
     <div className="min-h-screen bg-accent/30">
       <div className="h-[72px] bg-card border-b border-border" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Skeleton className="h-32 w-full rounded-xl mb-6" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
