@@ -1896,3 +1896,162 @@ Step E: Bukti Kas Keluar — DECISION NEEDED:
 ====================================================================
 LOCKED. DO NOT CHANGE WITHOUT USER EXPLICIT APPROVAL.
 ====================================================================
+
+---
+Task ID: USER-VOICE-PO-FRUSTRATION-2-LOCKED
+Agent: Main (GLM)
+Task: User continues venting about PO pain points — SAVE VERBATIM, NO PARAPHRASE
+
+====================================================================
+USER'S EXACT WORDS (verbatim, do not alter):
+====================================================================
+
+"belommm belom selesai, saya tambahin lagi nih frustasi saya soal PO
+1. pengawas wa saya 'bro, tolong pesen material untuk kamar mandi di unit A1, pondasi untuk unit A3, semen, listrik untuk A5, pasir, pipa air A2'
+2. like comeon bro, itu banyak, plus satu item pekerjaan itu isi materialnya harus beli lebih dari 1 toko loh, harus tanya update harga lagi kan apalagi di bangka ini harga material kayak crypto, janga waktu harga naiknya nggak nentu, bahkan beda 2 jem pun ada kemungkinan harga naik. gimana nggak kelabakan musti bikin PO per ITEM pekerjaan, Per toko, per unit lagi kan.....
+kenapa harus seperti itu?
+1. tiap unit rumah itu harus ada analisa penggunaan material tiap unit dan tiap item pekerjaan. apakah pekerjaan pondasi pemakaian itemnya sudah melebihi RAB atau belum?
+2. mikirnya PO = langsung masukin ke analisis tiap unit, tiap RAB item pekerjaan, emang sih saya pengennya seperti itu, tapi kek tiba tiba dateng lagi 'bro tolong beli pipa dong untuk A1' saya tanya untuk apa? 'untuk kamar mandi' nah coba kamu baca lagi diatas, dia juga udah mesen material untuk kamar mandi di unit A1 kan? untungnya saya inget, saya tanya 'loh kan tanggal sekian udah pernah pesen?' dijawab ' iya ternyata untuk unit A2 lebih butuh, dan kalo harus ngambil di toko lagi bisa bisa udah tutup, jadinya kepake deh', KEBETULAN UDAH SAYA INPUT A1 SUDAH MENGGUNAKAN PIPA AIR, KAN KAMPRETTTTTTTT, okelah kalo case ini adalah solusinya, saya buat aja PO untuk beli pipa air untuk A2, TAPI PERNAH ADA CASE SEPERTI INI
+E5 sudah beli kabel listrik 2,5, tiba tiba dapet nota kalo E5 beli kabel listrik lagi 2,5, eh ketemu deh.....ternyata udah dobel beli. saya tanya 'loh kok beli lagi? kan udah pernah beli', 'dijawab' iya bos yang suruh pake buat dapur rumah bos' KAMPRET GA TUH!!!!!! setelah saya verifikasi ke bos, ternyata emang bener, tapi jadinya saya yang dimarahin , emang wuanjing!!!!!
+
+case yang lainnya? ohhhh masih ada dong.....
+pengawas minta order bata, akhirnya ketemu toko yang bisa anter bata, awalnya pesen 3000 keping, sekali pengantaran itu hanya 250 keping aja, yaudah dong mobilnya dateng, cuman nganter 250 keping aja........ eh, sudah berselang 3 hari kok masih belom dianter' juga kloter ke2 nya..... setelah di konfirmasi baru deh mereka ngaku kalo batanya sudah habis........ capek deh harus edit PO lagi, cetak lagi ckckckckckckck akhirnya apa? cari toko bata lainnya lagi, buat PO nya lagi......
+
+masi ada ga frustasinya? ada dong.......
+pengawas request untuk beli item pekerjaan atap, kalo lagi hoki, saya bisa beli aja di 1 toko.....
+kalo lagi ga hoki?
+gini ceritanya, ke toko atap A
+'kak untuk item a, b ,c,d, e, f ini ada ga ya stoknya? boleh dong update harga'
+yaudah toko A kasih list harganya
+kondisi 1, dikasih semua harga barangnya, tapi pas udah bikin PO, udah minta duit ke bos, tau ga toko A jawab apa?
+'ohh sorry, untuk item B, D, E ternyata kosong' (harus edit ulang PO lagi kan?)
+yaudah dong saya ke toko atap B
+'kak ada ga ya item untuk B, D, E, update harga dong'
+nah di kasih list harga, tapi cuman dikasih item B, D, dan item yang ga kita gunakan harganya
+tanya lagi kan, 'kak minta harga item E dong'
+baru deh dikasih.......
+yaudah bikin PO nya........ mau ga mau minta lagi duit ke bos, karna kan harga tiap toko beda, dan ternyata harga di toko B lebih mahal dari pada toko A......
+pas order..... udah bayar juga.... nota udah dapet nih..... tapi kok ternyata cuman ada item B dan E, dan dikasih duit cash....
+tanya lagi lah ke toko B 'kak kok item D ga ada'
+'iya nih baru aja kosong'......kampreeettttttt kampret, update PO lagi jadinya kan
+
+mau ga mau tanya harga item D ke toko C
+minta list harga, dikasih, order pas kita dateng ke toko karna barangnya kecil dan ga mungkin toko bisa anter, ehhh pas datengnya 'maaf, harga naik' mabuk ga? saya tanya kamu deh, kamu sendiri mabuk ga sih????
+
+mau lebih gong lagi ga?
+belom acc bos, belum dapet duit dari bos, belom di transfer bos, toko anterin barangnya... dan nagih
+mau yang lebih gong lagi? pas bos liat PO nya, dan pengajuan dana harian, tau ga dia bilang apa?
+'cari lagi yang lebih murah'
+mikri la gimana saya ga frustasi? gimana saya ga bener bener butuh bantuan LLM untuk bantu saya? kamu pikir lahhhhhhhhhhh
+
+ini baru PO loh, belom yang lainnya juga
+
+ga cuman ituuuuuu
+misalnya untuk pasir, udah ku bikin PO terpisah untuk tiap unit, tapi notanya? 1 nota digabung semua PO, masih ada lagi ga? adaaaaaa
+
+misalnyas A1 butuh 1 pasir, A2 butuh 2 pasir dan 4 tanah timbun, dan 1 kubik batu cor, A3 butuh 4 tanah timbun dan 2 kubik batu cor....
+datanglah nota... tau ga gimana notanya? ya sih dapet 3 nota dari toko itu, tapi apa isi notanya?
+nota 1, 3 mobil pasir
+nota 2, 8 tanah timbun
+nota 3, 3 kubik batu cor......
+
+mabukkkkkkkkkk, udah dikasih tau 1 PO 1 nota, eh tokonya malah marah' ngamuk' ngancem lapor polisi (apa hubungannya minta pisah nota perunit dengan lapor polisi, pusiiiiing)"
+
+====================================================================
+PAIN POINTS DECODED (for AI to understand, but DO NOT change user's words):
+====================================================================
+
+PAIN 1: WA pengawas = mixed multi-request in 1 message
+  Example: "kamar mandi A1, pondasi A3, semen, listrik A5, pasir, pipa A2"
+  Reality: 1 WA message contains N (item × unit × work_item) tuples
+  User must manually parse → split into separate POs
+  Why split: PO must be PER ITEM PEKERJAAN × PER TOKO × PER UNIT (for RAB analysis)
+
+PAIN 2: PO must be split per (item pekerjaan × toko × unit) because:
+  - Each unit needs material usage analysis vs RAB per work item
+  - Cannot lump all materials into 1 PO or analysis breaks
+
+PAIN 3: Duplicate order — pengawas forgets
+  - Pengawas: "beli pipa untuk A1 kamar mandi"
+  - User remembers: "kan tanggal X udah pesen?"
+  - Pengawas: "oh iya ternyata A2 lebih butuh, kalo ambil di toko lagi tutup, jadi kepake deh"
+  - Solution accepted: create new PO for A2 (not edit A1's)
+  - Pain: system shows "A1 already uses pipa air" → confusing, must verify manually
+
+PAIN 4: Bos redirect material to personal use (KAMPRET CASE)
+  - E5 beli kabel listrik 2.5 (already in system)
+  - Nota masuk: E5 beli kabel lagi (duplicate alert!)
+  - Asked pengawas: "kok beli lagi?"
+  - Answer: "bos suruh pake buat dapur rumah bos"
+  - Verified true with bos
+  - User got blamed anyway ("emang wuanjing")
+  - Need: track "material purchased for project but redirected to personal use"
+  - Need: when double-purchase detected, ask "redirect to?" before flagging as duplicate
+
+PAIN 5: Supplier partial delivery + runs out
+  - Order: 3000 keping bata
+  - Delivered: 250 keping (first batch only)
+  - 3 days later: no second batch
+  - Supplier admits: bata habis
+  - User must: edit PO, reprint, find new supplier, make new PO
+  - Need: PO status = PARTIAL_RECEIVED, partial delivery tracking, easy "split remaining to new PO at different supplier"
+
+PAIN 6: Multi-toko for 1 work item (atap example)
+  - Work item "atap" has items A,B,C,D,E,F
+  - Toko A: gave prices for all, AFTER PO+payment says "B,D,E kosong"
+    → User must edit PO, remove B/D/E, find new toko
+  - Toko B: gives prices for B,D + items we don't need (no E price)
+    → Must ask again for E price
+    → Toko B more expensive than A
+  - Order placed, paid, nota received
+    → Nota only has B and E (no D), paid cash
+    → Toko B: "D baru kosong"
+    → Edit PO again
+  - Toko C: get price, go in person (small items, can't deliver)
+    → Arrive: "maaf, harga naik"
+  - Need: PO can split items across tokos mid-flight (1 work item → N POs at different tokos, with revision history)
+
+PAIN 7: Supplier delivers before bos approves/pays
+  - Bos hasn't acc'd, hasn't transferred
+  - Toko delivers + nags for payment
+  - More gong: bos looks at pengajuan, says "cari lagi yang lebih murah"
+  - Need: separate "ORDER status" vs "PAYMENT status"
+    * Order: DRAFT → ORDERED → DELIVERED → RECEIVED
+    * Payment: UNPAID → PARTIAL_PAID → PAID
+    * These are independent timelines
+
+PAIN 8: 1 Nota covers N POs (multi-unit)
+  - User made PO terpisah per unit (A1 pasir, A2 pasir, A3 pasir)
+  - Toko gives 1 nota combining all 3 POs
+  - User asked toko to split nota per unit
+  - Toko: marah, ngamuk, ngancem lapor polisi
+  - Reality: 1 Nota → N POs (many-to-many relationship)
+  - Current schema: 1 PO → N Notas (one-to-many) ← WRONG DIRECTION
+  - Need: NotaLineItem with allocation to PO (1 NotaLine can split across N POs)
+
+PAIN 9: Nota lists materials not units
+  - A1: 1 pasir
+  - A2: 2 pasir + 4 tanah timbun + 1 batu cor
+  - A3: 4 tanah timbun + 2 batu cor
+  - Got 3 notas from toko:
+    * Nota 1: 3 mobil pasir (combined A1+A2)
+    * Nota 2: 8 tanah timbun (combined A2+A3)
+    * Nota 3: 3 batu cor (combined A2+A3)
+  - User cannot allocate which material went to which unit
+  - Need: NotaLine allocation UI — user manually splits "3 mobil pasir" → 1 to A1 + 2 to A2
+  - Or: bos accepts "combined nota" and system auto-splits based on RAB ratio
+
+====================================================================
+WHAT AI SHOULD DO NOW (per user's explicit demand):
+====================================================================
+
+1. ACKNOWLEDGE the pain — do NOT minimize
+2. DO NOT propose 6-week plan
+3. DO NOT ask 10 questions
+4. LIST back the pains so user knows AI understood
+5. WAIT — user may add more ("belom yang lainnya juga")
+6. Only when user says "oke mulai" should AI start coding
+
+====================================================================
+LOCKED. DO NOT CHANGE.
+====================================================================
