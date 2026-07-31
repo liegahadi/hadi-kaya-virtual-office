@@ -2055,3 +2055,135 @@ WHAT AI SHOULD DO NOW (per user's explicit demand):
 ====================================================================
 LOCKED. DO NOT CHANGE.
 ====================================================================
+
+---
+Task ID: PO-SOLUTION-MAP-LOCKED
+Agent: Main (GLM)
+Task: User asked for solution to each pain point + how 3-item PO covers them
+
+====================================================================
+PAIN PRIORITY (user explicitly ordered, locked):
+====================================================================
+Paling pain >>> less pain:
+  1. Pain 1 (WA campur aduk)
+  2. Pain 2 (PO per item × toko × unit)
+  3. Pain 3 (copy-paste image) — UPGRADED: also for nota upload, not just transfer proof
+  4. Pain 6 (multi-toko chaos)
+  5. Pain 9 (nota material not unit)
+  6. Pain 8 (1 nota N PO)
+  7. Pain 3 dupes (pengawas forgets)
+  8. Pain 4 (bos redirect to personal)
+  9. Pain 5 (partial delivery)
+  10. Pain 7 (deliver before pay) — rare
+
+====================================================================
+HONEST MAPPING: Pain → Solution → Covered by basic 3-item PO?
+====================================================================
+
+Pain 3 (copy-paste image) → SOLVED by basic PO
+  - Component: <PasteImageUpload />
+  - Listen 'paste' event on upload area
+  - Convert clipboard image → File → upload
+  - Use EVERYWHERE file upload is needed:
+    * Bukti transfer (Payment)
+    * Nota upload (Nota)
+    * Bukti kas keluar
+    * Any future file upload
+  - Covered by basic? YES
+
+Pain 2 (PO per item × toko × unit) → PARTIALLY covered
+  - Need: add 'workItem' field per POItem (item pekerjaan)
+  - PO form: each material line has dropdown 'Item Pekerjaan'
+  - Source: free text OR dropdown from RAB
+  - Purpose: laporan group by (unit, work_item) → analisa vs RAB
+  - Covered by basic? PARTIAL — need to add workItem field
+
+Pain 1 (WA campur aduk) → NOT covered, need parser
+  - New button in PO list: 'Quick PO from Text'
+  - Textarea: paste WA pengawas verbatim
+    Example: 'kamar mandi A1, pondasi A3, listrik A5, pipa A2'
+  - Parser (regex, NO AI): extract (work_item, unit) tuples
+  - Generate N draft POs with work_item + unit pre-filled
+  - User just fills material per PO
+  - Covered by basic? NO. Need new feature.
+
+Pain 3 dupes (pengawas forgets) → NOT covered, need dupcheck
+  - On PO create with (material + unit + work_item), check existing POs
+  - If match → warning: 'Unit A1 already has PO for pipa air (PO-XXX date Y). Continue?'
+  - User: cancel OR override
+  - Covered by basic? NO. Need duplicate detection.
+
+Pain 4 (bos redirect to personal) → NOT covered, need redirect
+  - On duplicate warning, show option 'Redirect to:'
+  - Dropdown of projects including 'PRIBADI_BOS'
+  - PO created with redirect flag + reason
+  - Covered by basic? NO. Need redirect UI.
+
+Pain 6 (multi-toko chaos) → NOT covered, need item status + split
+  - POItem gets 'status' field: ORDERED | CANCELLED | RECEIVED | SHORT
+  - Toko says 'B/D/E kosong' → mark items as CANCELLED
+  - Button 'Split to New PO' → select CANCELLED items → new PO at different supplier
+  - Price hike at pickup → 'Revise Price' button → update price, log revision
+  - Covered by basic? NO. Need item status + split.
+
+Pain 9 (nota material not unit) → NOT covered, need NotaLine allocation
+  - Nota restructure:
+    * Nota = header (nomor, tanggal, total)
+    * Nota has N NotaLine (materialId, qty, price, subtotal)
+    * Each NotaLine has allocation: [(poId, qty_allocated), ...]
+  - Upload nota UI:
+    * User enters total qty per material (3 mobil pasir)
+    * System auto-splits by PO qty ratio (A1=1, A2=2 → A1 gets 1, A2 gets 2)
+    * User can adjust manually
+  - Covered by basic? NO. Need new NotaLine + allocation.
+
+Pain 8 (1 nota N PO) → SAME as Pain 9 solution
+  - Nota many-to-many with PO via NotaLine.allocation
+  - 1 Nota → N NotaLine → M PO (each line can split across POs)
+  - Toko ngamuk 'ga mau pisah nota' → user input 1 nota, system allocates
+  - Covered by Pain 9 solution.
+
+Pain 5 (partial delivery) → NOT covered, need delivery tracking
+  - Nota has 'receivedQty' per item (not just totalAmount)
+  - PO status: PARTIAL_RECEIVED if receivedQty < orderedQty
+  - Button 'Split Remaining' → new PO for (ordered - received) at different supplier
+  - Old PO marked PARTIAL_CLOSED, locked
+  - Covered by basic? NO. Need delivery tracking + split.
+
+Pain 7 (deliver before pay) → NOT covered, need status split
+  - Separate ORDER status from PAYMENT status:
+    * ORDER: DRAFT → ORDERED → DELIVERED → RECEIVED → CLOSED
+    * PAYMENT: UNPAID → PARTIAL_PAID → PAID
+  - 2 independent timelines
+  - Toko delivers early → mark DELIVERED, payment UNPAID
+  - Bos cancel 'cari murah' → ORDER = CANCELLED (even if delivered)
+  - Covered by basic? NO. Need schema change.
+
+====================================================================
+EXECUTION SEQUENCE (1 phase = 1-3 days, NOT 6 weeks):
+====================================================================
+
+Fase 1 (paling cepat kelihatan hasil):
+  - Fix PO form ke 5 field basic + tambah field 'workItem' per item
+  - Add <PasteImageUpload /> for bukti transfer + nota + BKK
+  - Solve: Pain 3 (copy-paste) + Pain 2 (work_item field)
+
+Fase 2:
+  - Duplicate detection (Pain 3 dupes) + redirect-to-project (Pain 4)
+
+Fase 3:
+  - Quick PO from Text parser (Pain 1)
+
+Fase 4:
+  - NotaLine + allocation many-to-many (Pain 8 + Pain 9)
+
+Fase 5:
+  - Item-level status + split to new PO (Pain 6)
+
+Fase 6:
+  - Delivery tracking + split remaining (Pain 5)
+
+Fase 7 (terakhir, jarang terjadi):
+  - Separate ORDER vs PAYMENT status (Pain 7)
+
+LOCKED. DO NOT CHANGE WITHOUT USER APPROVAL.
